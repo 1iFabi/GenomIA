@@ -33,7 +33,7 @@ const LabIcon = (props) => (
 
 const SobreNosotros = () => {
   const equipoMiembros = [
-    { id: 'jonathan', nombre: 'Jonathan Canan', cargo: 'Encargado HPC-UOH', imagen: 'jonathan', imagenNum: '4', linkedin: 'https://www.linkedin.com/in/jonathan-canan-469896238' },
+    { id: 'jonathan', nombre: 'Joaquin Soto', cargo: 'Encargado HPC-UOH', imagen: 'joaquin', imagenNum: '4', linkedin: 'https://www.linkedin.com/in/joaquin-soto-17b263332/' },
     { id: 'carol', nombre: 'Dra. Carol Moraga', cargo: 'Subdirectora SeqUOH', imagen: 'carol', imagenNum: '1', linkedin: 'https://www.linkedin.com/in/camoragaq' },
     { id: 'alex', nombre: 'Dr. Alex Di Genova', cargo: 'Director de SeqUOH', imagen: 'alex', imagenNum: '2', linkedin: 'https://www.linkedin.com/in/alex-di-genova-522b99246' },
     { id: 'susan', nombre: 'Mag. Susan Calfunao', cargo: 'Encargada de Lab. SeqUOH', imagen: 'susan', imagenNum: '3', linkedin: 'https://www.linkedin.com/in/susan-calfunao-caro-367a3173' },
