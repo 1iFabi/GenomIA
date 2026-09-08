@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/media
+/static
+/staticfiles
+
+# Environment variables (CRÍTICO - NO VERSIONAR)
+.env
+.env.local
+.env.production
+.env.*.local
+.env.*
+!.env.example
+!**/.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Gmail API credentials (NO VERSIONAR)
+config/credentials.json
+config/token.json
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+# Local Pi runtime state
+.atl/

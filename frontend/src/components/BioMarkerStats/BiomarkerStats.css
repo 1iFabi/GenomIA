@@ -1,0 +1,96 @@
+/* BiomarkerStats.css */
+.stats-container {
+    background: transparent;
+    padding: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.stat-item {
+    position: relative;
+    padding-left: 1.25rem; /* Alineación uniforme para todos */
+}
+
+.stat-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.5rem;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3b82f6;
+}
+
+.stat-item.level-2::before {
+    background: #10b981;
+}
+
+.stat-item.level-3::before {
+    background: #f59e0b;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    margin-bottom: 0.25rem;
+}
+
+.stat-value-container {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #1e293b;
+    line-height: 1;
+}
+
+.stat-unit {
+    font-size: 0.875rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.stat-item .stat-value {
+    color: #3b82f6; /* Azul por defecto para Base Global */
+}
+
+.stat-item.level-2 .stat-value {
+    color: #10b981; /* Verde */
+}
+
+.stat-item.level-3 .stat-value {
+    color: #f59e0b; /* Ámbar */
+}
+
+.progress-bar {
+    margin-top: 0.75rem;
+    height: 6px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #3b82f6;
+    border-radius: 999px;
+    transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stat-item.level-2 .progress-fill {
+    background: #10b981;
+}
+
+.stat-item.level-3 .progress-fill {
+    background: #f59e0b;
+}

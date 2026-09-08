@@ -1,0 +1,76 @@
+.coin-scene {
+  perspective: 800px;
+  display: inline-block;
+}
+
+.coin {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Variante 3D (rotación completa) */
+.coin--3d {
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  animation: spin linear infinite;
+}
+
+/* Variante plana (flip sin mostrar canto) */
+.coin--flat {
+  transform-origin: center;
+  animation: flatFlip linear infinite;
+}
+
+.coin-face {
+  position: absolute;
+  inset: 0;
+  object-fit: contain;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0.1px);
+}
+
+/* Frente */
+.coin-front {
+  transform: rotateY(0deg) translateZ(0.1px);
+}
+
+/* Reverso */
+.coin-back {
+  transform: rotateY(180deg) translateZ(0.1px);
+}
+
+/* Borde */
+.coin-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) rotateY(90deg);
+  background: repeating-linear-gradient(
+    to bottom,
+    #6b7280 0 2px,
+    #9ca3af 2px 4px
+  );
+  border-radius: 9999px;
+  height: 100%;
+  backface-visibility: hidden;
+}
+
+@keyframes spin {
+  0%   { transform: rotateY(0turn); }
+  100% { transform: rotateY(1turn); }
+}
+
+@keyframes flatFlip {
+  /* Pausas en caras + flip a la velocidad actual (ciclo 8s en Navbar) */
+  0%   { transform: scaleX(1); }
+  35%  { transform: scaleX(1); }   /* pausa cara frontal */
+  50%  { transform: scaleX(-1); }  /* flip hacia cara trasera (duración ~15% del ciclo) */
+  85%  { transform: scaleX(-1); }  /* pausa cara trasera */
+  100% { transform: scaleX(1); }   /* flip de regreso (duración ~15% del ciclo) */
+}

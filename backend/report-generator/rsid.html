@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --page-padding-x: 15mm;
+      --page-padding-y: 10mm;
+      --hero-height: 30mm;
+      --page-bg: #f8fafc;
+      --accent: #0c4a6e;
+      --accent-soft: #e0f2fe;
+    }
+
+    @page { size: A4; margin: 0; background-color: #f8fafc; }
+    * { box-sizing: border-box; }
+    html { -webkit-print-color-adjust: exact; }
+    html, body { margin: 0; padding: 0; width: var(--page-width); height: var(--page-height); }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--page-bg);
+      color: #334155;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* === HERO HEADER === */
+    .hero-header {
+      position: relative;
+      width: 100%;
+      height: var(--hero-height);
+      overflow: hidden;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--page-padding-x);
+    }
+
+    .hero-number {
+      position: absolute;
+      font-size: 280px;
+      font-weight: 900;
+      color: rgba(6, 182, 212, 0.1);
+      right: -20px;
+      top: -80px;
+      font-family: 'Montserrat', sans-serif;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 160mm;
+    }
+
+    .hero-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin: 0 0 4px 0;
+      color: var(--accent-soft);
+      letter-spacing: -0.5px;
+      text-transform: uppercase;
+    }
+
+    .hero-subtitle {
+      font-size: 10px;
+      line-height: 1.4;
+      color: #bae6fd;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    /* === CONTENT === */
+    .content-wrapper {
+      padding: var(--page-padding-y) var(--page-padding-x);
+      display: flex;
+      flex-direction: column;
+      gap: 8mm;
+      flex: 1;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 12px;
+    }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .pill {
+      font-size: 8px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pill-rsid { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+    .pill-cat { background: #ecfeff; color: #0e7490; border-color: #a5f3fc; }
+    .risk-high { background: #fef2f2; color: #ef4444; border-color: #fee2e2; }
+    .risk-mid { background: #fff7ed; color: #f97316; border-color: #fed7aa; }
+    .risk-low { background: #ecfdf5; color: #10b981; border-color: #d1fae5; }
+    .risk-unknown { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+
+    .summary-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+
+    .summary-text {
+      font-size: 9px;
+      line-height: 1.6;
+      color: #64748b;
+      margin: 0 0 10px 0;
+    }
+
+    .source-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      font-size: 8.5px;
+      color: #64748b;
+      border-top: 1px dashed #e2e8f0;
+      padding-top: 8px;
+    }
+
+    .source-label {
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #94a3b8;
+    }
+
+    .source-value {
+      font-weight: 600;
+      color: #475569;
+      word-break: break-word;
+    }
+
+    .freq-card {
+      background: linear-gradient(135deg, #fff7ed 0%, #fffbeb 100%);
+      border: 1px solid #fed7aa;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .freq-title {
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #c2410c;
+      margin-bottom: 6px;
+    }
+
+    .freq-value {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 34px;
+      font-weight: 900;
+      color: #ea580c;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .freq-track {
+      position: relative;
+      width: 100%;
+      height: 28px;
+      margin-bottom: 6px;
+    }
+
+    .freq-track::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 8px;
+      background: #ffedd5;
+      border-radius: 999px;
+      border: 1px solid #fed7aa;
+      transform: translateY(-50%);
+    }
+
+    .freq-thumb {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .freq-bubble {
+      font-size: 9px;
+      font-weight: 800;
+      color: #ea580c;
+      background: #ffffff;
+      border: 1px solid #fed7aa;
+      padding: 3px 8px;
+      border-radius: 999px;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+      min-width: 44px;
+      text-align: center;
+    }
+
+    .freq-dot {
+      width: 12px;
+      height: 12px;
+      background: #f97316;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+    }
+
+    .freq-scale {
+      display: flex;
+      justify-content: space-between;
+      font-size: 8px;
+      font-weight: 700;
+      color: #9a3412;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .freq-note {
+      font-size: 8px;
+      color: #9a3412;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+
+    .details-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .section-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #0f172a;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #f1f5f9;
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .detail-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 60px;
+    }
+
+    .detail-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+
+    .detail-value {
+      font-size: 13px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .detail-value.mono {
+      font-family: 'Inter', monospace;
+      font-size: 11px;
+      letter-spacing: 0.2px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .info-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .desc-section {
+      background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+      border: 1px solid #cbd5f5;
+    }
+
+    .info-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    .desc-title {
+      color: #0c4a6e;
+    }
+
+    .desc-text {
+      font-size: 9px;
+      line-height: 1.6;
+      color: #475569;
+      margin: 0;
+    }
+
+    .info-text {
+      font-size: 9px;
+      line-height: 1.5;
+      color: #64748b;
+      margin: 0;
+    }
+
+    .info-list {
+      margin: 0;
+      padding-left: 14px;
+      font-size: 9px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    .footer {
+      margin-top: auto;
+      padding: 0 var(--page-padding-x) 6mm;
+      text-align: right;
+      font-size: 8px;
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="hero-header">
+    <div class="hero-number">{{heroNumber}}</div>
+    <div class="hero-content">
+      <h1 class="hero-title">{{phenotype}}</h1>
+      <p class="hero-subtitle">
+        Variante {{rsid}} · Categoria {{category}} · Riesgo {{riskLabel}}
+      </p>
+    </div>
+  </header>
+
+  <div class="content-wrapper">
+
+    <section class="summary-grid">
+      <div class="card">
+        <div class="pill-row">
+          <span class="pill pill-rsid">RSID {{rsid}}</span>
+          <span class="pill pill-cat">{{category}}</span>
+          <span class="pill {{riskClass}}">Riesgo {{riskLabel}}</span>
+        </div>
+
+        <div class="summary-title">Resumen de la variante</div>
+        <p class="summary-text">
+          Este marcador se relaciona con el fenotipo indicado y se reporta con un
+          nivel de riesgo estimado. Usa esta ficha como referencia informativa.
+        </p>
+
+        <div class="source-row">
+          <span class="source-label">Fuente</span>
+          <span class="source-value">{{source}}</span>
+        </div>
+
+      </div>
+
+      <div class="card freq-card">
+        <div class="freq-title">Frecuencia en Chile</div>
+        <div class="freq-value">{{chilePercentDisplay}}</div>
+        <div class="freq-track">
+          <div class="freq-thumb" style="left: {{chilePercentPos}};">
+            <div class="freq-bubble">{{chilePercentDisplay}}</div>
+            <div class="freq-dot"></div>
+          </div>
+        </div>
+        <div class="freq-scale">
+          <span>0%</span>
+          <span>50%</span>
+          <span>100%</span>
+        </div>
+        <div class="freq-note">
+          Indica que porcentaje estimado de personas en Chile comparte este genotipo. Ayuda a entender
+          que tan comun o poco frecuente es en la poblacion local.
+        </div>
+      </div>
+    </section>
+
+    <section class="card desc-section">
+      <div class="info-title desc-title">Descripcion del fenotipo</div>
+      <p class="desc-text">{{phenotypeDescription}}</p>
+    </section>
+
+    <section class="card details-card">
+      <div class="section-title">Datos de la variante</div>
+      <div class="details-grid">
+        <div class="detail-card">
+          <div class="detail-label">Alelo referencia</div>
+          <div class="detail-value">{{refAllele}}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">Alelo alternativo</div>
+          <div class="detail-value">{{altAllele}}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">Cromosoma</div>
+          <div class="detail-value mono">{{chromosome}}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">Posicion</div>
+          <div class="detail-value mono">{{position}}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="info-grid">
+      <div class="info-card">
+        <div class="info-title">Interpretacion rapida</div>
+        <ul class="info-list">
+          <li>Variante {{rsid}} asociada a {{phenotype}}.</li>
+          <li>Frecuencia estimada en chilenos: {{chilePercentDisplay}}.</li>
+          <li>Categoria {{category}} con riesgo {{riskLabel}}.</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <div class="info-title">Uso y limites</div>
+        <p class="info-text">
+          Esta ficha resume un marcador puntual y no constituye diagnostico clinico.
+          La interpretacion depende de contexto medico, evidencia actual y estilo de vida.
+        </p>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="footer">Pag {{pageNumber}} de {{pageTotal}}</footer>
+</body>
+</html>

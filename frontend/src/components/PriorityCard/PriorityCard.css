@@ -1,0 +1,27 @@
+.btn-priority-high {
+    background-color: #dc2626;
+}
+
+.btn-priority-high:hover {
+    background-color: #b91c1c;
+}
+
+.btn-priority-medium {
+    background-color: #ca8a04;
+}
+
+.btn-priority-medium:hover {
+    background-color: #a16207;
+}
+
+.btn-priority-low {
+    background-color: #2563eb;
+}
+
+.btn-priority-low:hover {
+    background-color: #1d4ed8;
+}
+
+.btn-ver-recomendaciones {
+    font-size: 0.875rem;
+}

@@ -1,0 +1,119 @@
+/* GenomaPricing: diseño que replica el mock */
+.gp {
+  --c-brand: #108AC2;
+  --c-text: #5a6b80;
+
+  background: radial-gradient(80% 60% at 60% 75%, #b8d8fb 0%, rgba(184,216,251,0) 70%),
+              linear-gradient(360deg, #C9D8FC 0%, #F1F8FE 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 96px 20px 80px;
+  font-family: 'DM Sans','Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.gp-container{
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 550px; /* izquierda + derecha */
+  gap: 32px;
+  align-items: center;
+}
+
+/* Izquierda */
+.gp-left{ min-width: 0; }
+
+.gp-title{
+  margin: 6px 0 15px;
+  font-weight: 600;
+  color: #1189c2;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  font-size: clamp(28px, 4.5vw, 40px);
+}
+
+.gp-lead{
+  margin: 0 0 30px 0;
+  color: var(--c-text);
+  font-size: 14px;
+  max-width: 70ch;
+}
+
+.gp-bullets{ list-style:none; padding:0; margin: 6px 0 30px 0; display:flex; flex-direction:column; gap:30px; }
+.gp-bullet{ display:flex; gap:12px; align-items:flex-start; color:#2e4258; }
+.gp-bullet-ico{ width:36px; height:36px; display:grid; place-items:center; border-radius:999px; background:#E6F4FE; color:#108AC2; border:1px solid #d9eaf8; flex-shrink:0; }
+.gp-bullet-ico svg{ width:18px; height:18px; }
+.gp-bullet-title{ font-weight:600; color:#108AC2; font-size:17px; }
+.gp-bullet-desc{ font-size:13px; color:#6b7a90; max-width: 70ch;}
+
+.gp-cta-main{
+  display:inline-flex; align-items:center; gap:10px; margin-top: 10px;
+  background: linear-gradient(180deg, #1195d6 0%, #108AC2 100%);
+  color:#fff; border:0; border-radius:999px;
+  padding:12px 20px; font-weight:700; font-size:14px; cursor:pointer; letter-spacing:.2px;
+  box-shadow: 0 10px 18px rgba(16,138,194,.18);
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+.gp-cta-main:hover{ transform: translateY(-1px); filter: brightness(1.05); box-shadow: 0 14px 24px rgba(16,138,194,.22); }
+
+/* Tickets: ¿Qué incluye tu paquete? */
+.gp-includes-heading{ margin: 6px 0 6px; font-weight:800; color:#108AC2; letter-spacing:-.01em; font-size:17px; }
+.gp-tickets{ list-style:none; padding:0; margin:8px 0 16px; display:flex; flex-direction:column; gap:15px; }
+.gp-ticket{ position:relative; display:grid; grid-template-columns: 36px 1fr 12px; align-items:center; gap:10px; 
+  background: linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,.42));
+  border:1px solid rgba(223,229,237,.9);
+  border-radius:18px; padding:10px 12px; 
+  box-shadow: 0 8px 22px rgba(16,40,82,.08), inset 0 0 0 1px rgba(255,255,255,.18);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+.gp-ticket::before{ content:""; position:absolute; inset:0; background: radial-gradient(600px 80px at -20% 0%, rgba(16,138,194,.12), rgba(16,138,194,0)); opacity:0; transition: opacity .25s ease; }
+.gp-ticket:hover::before{ opacity:1; }
+.gp-ticket-ico{ width:30px; height:30px; border-radius:999px; display:grid; place-items:center; 
+  background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.45));
+  border:1px solid rgba(223,229,237,.95); box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+}
+.gp-ticket-body{ display:flex; flex-direction:column; line-height:1.26; }
+.gp-ticket-title{ font-weight:700; color:#108AC2; font-size:14.5px; }
+.gp-ticket-desc{ color:#6b7a90; font-size:12px; }
+/* borde perforado a la derecha (desactivado en glass) */
+.gp-ticket-edge{ display:none; }
+
+/* Hover bonito para tickets */
+.gp-ticket{ transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease; }
+.gp-ticket-ico{ transition: transform .18s ease, filter .18s ease; }
+.gp-ticket:hover{ box-shadow: 0 10px 24px rgba(16,40,82,.10); border-color: rgba(210,220,232,.95); background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.52)); }
+.gp-ticket:hover .gp-ticket-ico{ transform: scale(1.06); filter: brightness(1.03); }
+
+/* Derecha (TiltedCard) */
+.gp-right{ position:relative; min-height:560px; }
+.gp-right-tilt{ position:relative; height:560px; display:flex; align-items:flex-end; justify-content:flex-end; }
+/* Subir la card 10px */
+.gp-right-tilt .tilted-card-figure{ transform: translateY(-10px) scale(1); transform-origin: bottom right; }
+
+/* Responsive */
+@media (max-width:1140px){
+  .gp-container{ grid-template-columns: 1fr; }
+  .gp-right{ order:2; min-height: 420px; }
+  .gp-right-tilt{ height: 420px; justify-content:center; }
+  .gp-right-tilt .tilted-card-figure{ transform: translateY(20px) scale(0.9); transform-origin: bottom center; }
+  /* Centrar contenido del texto en tablet */
+  .gp-left{ text-align:center; }
+  .gp-includes-heading{ text-align:center; }
+  .gp-tickets{ align-items:center; }
+  .gp-ticket{ max-width: 620px; width:100%; }
+}
+@media (max-width:768px){
+  .gp{ padding: 100px 16px 60px; }
+  .gp-right-tilt{ height: 380px; }
+  .gp-right-tilt .tilted-card-figure{ transform: translateY(20px) scale(0.8); }
+}
+@media (max-width:600px){
+  .gp-right-tilt{ height: 340px; }
+  .gp-right-tilt .tilted-card-figure{ transform: translateY(20px) scale(0.72); }
+}
+@media (max-width:480px){
+  .gp-cta-main{ width:100%; justify-content:center; }
+}

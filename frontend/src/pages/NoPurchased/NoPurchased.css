@@ -1,0 +1,343 @@
+/* ==========================================================================
+   NoPurchased — Split informativo (rediseño sobre la marca GenomIA)
+   Dirección "Dimension": títulos Geist · cuerpo DM Sans · un solo acento azul
+   Sin glassmorphism, sin degradados de texto, sin animaciones infinitas.
+   Split 50/50: panel de marca a la izquierda, pasos a la derecha.
+   ========================================================================== */
+
+.no-purchased-page {
+  /* tokens locales */
+  --gp-ink: #0f2341;
+  --gp-navy: #0d5e8c;
+  --gp-navy-deep: #0b3a5f;
+  --gp-blue: #0b7ad0;
+  --gp-body: #4f637c;
+  --gp-muted: #5b6b80;
+  --gp-line: #e8edf4;
+  --gp-bg: #f6f8fb;
+
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 4vw, 3rem);
+
+  font-family: "DM Sans", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--gp-body);
+
+  background:
+    radial-gradient(1100px 700px at 85% -20%, rgba(11, 122, 208, 0.06), transparent 60%),
+    var(--gp-bg);
+}
+
+/* ===== Contenedor split ===== */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  width: 100%;
+  max-width: 940px;
+  background: #ffffff;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px rgba(13, 94, 140, 0.06),
+    0 28px 64px -28px rgba(13, 94, 140, 0.3);
+  animation: fadeInUp 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* ===== Panel de marca (izquierda) ===== */
+.split-brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.75rem;
+  padding: clamp(2rem, 4.5vw, 3rem);
+
+  background: linear-gradient(160deg, var(--gp-navy-deep) 0%, var(--gp-navy) 100%);
+  color: #ffffff;
+}
+
+.split-logo-button {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  line-height: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.split-logo-button:hover .split-logo {
+  opacity: 0.85;
+}
+
+.split-logo-button:active {
+  transform: scale(0.97);
+}
+
+.split-logo-button:focus-visible {
+  outline: 2px solid #8fd0ff;
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.split-logo {
+  width: 92px;
+  height: auto;
+  /* Monocromo blanco para que el logo lea bien sobre el panel azul */
+  filter: brightness(0) invert(1);
+}
+
+.split-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.split-status svg {
+  flex-shrink: 0;
+}
+
+.split-brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.split-title {
+  font-family: "Geist", "DM Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(1.6rem, 3.4vw, 2.1rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.brand-name {
+  color: #8fd0ff;
+}
+
+.split-greeting {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ===== Panel informativo (derecha) ===== */
+.split-content {
+  padding: clamp(2rem, 4.5vw, 3rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.content-title {
+  font-family: "Geist", "DM Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--gp-ink);
+  margin: 0;
+}
+
+.steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.step-number {
+  font-family: "Geist", "DM Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--gp-blue);
+  line-height: 1.3;
+  padding-top: 0.1rem;
+}
+
+.step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-bottom: 1px solid var(--gp-line);
+  padding-bottom: 1.1rem;
+  flex: 1;
+}
+
+.step:last-child .step-body {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.step-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gp-muted);
+}
+
+.step-value {
+  font-size: 1rem;
+  color: var(--gp-ink);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* ===== Contacto ===== */
+.contact-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.contact-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--gp-muted);
+}
+
+.contact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: #f5f8fc;
+  border: 1px solid #e4ebf4;
+  color: var(--gp-navy);
+  padding: 0.75rem 1.1rem;
+  border-radius: 16px;
+  text-decoration: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.contact-chip:hover {
+  background: #eef4fb;
+  border-color: #c8dbef;
+}
+
+.contact-chip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--gp-navy);
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.contact-chip__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.35;
+}
+
+.contact-chip__label {
+  font-size: 0.75rem;
+  color: var(--gp-muted);
+  font-weight: 600;
+}
+
+.contact-chip__value {
+  font-size: 1rem;
+  color: var(--gp-ink);
+  font-weight: 700;
+}
+
+/* ===== Cerrar sesión (sobre panel azul) ===== */
+.logout-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  padding: 0.6rem 1.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.logout-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.logout-button:active {
+  transform: scale(0.98);
+}
+
+.logout-button svg {
+  flex-shrink: 0;
+}
+
+/* ===== Animación de entrada (una sola vez) ===== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Responsivo (apilado) ===== */
+@media (max-width: 760px) {
+  .no-purchased-page {
+    padding: 1rem;
+    align-items: stretch;
+  }
+
+  .split {
+    grid-template-columns: 1fr;
+    border-radius: 20px;
+  }
+
+  .split-brand {
+    gap: 1.4rem;
+    padding: 2rem 1.5rem;
+  }
+
+  .split-content {
+    padding: 2rem 1.5rem;
+  }
+}
+
+/* ===== Movimiento reducido ===== */
+@media (prefers-reduced-motion: reduce) {
+  .split {
+    animation: none;
+  }
+
+  .contact-chip,
+  .logout-button {
+    transition: none;
+  }
+}

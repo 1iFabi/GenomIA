@@ -1,0 +1,489 @@
+/* Dashboard Layout */
+.ancestria-dashboard {
+  display: flex;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f3f7ff 0%, #ffffff 60%);
+  color: #0f2341;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  position: relative;
+}
+
+/* Burger Button */
+.ancestria-dashboard__burger {
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 1100;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(11, 122, 208, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  outline: none;
+  backdrop-filter: blur(10px);
+}
+
+.ancestria-dashboard__burger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(11, 122, 208, 0.45), 0 4px 12px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
+}
+
+.ancestria-dashboard__burger:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 16px rgba(11, 122, 208, 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.ancestria-dashboard__sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: transparent;
+  display: flex;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.ancestria-dashboard__sidebar:has(.sidebar--folded) {
+  width: 80px;
+  min-width: 80px;
+}
+
+.ancestria-dashboard__main {
+  flex: 1 1 auto;
+  padding: 1.5rem 2.5rem 1.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* Page Content */
+.ancestria-page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Header */
+.ancestria-page__header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin: 0 0 2.5rem;
+}
+
+.ancestria-page__title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ancestria-page__title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0b7ad0;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.ancestria-page__subtitle {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #4f637c;
+  margin: 0;
+  max-width: 700px;
+}
+
+/* Content */
+.ancestria-page__content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.ancestria-page__chart-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  position: relative;
+}
+
+.ancestria-page__drill-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.ancestria-page__drill-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #0b7ad0;
+  margin: 0;
+}
+
+.ancestria-page__back-button {
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(11, 122, 208, 0.25);
+}
+
+.ancestria-page__back-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(11, 122, 208, 0.35);
+  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
+}
+
+.ancestria-page__back-button:active {
+  transform: translateY(0);
+}
+
+.ancestria-page__back-button {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(11, 122, 208, 0.25);
+  z-index: 10;
+}
+
+.ancestria-page__back-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(11, 122, 208, 0.35);
+  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
+}
+
+.ancestria-page__back-button:active {
+  transform: translateY(0);
+}
+
+.ancestria-page__legend-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 2rem;
+}
+
+.ancestria-page__legend-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #0b7ad0;
+  margin: 0 0 1.5rem 0;
+}
+
+.ancestria-page__legend-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.ancestria-page__legend-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.ancestria-page__legend-item:hover {
+  background: rgba(11, 122, 208, 0.05);
+  transform: translateX(4px);
+}
+
+.ancestria-page__legend-item--selected {
+  background: rgba(11, 122, 208, 0.1);
+  border-left: 4px solid #0b7ad0;
+  padding-left: calc(0.75rem - 4px);
+}
+
+.ancestria-page__legend-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.ancestria-page__legend-expand-btn {
+  background: none;
+  border: none;
+  color: #0b7ad0;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ancestria-page__legend-expand-btn:hover {
+  transform: scale(1.2);
+}
+
+.ancestria-page__legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.ancestria-page__legend-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f2341;
+  flex: 1;
+}
+
+.ancestria-page__legend-percentage {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #4f637c;
+}
+
+.ancestria-page__legend-sublist {
+  list-style: none;
+  padding: 0 0 0 2rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ancestria-page__legend-subitem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #4f637c;
+}
+
+.ancestria-page__legend-bullet {
+  font-size: 1.2rem;
+  color: #0b7ad0;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .ancestria-dashboard__burger {
+    display: flex;
+  }
+
+  .ancestria-dashboard {
+    flex-direction: column;
+  }
+
+  .ancestria-dashboard__sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: auto;
+    min-width: 0;
+    height: 100vh;
+    z-index: 1000;
+  }
+
+  .ancestria-dashboard__main {
+    width: 100%;
+    padding: 6rem 2rem 2rem 2rem;
+    margin: 0;
+  }
+
+  .ancestria-page__content {
+    grid-template-columns: 1fr;
+  }
+
+  .ancestria-page__legend-card {
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .ancestria-dashboard__main {
+    padding: 6rem 1.5rem 1.5rem 1.5rem;
+  }
+
+  .ancestria-page__title {
+    font-size: 1.5rem;
+  }
+
+  .ancestria-page__subtitle {
+    font-size: 0.9rem;
+  }
+
+  .ancestria-page__chart-card {
+    padding: 1.5rem;
+  }
+
+  .ancestria-page__legend-card {
+    padding: 1.5rem;
+  }
+
+  .ancestria-page__legend-title {
+    font-size: 1.1rem;
+  }
+
+  .ancestria-page__legend-name {
+    font-size: 1rem;
+  }
+
+  .ancestria-page__legend-percentage {
+    font-size: 0.9rem;
+  }
+
+  .ancestria-page__legend-subitem {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .ancestria-dashboard__burger {
+    width: 48px;
+    height: 48px;
+    top: 1.25rem;
+    left: 1.25rem;
+  }
+
+  .ancestria-dashboard__main {
+    padding: 5.5rem 1rem 1rem 1rem;
+  }
+
+  .ancestria-page__title {
+    font-size: 1.3rem;
+  }
+
+  .ancestria-page__chart-card {
+    padding: 1rem;
+  }
+
+  .ancestria-page__legend-card {
+    padding: 1rem;
+  }
+
+.ancestria-page__legend-sublist {
+    padding-left: 1.5rem;
+  }
+}
+
+/* Responsive Geochart */
+.ancestria-geochart-container {
+  width: 100% !important;
+}
+
+.ancestria-page__content {
+  grid-template-columns: 2fr 1fr !important;
+}
+
+@media (max-width: 1024px) {
+  .ancestria-page__content {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .ancestria-page__chart-card {
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .ancestria-page__content {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+  
+  .ancestria-page__chart-card {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .ancestria-page__chart-card {
+    padding: 0.75rem;
+  }
+}
+
+/* TrueFocus pequeño */
+.ancestria-truefocus-small .focus-container {
+  font-size: 1.1rem !important;
+  font-weight: 600;
+  color: #000000 !important;
+  letter-spacing: 0.3px;
+}
+
+.ancestria-truefocus-small .focus-word {
+  font-size: 1.1rem !important;
+  color: #000000 !important;
+}
+
+/* Estilos para bordes de países en el geochart */
+:global(svg path[stroke-width]) {
+  stroke: #000000 !important;
+  stroke-width: 0.2px !important;
+}
+
+:global(div[dir="ltr"] svg path) {
+  stroke: #000000 !important;
+  stroke-width: 0.2px !important;
+}
+
+/* Bordes específicos para el GeoChart de Google */
+:global(.google-visualization-geochart path) {
+  stroke: #000000 !important;
+  stroke-width: 0.2px !important;
+  transition: stroke-width 0.2s ease, stroke 0.2s ease !important;
+}
+
+:global(.google-visualization-geochart path:hover) {
+  stroke: #0b7ad0 !important;
+  stroke-width: 2.5px !important;
+  cursor: pointer !important;
+}
+
+:global(.google-visualization-geochart-container path) {
+  stroke: #000000 !important;
+  stroke-width: 0.2px !important;
+  transition: stroke-width 0.2s ease, stroke 0.2s ease !important;
+}
+
+:global(.google-visualization-geochart-container path:hover) {
+  stroke: #0b7ad0 !important;
+  stroke-width: 2.5px !important;
+  cursor: pointer !important;
+}

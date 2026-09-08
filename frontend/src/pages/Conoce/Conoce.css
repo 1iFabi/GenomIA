@@ -1,0 +1,184 @@
+.conoce-section{
+  --uoh:#108ac2;
+  --fg:#fff;
+  --fg-soft:rgba(255,255,255,.85);
+  --chip-bg:#fff;
+  --chip-fg:#108ac2;
+  --card-bg:rgba(0,0,0,.12);
+  background:var(--uoh);
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:120px 20px;
+  color:var(--fg);
+  font-family:'DM Sans','Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  position:relative;
+  overflow:hidden; /* para los brillos decorativos */
+}
+
+
+.conoce-container{
+  width:100%;
+  max-width:1180px;
+  margin-inline:auto;
+  padding-inline:16px;
+  box-sizing:border-box;
+}
+
+.conoce-header{
+  text-align:center;
+}
+
+/* Breadcrumb usa estilos compartidos en src/styles/breadcrumb.css */
+/* Se aplica la tipografía nueva solo dentro de esta sección */
+.conoce-section .breadcrumb{
+  font-family:'DM Sans','Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+}
+
+.conoce-title{
+  margin:0 0 12px 0;
+  font-family:'Geist','DM Sans','Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  font-weight:600;
+  font-size:clamp(28px,5vw,48px);
+  line-height:1.06;
+  letter-spacing:-.015em;
+  color:#fff;
+}
+
+.conoce-subtitle{
+  margin:0 auto;
+  max-width:65ch;
+  font-size:clamp(15px,1.5vw,18px);
+  line-height:1.45;
+  color:var(--fg-soft);
+}
+
+/* ===== Grid de pasos ===== */
+.conoce-steps-grid{
+  display:grid;
+  grid-template-columns:repeat(4, 240px);  /* ancho fijo */
+  justify-content:center;                  /* centra el bloque */
+  column-gap:80px;
+  row-gap:40px;
+  align-items:start;
+  margin-top:34px;
+  position:relative;
+}
+
+/* Línea conectora entre cards (desktop) */
+@media (min-width:1141px){
+  .conoce-step{ position:relative; }
+  .conoce-step::after{
+    content:"";
+    position:absolute;
+    top: 115px;                  /* bajo icono/badge */
+    left: calc(50% + 120px);     /* mitad card + mitad gap */
+    width: 80px;                 /* tramo dentro del gap */
+    height:2px;
+    background: repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,.75) 0 10px,
+      rgba(255,255,255,0) 10px 16px
+    );
+    opacity:.8;
+  }
+  .conoce-step:last-child::after{ display:none; }
+}
+
+.conoce-step{
+  text-align:center;
+  width:240px; /* coincide con la columna */
+  margin:0;
+}
+
+/* Icono */
+.conoce-step-icon{
+  width:84px;
+  height:84px;
+  margin:0 auto 16px;
+  border-radius:18px;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,.16);
+  color:#fff;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.18);
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.conoce-step-icon svg{ width:50px; height:50px; stroke-width:2; }
+
+/* Badge */
+.conoce-step-badge{
+  display:inline-block;
+  background:var(--chip-bg);
+  color:var(--chip-fg);
+  padding:6px 16px;
+  border-radius:999px;
+  font-size:15px;
+  font-weight:700;
+  margin-bottom:14px;
+}
+
+/* Título */
+.conoce-step-title{
+  margin:0 0 8px 0;
+  font-weight:700;
+  font-size:20px;
+  line-height:1.25;
+  color:#fff;
+  max-width:22ch;
+  margin-inline:auto;
+}
+
+/* Subrayado */
+.conoce-step-underline{
+  width:58px;
+  height:3px;
+  margin:10px auto 16px;
+  border-radius:3px;
+  background:linear-gradient(90deg, #fff, rgba(255,255,255,.65));
+}
+
+/* Descripción */
+.conoce-step-description{
+  margin:0;
+  padding:16px 14px;
+  border-radius:16px;
+  background:var(--card-bg);
+  font-size:15px;
+  line-height:1.45;
+  color:var(--fg-soft);
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+/* Micro-hover sutil */
+.conoce-step:hover .conoce-step-icon{
+  background: rgba(255,255,255,.2);
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.28),
+    0 8px 24px rgba(0,0,0,.18);
+  transform: translateY(-2px);
+}
+.conoce-step:hover .conoce-step-description{
+  background: rgba(0,0,0,.16);
+  box-shadow: 0 8px 22px rgba(0,0,0,.18);
+  transform: translateY(-1px);
+}
+
+/* ===== Responsive ===== */
+@media (max-width:1140px){
+  .conoce-steps-grid{
+    grid-template-columns:repeat(2, 260px);
+    column-gap:60px;
+  }
+  .conoce-step{ width:260px; }
+  .conoce-step::after{ display:none !important; } /* sin conectores en tablet */
+}
+
+@media (max-width:640px){
+  .conoce-section{ min-height:auto; padding:100px 20px; }
+  .conoce-steps-grid{ grid-template-columns:300px; column-gap:0; }
+  .conoce-step{ width:300px; }
+  .conoce-step-icon{ width:76px; height:76px; }
+  .conoce-step-icon svg{ width:44px; height:44px; }
+}

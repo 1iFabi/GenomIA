@@ -1,0 +1,893 @@
+/* ========================================
+   ENFERMEDADES LAYOUT - Naming unique to avoid conflicts
+======================================== */
+
+.enfermedades-layout {
+  display: flex;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f3f7ff 0%, #ffffff 60%);
+  color: #0f2341;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  position: relative;
+}
+
+/* Burger Button */
+.enfermedades-layout__burger {
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 1100;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(11, 122, 208, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  outline: none;
+  backdrop-filter: blur(10px);
+}
+
+.enfermedades-layout__burger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(11, 122, 208, 0.45), 0 4px 12px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
+}
+
+.enfermedades-layout__burger:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 16px rgba(11, 122, 208, 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.enfermedades-layout__sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: transparent;
+  display: flex;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.enfermedades-layout__sidebar:has(.sidebar--folded) {
+  width: 80px;
+  min-width: 80px;
+}
+
+.enfermedades-layout__main {
+  flex: 1 1 auto;
+  padding: 1.5rem 2.5rem 1.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* Page Content */
+.enfermedades-page {
+  width: 100%;
+  padding: 0 1rem;
+}
+
+.enfermedades-page__content {
+  display: flex;
+  flex-direction: column;
+}
+
+.enfermedades-page__priorities-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  align-items: start;
+  margin-top: -70px;
+}
+
+.enfermedades-page__priorities-container .priority-section {
+  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.enfermedades-page__priorities-container .priority-section__header {
+  flex-shrink: 0;
+}
+
+.enfermedades-page__priorities-container .priority-section__cards {
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.enfermedades-page__priorities-container .priority-section__cards::-webkit-scrollbar {
+  width: 6px;
+}
+
+.enfermedades-page__priorities-container .priority-section__cards::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.enfermedades-page__priorities-container .priority-section__cards::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.enfermedades-page__priorities-container .priority-section__cards::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Priority Sections */
+.priority-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.priority-section__header {
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  user-select: none;
+}
+
+.priority-section__header:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.priority-section__title-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.priority-section__icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.priority-section__icon {
+  width: 24px;
+  height: 24px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.priority-section__title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+  flex: 1;
+  line-height: 1.2;
+}
+
+.priority-section__count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 0.65rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.priority-section__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.priority-section__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* SNP Cards */
+.snp-card {
+  background: #ffffff;
+  border: 2px solid;
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.snp-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.snp-card__header {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  cursor: pointer;
+  user-select: none;
+}
+
+.snp-card__info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.snp-card__title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.4;
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.snp-card__rsid-expanded {
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  font-family: 'Courier New', monospace;
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1.5px solid currentColor;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.snp-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.snp-card__risk-badge {
+  display: none;
+}
+
+/* Expanded Content */
+.snp-card__content {
+  padding: 0 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: slideDown 0.3s ease-out;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding-top: 1.25rem;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.snp-card__detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.snp-card__subtitle {
+  font-size: 0.5rem;
+  font-weight: 700;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.75;
+}
+
+.snp-card__genotype {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  font-family: 'Courier New', monospace;
+  padding: 0.6rem 0.85rem;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  letter-spacing: 0.1em;
+}
+
+.snp-card__description {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+}
+
+.snp-card__recommendation-btn {
+  align-self: flex-start;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.snp-card__recommendation-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.snp-card__recommendation-btn:active {
+  transform: translateY(0);
+}
+
+/* Loading State */
+.enfermedades-page__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 1.5rem;
+}
+
+
+
+.enfermedades-page__loading p {
+  font-size: 1.1rem;
+  color: #4f637c;
+  font-weight: 500;
+}
+
+/* Error State */
+.enfermedades-page__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 1.5rem;
+}
+
+.enfermedades-page__error p {
+  font-size: 1.1rem;
+  color: #DC2626;
+  font-weight: 500;
+}
+
+.enfermedades-page__error button {
+  padding: 0.85rem 1.5rem;
+  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(12, 140, 240, 0.25);
+}
+
+.enfermedades-page__error button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(12, 140, 240, 0.35);
+}
+
+/* Empty State */
+.enfermedades-page__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  border: 2px dashed #93C5FD;
+}
+
+.enfermedades-page__empty p {
+  font-size: 1.1rem;
+  color: #4f637c;
+  text-align: center;
+  margin: 0;
+}
+
+/* ===== DASHBOARD PRO - ESTILOS PROFESIONALES ===== */
+.dashboard-pro-3col {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 0px;
+}
+
+.kpis-stack,
+.score-recommendations-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 80%;
+  justify-content: center;
+}
+
+/* ===== CARD PRO (page-specific deltas; base lives in styles/cards.css) ===== */
+.card-pro {
+  overflow: hidden;
+}
+
+.card-large-pro {
+  height: 80%;
+}
+
+/* ===== LEGEND PRO ===== */
+.legend-pro {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #E5E7EB;
+}
+
+.legend-pro__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.legend-pro__item:hover {
+  background: #F9FAFB;
+}
+
+.legend-pro__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legend-pro__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-pro__label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.legend-pro__value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* ===== KPI PRO ===== */
+.kpi-pro {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  height: 100%;
+}
+
+.kpi-pro__content {
+  flex: 1;
+}
+
+.kpi-header-tooltip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.kpi-pro__content h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6B7280;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpi-tooltip-wrapper {
+  position: relative;
+}
+
+.kpi-tooltip-trigger {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #E5E7EB;
+  border: none;
+  color: #6B7280;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: help;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.kpi-tooltip-trigger:hover {
+  background: #D1D5DB;
+  color: #374151;
+}
+
+.kpi-tooltip {
+  position: fixed !important;
+  background: #1F2937;
+  color: #F3F4F6;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  z-index: 10000 !important;
+  max-width: 280px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid #4B5563;
+  word-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 1 !important;
+  visibility: visible !important;
+  animation: tooltipFadeIn 0.2s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.kpi-pro__value {
+  font-size: 25px;
+  font-weight: 800;
+  color: #111827;
+  margin: 8px 0;
+  line-height: 1;
+}
+
+.kpi-pro__subtitle {
+  font-size: 13px;
+  color: #9CA3AF;
+  margin: 8px 0 0 0;
+  font-weight: 500;
+}
+
+.kpi-pro__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== RESPONSIVE PRO ===== */
+@media (max-width: 1200px) {
+  .dashboard-pro-3col {
+    grid-template-columns: 1fr;
+    margin-bottom: 40px; /* Reduce margin on smaller screens */
+  }
+
+  .enfermedades-page__priorities-container {
+    margin-top: 0;
+  }
+
+  .card-large-pro, .kpis-stack {
+    height: auto; /* Let content define height */
+  }
+}
+
+@media (max-width: 1024px) {
+  .enfermedades-layout__burger {
+    display: flex;
+  }
+
+  .enfermedades-layout {
+    flex-direction: column;
+  }
+
+  .enfermedades-layout__sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: auto;
+    min-width: 0;
+    height: 100vh;
+    z-index: 1000;
+  }
+
+  .enfermedades-layout__main {
+    width: 100%;
+    padding: 6rem 2rem 2rem 2rem;
+    margin: 0;
+  }
+
+  .enfermedades-page__priorities-container {
+    grid-template-columns: 1fr;
+  }
+
+  .enfermedades-page__priorities-container .priority-section__cards {
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .enfermedades-layout__main {
+    padding: 6rem 1.5rem 1.5rem 1.5rem;
+  }
+
+  .card-large-pro,
+  .card-small-pro {
+    padding: 20px;
+  }
+  
+  .kpi-pro__value {
+    font-size: 28px;
+  }
+
+  .priority-section__header {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .priority-section__title-row {
+    gap: 0.85rem;
+  }
+
+  .priority-section__icon-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+
+  .priority-section__icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .priority-section__title {
+    font-size: 1.2rem;
+  }
+
+  .priority-section__count {
+    min-width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+    padding: 0 0.5rem;
+  }
+
+  .snp-card__header {
+    padding: 1.25rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .snp-card__actions {
+    align-self: flex-start;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .snp-card__content {
+    padding: 0 1.25rem 1.25rem;
+    gap: 0.85rem;
+  }
+
+  .snp-card__recommendation-btn {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .enfermedades-layout__burger {
+    width: 48px;
+    height: 48px;
+    top: 1.25rem;
+    left: 1.25rem;
+  }
+
+  .enfermedades-layout__main {
+    padding: 5.5rem 1rem 1rem 1rem;
+  }
+
+  .priority-section__header {
+    padding: 1rem 1rem;
+  }
+
+  .priority-section__title-row {
+    gap: 0.75rem;
+  }
+
+  .priority-section__icon-wrapper {
+    width: 36px;
+    height: 36px;
+  }
+
+  .priority-section__icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .priority-section__title {
+    font-size: 1.05rem;
+  }
+
+  .priority-section__count {
+    min-width: 26px;
+    height: 26px;
+    font-size: 0.8rem;
+    padding: 0 0.45rem;
+  }
+
+  .snp-card__title {
+    font-size: 1.05rem;
+    gap: 0.5rem;
+  }
+
+  .snp-card__rsid {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.7rem;
+  }
+
+  .snp-card__header {
+    padding: 1rem;
+  }
+
+  .snp-card__content {
+    padding: 0 1rem 1rem;
+    gap: 0.75rem;
+  }
+
+  .snp-card__genotype {
+    font-size: 1rem;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .snp-card__description {
+    font-size: 0.85rem;
+    padding: 0.7rem;
+  }
+
+  .snp-card__subtitle {
+    font-size: 0.75rem;
+  }
+}
+
+/* ===== ANIMATIONS PRO ===== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.card-pro {
+  animation: fadeIn 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+.card-pro:nth-child(1) { animation-delay: 0.1s; }
+.card-pro:nth-child(2) { animation-delay: 0.2s; }
+.card-pro:nth-child(3) { animation-delay: 0.3s; }
+
+.card-pro:hover {
+  transform: translateY(-4px);
+}
+
+/* Score Card Animation */
+.score-card-modern {
+  animation: slideUp 0.6s ease-out 0.25s forwards;
+  opacity: 0;
+}
+
+.score-card-modern:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(56, 189, 248, 0.2);
+}
+
+/* Info Card Animation */
+.info-card-modern {
+  animation: slideUp 0.6s ease-out 0.35s forwards;
+  opacity: 0;
+}
+
+.info-card-modern:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(102, 126, 234, 0.2);
+}
+
+/* KPI Cards Animation */
+.kpi-card-modern {
+  animation: scaleIn 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+.kpi-card-modern:nth-child(1) { animation-delay: 0.1s; }
+.kpi-card-modern:nth-child(2) { animation-delay: 0.2s; }
+
+.kpi-card-modern:hover {
+  transform: translateY(-6px);
+}
+
+/* Priority Cards Animation */
+.priority-section {
+  animation: slideUp 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+.priority-section:nth-child(1) { animation-delay: 0.1s; }
+.priority-section:nth-child(2) { animation-delay: 0.2s; }
+.priority-section:nth-child(3) { animation-delay: 0.3s; }

@@ -1,0 +1,95 @@
+/* SunburstChart.css */
+.sunburst-pure-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sunburst-svg-wrapper {
+  width: 100%;
+  max-width: 320px;
+  position: relative;
+}
+
+.sunburst-main-svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.sunburst-segment {
+  cursor: pointer;
+  stroke: white;
+  stroke-width: 2px;
+}
+
+.sunburst-segment.dimmed {
+  fill-opacity: 0.2 !important;
+  stroke-opacity: 0.2;
+}
+
+.center-label-top {
+  font-size: 13px;
+  font-weight: 700;
+  fill: #334155;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.center-label-bottom {
+  font-size: 13px;
+  font-weight: 700;
+  fill: #334155;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sunburst-legend-integrated {
+  margin-top: 2rem;
+  width: 100%;
+}
+
+.systems-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+}
+
+.mini-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.mini-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sunburst-tooltip-new {
+  background-color: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  pointer-events: none;
+  z-index: 2000;
+  box-shadow: 
+      0 10px 15px -3px rgba(0, 0, 0, 0.1), 
+      0 0 0 1px rgba(255, 255, 255, 0.1);
+  border: none; /* Removing previous border to use box-shadow border */
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}

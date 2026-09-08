@@ -1,0 +1,86 @@
+.nf-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #7fbfe8; /* fallback azul claro mientras carga WebGL */
+}
+
+/* Capa del fondo iridiscente a pantalla completa */
+.nf-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.nf-bg .iridescence-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Contenido centrado sobre el fondo */
+.nf-content {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 40px 24px;
+  box-sizing: border-box;
+}
+
+/* "404" en azul marino para contrastar sobre el fondo claro */
+.nf-code {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: clamp(4rem, 12vw, 7rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 4px;
+  color: #ffffff;
+  text-shadow: 0 2px 10px rgba(13, 44, 84, 0.35);
+  user-select: none;
+}
+
+/* Leyenda debajo del 404 */
+.nf-sub {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: clamp(0.85rem, 2.5vw, 1.4rem);
+  font-weight: 600;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: hsl(0, 0%, 100%);
+  margin-top: 0.25rem;
+  text-align: center;
+  user-select: none;
+}
+
+/* Botón gris claro */
+.nf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2rem;
+  padding: 0.8rem 2.2rem;
+  background: #d1d5db;
+  color: #0d2c54;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  box-shadow: 0 2px 8px rgba(13, 44, 84, 0.15);
+}
+
+.nf-btn:hover {
+  background: #c3cbd5;
+}
+
+.nf-btn:active {
+  transform: scale(0.98);
+}

@@ -1,0 +1,325 @@
+:root {
+  color-scheme: light;
+}
+
+.card-grid {
+  display: grid;
+  gap: clamp(0.75rem, 1.5vw, 1rem);
+  width: 100%;
+  grid-auto-rows: minmax(160px, auto);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(1.15rem, 1.6vw, 1.85rem);
+  border-radius: 22px;
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 16px 36px rgba(15, 35, 65, 0.08);
+  color: var(--card-text-color, #1f2937);
+  overflow: hidden;
+  min-height: 180px;
+  isolation: isolate;
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+  --glow-x: 50%;
+  --glow-y: 50%;
+  --glow-intensity: 0;
+  --glow-radius: 200px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 32px 60px rgba(15, 35, 65, 0.12);
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  color: inherit;
+}
+
+.card__label {
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  opacity: 0.68;
+}
+
+.card__meta {
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.6;
+}
+
+.card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-width: 360px;
+  flex: 1 1 auto;
+}
+
+.card__content--center {
+  text-align: center;
+  align-items: center;
+}
+
+.card__content-justify-start {
+  justify-content: flex-start;
+}
+
+.card__content-justify-center {
+  justify-content: center;
+}
+
+.card__content-justify-between {
+  justify-content: space-between;
+}
+
+.card__content-justify-end {
+  justify-content: flex-end;
+}
+
+.card__title {
+  margin: 0;
+  font-size: clamp(1.1rem, 0.95rem + 0.45vw, 1.4rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: inherit;
+}
+
+.card__description {
+  margin: 0;
+  font-size: clamp(0.8rem, 0.75rem + 0.12vw, 0.9rem);
+  line-height: 1.48;
+  color: var(--card-description-color, rgba(17, 24, 39, 0.72));
+}
+
+.card__description--rich {
+  font-size: clamp(0.75rem, 0.7rem + 0.15vw, 0.85rem);
+  line-height: 1.5;
+  color: var(--card-description-color, rgba(17, 24, 39, 0.72));
+}
+
+.card__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--card-cta-color, currentColor);
+  text-decoration: none;
+  cursor: pointer;
+  transition: gap 0.2s ease, transform 0.2s ease;
+}
+
+.card__cta::after {
+  content: '\2192';
+  transition: transform 0.2s ease;
+  font-size: 1.05rem;
+}
+
+.card__cta:hover::after,
+.card__cta:focus-visible::after {
+  transform: translateX(4px);
+}
+
+.card__cta--button {
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+.card--text-autohide .card__title,
+.card--text-autohide .card__description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card--text-autohide .card__title {
+  -webkit-line-clamp: var(--clamp-title, 1);
+  line-clamp: var(--clamp-title, 1);
+}
+
+.card--text-autohide .card__description {
+  -webkit-line-clamp: var(--clamp-desc, 3);
+  line-clamp: var(--clamp-desc, 3);
+}
+
+@media (max-width: 1023px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-auto-rows: minmax(200px, auto);
+  }
+  
+  .card {
+    min-height: 200px;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .card-grid {
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+    grid-auto-rows: minmax(200px, auto);
+  }
+  
+  .card {
+    min-height: 200px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .card-grid {
+    grid-template-columns: 0.68fr 1fr 1fr;
+    grid-template-rows: repeat(3, 1fr);
+    height: calc(100vh - 240px); /* Altura total menos header y padding */
+    min-height: 500px;
+    max-height: 820px;
+    grid-template-areas:
+      "ancestria rasgos farmacogenetica"
+      "ancestria biomarcadores biometricas"
+      "ancestria enfermedades enfermedades";
+  }
+
+  .card--ancestria {
+    grid-area: ancestria;
+    min-height: 100%;
+    justify-content: flex-start !important;
+    padding-bottom: 0 !important;
+  }
+  
+  .card--ancestria .card__content {
+    margin-bottom: 0;
+    flex: 0 0 auto;
+  }
+
+  .card--rasgos {
+    grid-area: rasgos;
+    min-height: 0;
+  }
+
+  .card--farmacogenetica {
+    grid-area: farmacogenetica;
+    min-height: 0;
+  }
+
+  .card--biomarcadores {
+    grid-area: biomarcadores;
+    min-height: 0;
+  }
+
+  .card--biometricas {
+    grid-area: biometricas;
+    min-height: 0;
+  }
+
+  .card--enfermedades {
+    grid-area: enfermedades;
+    min-height: 0;
+  }
+}
+
+/* Visual styles per tile */
+
+/* Motion helpers retained for feature parity */
+
+.card--border-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 6px;
+  background: radial-gradient(
+    var(--glow-radius, 200px) circle at var(--glow-x, 50%) var(--glow-y, 50%),
+    rgba(var(--glow-color, 132, 0, 255), calc(var(--glow-intensity, 0) * 0.7)) 0%,
+    rgba(var(--glow-color, 132, 0, 255), calc(var(--glow-intensity, 0) * 0.35)) 35%,
+    transparent 65%
+  );
+  border-radius: inherit;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: subtract;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+}
+
+.card--border-glow:hover::after {
+  opacity: 1;
+}
+
+.particle-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.particle {
+  pointer-events: none;
+}
+
+.particle::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: rgba(132, 0, 255, 0.2);
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.global-spotlight {
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+  z-index: 200 !important;
+  pointer-events: none;
+}
+
+.bento-section {
+  position: relative;
+  user-select: none;
+}
+
+/* Breakpoints adicionales para zoom y pantallas intermedias */
+@media (min-width: 1600px) {
+  .card-grid {
+    height: calc(100vh - 220px);
+    min-height: 600px;
+    max-height: 900px;
+    grid-template-rows: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1400px) and (max-width: 1599px) {
+  .card-grid {
+    height: calc(100vh - 230px);
+    min-height: 550px;
+    max-height: 850px;
+    grid-template-rows: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .card-grid {
+    grid-template-columns: 0.7fr 1fr 1fr;
+    height: calc(100vh - 250px);
+    min-height: 500px;
+    max-height: 750px;
+    grid-template-rows: repeat(3, 1fr);
+  }
+}
+

@@ -1,0 +1,219 @@
+.genetic-trait-bar {
+  background: white;
+  border: 1px solid #f1f5f9;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  transition: all 0.25s ease;
+  cursor: default;
+  margin-bottom: 1rem;
+}
+
+.genetic-trait-bar:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+  border-color: #e2e8f0;
+}
+
+.genetic-trait-bar.open {
+  border-color: #bfdbfe;
+  box-shadow: 0 10px 30px -5px rgba(14, 165, 233, 0.1);
+}
+
+.genetic-trait-bar__header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.genetic-trait-bar__header:hover .genetic-trait-bar__title {
+  color: #0b7ad0;
+}
+
+.genetic-trait-bar__title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.genetic-trait-bar__title {
+  flex: 1;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+  transition: color 0.2s;
+}
+
+.genetic-trait-bar__badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.genetic-trait-bar__badge-rsid {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.genetic-trait-bar__badge-genotype {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0b7ad0;
+  background: #e0f2fe;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.genetic-trait-bar__impact {
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.genetic-trait-bar__progress-bg {
+  width: 100%;
+  height: 8px;
+  background: #f3f4f6;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.genetic-trait-bar__progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.genetic-trait-bar__toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+.genetic-trait-bar__toggle:hover {
+  color: #64748b;
+}
+
+.genetic-trait-bar__toggle-icon {
+  transition: transform 0.3s ease;
+}
+
+.genetic-trait-bar__details {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px dashed #e2e8f0;
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.genetic-trait-bar__section {
+  margin-bottom: 1.5rem;
+}
+
+.genetic-trait-bar__section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-bottom: 1rem;
+}
+
+.genetic-trait-bar__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.genetic-trait-bar__grid-item {
+  background: white;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+
+.genetic-trait-bar__grid-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+  border-color: #e2e8f0;
+}
+
+.genetic-trait-bar__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.genetic-trait-bar__label {
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.genetic-trait-bar__value {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.genetic-trait-bar__note {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.genetic-trait-bar__interpretation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+  padding: 1rem;
+  border-radius: 12px;
+}
+
+.genetic-trait-bar__intensity-dots {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.genetic-trait-bar__dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.genetic-trait-bar__description {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+  .genetic-trait-bar__grid {
+    grid-template-columns: 1fr;
+  }
+}

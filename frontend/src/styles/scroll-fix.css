@@ -1,0 +1,106 @@
+/* scroll-fix.css - Correcciones globales para scroll móvil */
+
+/* Asegurar que el html y body permitan scroll natural */
+html, body {
+  height: auto;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling en iOS */
+  scroll-behavior: smooth;
+}
+
+/* Evitar problemas con el viewport en móviles */
+body {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Container principal de la app */
+#root {
+  min-height: 100vh;
+  height: auto;
+  width: 100%;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Media queries específicas para móviles */
+@media (max-width: 768px) {
+  html, body {
+    /* Asegurar que no hay alturas fijas que interfieran */
+    height: auto !important;
+    min-height: 100vh;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: manipulation;
+    /* Evitar zoom en inputs */
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+  }
+
+  body {
+    /* Evitar rebotes al hacer scroll */
+    overscroll-behavior: contain;
+    position: relative !important;
+    overflow: auto !important;
+  }
+
+  #root {
+    overflow-x: hidden;
+    overflow-y: auto;
+    position: relative;
+    min-height: 100vh;
+    height: auto;
+  }
+}
+
+/* Específico para iOS Safari */
+@supports (-webkit-touch-callout: none) {
+  html, body {
+    height: auto;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Evitar problemas con contenedores flex */
+@media (max-width: 768px) {
+  .flex-container {
+    min-height: 100vh;
+    height: auto;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Específicamente para páginas de auth */
+  .auth-page, .register-page, .login-page {
+    min-height: 100vh;
+    height: auto;
+    overflow-y: auto;
+    position: relative;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Prevenir problemas con modals y scroll */
+.modal-open {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+}
+
+/* Reset específico para formularios largos en móviles */
+@media (max-width: 480px) {
+  .form-container {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    position: relative !important;
+  }
+}

@@ -1,0 +1,30 @@
+    .loader {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      width: 100%;
+      min-height: 40vh;
+      padding: 3rem 1rem;
+    }
+    
+    .loader-spinner {
+      width: 2rem;
+      height: 2rem;
+      border: 3px solid rgba(0, 0, 0, 0.12);
+      border-top-color: #4f8cff;
+      border-radius: 50%;
+      animation: loader-spin 0.8s linear infinite;
+    }
+    
+    .loader-label {
+      color: #6b7280;
+      font-size: 0.875rem;
+    }
+    
+    @keyframes loader-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }

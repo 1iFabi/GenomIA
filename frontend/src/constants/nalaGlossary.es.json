@@ -1,0 +1,210 @@
+[
+  {
+    "id": "alelo",
+    "question": "¿Qué es un alelo?",
+    "answer": "Es una versión de un gen en un lugar específico del ADN. Ejemplo: alelo A o alelo G.",
+    "details": "Cada persona hereda dos alelos por variante (uno de cada progenitor). La combinación de ambos define el genotipo en esa posición.",
+    "tags": ["alelo", "variante", "gen"],
+    "related": ["genotipo", "heterocigoto", "homocigoto"]
+  },
+  {
+    "id": "variante",
+    "question": "¿Qué es una variante genética?",
+    "answer": "Es un cambio puntual en la secuencia del ADN respecto a una referencia.",
+    "details": "Puede ser un cambio de letra (SNP) o inserciones/deleciones pequeñas. No implica por sí sola una enfermedad.",
+    "tags": ["variante", "ADN", "cambio"],
+    "related": ["snp", "rsid", "referencia_alternativo"]
+  },
+  {
+    "id": "snp",
+    "question": "¿Qué es un SNP?",
+    "answer": "Un cambio de una sola letra en el ADN. Ejemplo: C>T en una posición.",
+    "details": "Son las variantes más comunes. Se describen con un identificador como rsID y una base de referencia y alternativa.",
+    "tags": ["snp", "variante", "puntual"],
+    "related": ["rsid", "referencia_alternativo", "frecuencia_alelica"]
+  },
+  {
+    "id": "rsid",
+    "question": "¿Qué es un rsID?",
+    "answer": "Es el identificador único de una variante en bases de datos públicas. Ejemplo: rs429358.",
+    "details": "Lo asigna dbSNP. Se usa para buscar información científica o en reportes de genética.",
+    "tags": ["rsid", "identificador", "snp"],
+    "related": ["snp", "genotipo", "frecuencia_alelica"]
+  },
+  {
+    "id": "genotipo",
+    "question": "¿Qué es genotipo?",
+    "answer": "Es la combinación de alelos que tienes en una variante. Ejemplo: C/C, C/T o T/T.",
+    "details": "El genotipo se obtiene comparando tu ADN con la referencia. Se interpreta junto a la evidencia disponible.",
+    "tags": ["genotipo", "alelo", "resultado"],
+    "related": ["heterocigoto", "homocigoto", "fenotipo"]
+  },
+  {
+    "id": "fenotipo",
+    "question": "¿Qué es fenotipo?",
+    "answer": "Es la característica observable asociada a un genotipo. Ejemplo: metabolismo rápido o lento.",
+    "details": "El fenotipo depende del genotipo y de factores ambientales o de estilo de vida.",
+    "tags": ["fenotipo", "caracteristica", "expresion"],
+    "related": ["genotipo", "metabolizador", "biomarcador"]
+  },
+  {
+    "id": "cromosoma",
+    "question": "¿Qué es un cromosoma?",
+    "answer": "Es un paquete de ADN. Los humanos tenemos 22 pares más X e Y.",
+    "details": "El número de cromosoma indica dónde está la variante. Por ejemplo: cromosoma 19, posición 45,410,227.",
+    "tags": ["cromosoma", "locus", "ADN"],
+    "related": ["posicion", "locus", "variante"]
+  },
+  {
+    "id": "posicion",
+    "question": "¿Qué es la posición (locus) de una variante?",
+    "answer": "Es la coordenada exacta dentro de un cromosoma donde está la variante.",
+    "details": "Se reporta como cromosoma + número de base. Ejemplo: chr19:45410227.",
+    "tags": ["posicion", "locus", "coordenada"],
+    "related": ["cromosoma", "variante", "referencia_alternativo"]
+  },
+  {
+    "id": "referencia_alternativo",
+    "question": "¿Qué significa referencia y alternativo?",
+    "answer": "La base de referencia es la letra estándar en esa posición; la alternativa es el cambio observado.",
+    "details": "Ejemplo: referencia C, alternativa T. Tu genotipo combina estas letras en cada cromosoma.",
+    "tags": ["referencia", "alternativo", "snp"],
+    "related": ["genotipo", "snp", "rsid"]
+  },
+  {
+    "id": "heterocigoto",
+    "question": "¿Qué es ser heterocigoto?",
+    "answer": "Tener dos alelos distintos en una variante. Ejemplo: C/T.",
+    "details": "Un alelo viene de cada progenitor. Se interpreta junto a la evidencia disponible para esa variante.",
+    "tags": ["heterocigoto", "genotipo", "alelo"],
+    "related": ["homocigoto", "genotipo", "variante"]
+  },
+  {
+    "id": "homocigoto",
+    "question": "¿Qué es ser homocigoto?",
+    "answer": "Tener dos copias iguales del alelo en una variante. Ejemplo: C/C o T/T.",
+    "details": "Puede reforzar o no un efecto, dependiendo de la evidencia y del gen en cuestión.",
+    "tags": ["homocigoto", "genotipo", "alelo"],
+    "related": ["heterocigoto", "genotipo", "impacto"]
+  },
+  {
+    "id": "impacto",
+    "question": "¿Qué significa impacto alto, medio o bajo?",
+    "answer": "Es una etiqueta de relevancia potencial de la variante según reglas o literatura.",
+    "details": "No es un diagnóstico. Indica qué tan importante puede ser para el resultado mostrado.",
+    "tags": ["impacto", "prioridad", "relevancia"],
+    "related": ["evidencia", "biomarcador", "farmacogenetica"]
+  },
+  {
+    "id": "biomarcador",
+    "question": "¿Qué es un biomarcador genético?",
+    "answer": "Una variante o conjunto de variantes asociadas a una característica medible.",
+    "details": "Se usa para interpretar riesgo, respuesta a fármacos o rasgos. No reemplaza criterio clínico.",
+    "tags": ["biomarcador", "marcador", "variante"],
+    "related": ["evidencia", "impacto", "farmacogenetica"]
+  },
+  {
+    "id": "farmacogenetica",
+    "question": "¿Qué es farmacogenética?",
+    "answer": "El estudio de cómo tus variantes influyen en la respuesta a medicamentos.",
+    "details": "Ayuda a estimar ajustes de dosis o precauciones según el genotipo. Siempre se valida con el equipo de salud.",
+    "tags": ["farmacogenetica", "medicamentos", "respuesta"],
+    "related": ["metabolizador", "dosis", "interaccion"]
+  },
+  {
+    "id": "metabolizador",
+    "question": "¿Qué es un metabolizador lento, intermedio o rápido?",
+    "answer": "Es un fenotipo que describe qué tan rápido tu cuerpo procesa un fármaco.",
+    "details": "Se calcula combinando variantes en genes de enzimas metabolizadoras (ej. CYP).",
+    "tags": ["metabolizador", "fenotipo", "farmacogenetica"],
+    "related": ["dosis", "interaccion", "impacto"]
+  },
+  {
+    "id": "dosis",
+    "question": "¿Por qué se menciona ajuste de dosis?",
+    "answer": "Algunas variantes sugieren usar más, menos o la misma dosis de un medicamento.",
+    "details": "Estas guías provienen de paneles de evidencia. La decisión final es médica.",
+    "tags": ["dosis", "ajuste", "farmacogenetica"],
+    "related": ["metabolizador", "interaccion", "evidencia"]
+  },
+  {
+    "id": "interaccion",
+    "question": "¿Qué es una interacción fármaco-gen?",
+    "answer": "Cuando tu genotipo puede influir en la eficacia o seguridad de un medicamento.",
+    "details": "Ejemplo: variantes en CYP2C19 pueden cambiar cómo metabolizas ciertos fármacos.",
+    "tags": ["interaccion", "farmacogenetica", "seguridad"],
+    "related": ["metabolizador", "dosis", "evidencia"]
+  },
+  {
+    "id": "evidencia",
+    "question": "¿Qué significa nivel de evidencia?",
+    "answer": "Es la solidez de los estudios que relacionan una variante con un efecto.",
+    "details": "Se basa en guías y literatura revisada. Ayuda a priorizar qué variantes mostrar primero.",
+    "tags": ["evidencia", "impacto", "prioridad"],
+    "related": ["impacto", "biomarcador", "poblacion"]
+  },
+  {
+    "id": "poblacion",
+    "question": "¿Por qué importa la población o ancestría?",
+    "answer": "Algunas frecuencias y efectos pueden variar entre poblaciones.",
+    "details": "Sirve para contextualizar la evidencia. No define individualmente el resultado.",
+    "tags": ["poblacion", "ancestria", "frecuencia"],
+    "related": ["frecuencia_alelica", "evidencia", "variante"]
+  },
+  {
+    "id": "frecuencia_alelica",
+    "question": "¿Qué es la frecuencia alélica?",
+    "answer": "Es qué tan común es un alelo en una población de referencia.",
+    "details": "Se expresa en proporción (ej. 0.12). Ayuda a entender si un cambio es raro o frecuente.",
+    "tags": ["frecuencia", "alelo", "poblacion"],
+    "related": ["rsid", "poblacion", "variante"]
+  },
+  {
+    "id": "biomarcadores_panel",
+    "question": "¿Qué es un panel de biomarcadores?",
+    "answer": "Es un conjunto de variantes seleccionadas para responder una pregunta específica.",
+    "details": "Ejemplo: panel para metabolizadores de fármacos o para rasgos de salud.",
+    "tags": ["panel", "biomarcadores", "seleccion"],
+    "related": ["biomarcador", "evidencia", "impacto"]
+  },
+  {
+    "id": "haplotipo",
+    "question": "¿Qué es un haplotipo?",
+    "answer": "Es un bloque de variantes que se heredan juntas en un mismo cromosoma.",
+    "details": "En farmacogenética se usan haplotipos para nombrar estrellas (*1, *2, etc.) en genes como CYP.",
+    "tags": ["haplotipo", "bloque", "cromosoma"],
+    "related": ["metabolizador", "farmacogenetica", "genotipo"]
+  },
+  {
+    "id": "fenotipo_clinico",
+    "question": "¿Qué es un fenotipo clínico estimado?",
+    "answer": "Es la interpretación del genotipo traducida a un efecto esperado, como metabolizador rápido.",
+    "details": "Se calcula con reglas deterministas y se revisa con evidencia disponible.",
+    "tags": ["fenotipo", "estimado", "farmacogenetica"],
+    "related": ["genotipo", "metabolizador", "evidencia"]
+  },
+  {
+    "id": "referencia_genomica",
+    "question": "¿Qué significa genoma de referencia?",
+    "answer": "Es la versión estándar del ADN usada para comparar tus variantes.",
+    "details": "Ejemplo: GRCh37 o GRCh38. Define coordenadas y letras de referencia.",
+    "tags": ["referencia", "genoma", "coordenadas"],
+    "related": ["posicion", "variante", "rsid"]
+  },
+  {
+    "id": "limite_informativo",
+    "question": "¿Por qué algunas variantes no se reportan?",
+    "answer": "Porque no cumplen criterios de calidad o evidencia mínima para mostrarse.",
+    "details": "El filtrado evita sobreinterpretar hallazgos con datos insuficientes.",
+    "tags": ["calidad", "filtro", "evidencia"],
+    "related": ["evidencia", "impacto", "biomarcador"]
+  },
+  {
+    "id": "contexto_clinico",
+    "question": "¿Necesito validación clínica?",
+    "answer": "Los hallazgos genéticos siempre deben revisarse con un profesional de salud.",
+    "details": "El reporte es informativo y no reemplaza diagnóstico, tratamiento ni seguimiento clínico.",
+    "tags": ["clinico", "validacion", "reporte"],
+    "related": ["impacto", "evidencia", "farmacogenetica"]
+  }
+]

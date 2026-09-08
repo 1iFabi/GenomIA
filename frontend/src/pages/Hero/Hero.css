@@ -1,0 +1,180 @@
+/* ============= HERO BASE (DESKTOP / DEFAULT) ============= */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  grid-template-columns: 20px 60px 1fr minmax(200px,420px) 80px;
+  color: #fff;
+  font-family: 'DM Sans','Inter', sans-serif;
+  overflow: hidden;
+  padding-inline: var(--page-padding);
+  /* Fondo oscuro de respaldo: evita un destello blanco antes de que
+     el video (o su poster) estén cargados. */
+  background-color: #05070d;
+}
+
+/* Media (video + overlay) */
+.hero-media { position: absolute; inset: 0; }
+.hero-video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  filter: saturate(1.05) contrast(1.05);
+  transform: translateZ(0);
+}
+.hero-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg,
+    rgba(0,0,0,.55),
+    rgba(0,0,0,.35) 40%,
+    rgba(0,0,0,.65)
+  );
+}
+
+/* Rail (ahora horizontal) */
+.hero-rail {
+  /* --- MODIFIED --- */
+  /* No longer positioned by the parent grid */
+  display: flex;
+  flex-direction: row; /* Changed from column to row */
+  gap: 16px;
+  z-index: 1;
+}
+.rail-btn {
+  width: 44px; height: 44px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.25);
+  backdrop-filter: blur(4px);
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: transform .15s ease, background .2s ease;
+}
+.rail-btn:hover { transform: translateY(-2px); background: rgba(255,255,255,0.18); }
+
+/* Título abajo-izquierda (ahora contiene el rail) */
+.hero-bl {
+  grid-column: 3; grid-row: 2;
+  align-self: end; z-index: 1;
+  margin-bottom: clamp(70px, 6vh, 80px);
+  /* --- ADDED --- */
+  /* Make it a flex container to stack the rail and title */
+  display: flex;
+  flex-direction: column;
+  gap: 24px; /* Space between rail and title */
+}
+.hero-title {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-size: clamp(28px, 6vw, 56px);
+  text-wrap: balance;
+  text-shadow: 0 2px 18px rgba(0,0,0,.25);
+}
+
+/* Texto + CTA abajo-derecha */
+.hero-br {
+  grid-column: 4; grid-row: 2;
+  align-self: end; justify-self: end;
+  max-width: 38ch; display: grid; gap: 12px;
+  z-index: 1; margin-bottom: clamp(70px, 6vh, 80px);
+}
+.hero-kicker {
+  margin: 0; font-size: clamp(15px, 1.4vw, 14px); opacity: .9;
+}
+.cta {
+  justify-self: start;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 999px;
+  background: #fff; color: #111; font-weight: 600; text-decoration: none;
+  transition: transform .15s ease, box-shadow .2s ease, opacity .2s ease;
+  box-shadow: 0 8px 20px rgba(0,0,0,.25);
+}
+.cta:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(0,0,0,.28); opacity: .95; }
+
+/* ===================== TABLET (≤1100px) ===================== */
+@media (max-width:1100px){
+  .hero{
+    grid-template-columns: 16px 48px 1fr minmax(220px, 360px) 16px;
+    padding-inline: clamp(12px, 4vw, 24px);
+  }
+  .hero-title{ font-size: clamp(28px, 5vw, 46px); }
+  .hero-kicker{ font-size: clamp(14px, 1.6vw, 16px); }
+}
+
+/* ===================== MOBILE (≤720px) ===================== */
+@media (max-width:720px){
+  .hero{
+    min-height: 100svh;
+    overflow: clip;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* Align content blocks to the bottom */
+    gap: 24px;
+    padding: 16px 16px calc(30px + env(safe-area-inset-bottom));
+  }
+
+  .hero-overlay{
+    background: linear-gradient(
+      180deg,
+      rgba(0,0,0,.35) 0%,
+      rgba(0,0,0,.45) 30%,
+      rgba(0,0,0,.75) 72%,
+      rgba(0,0,0,.88) 100%
+    );
+  }
+
+  /* --- MODIFIED --- */
+  /* Rail is now a normal flex item, centered horizontally */
+  .hero-rail{
+    justify-content: center;
+    gap: 12px;
+  }
+  .rail-btn{ width: 42px; height: 42px; background: rgba(255,255,255,.14); }
+
+  /* Title block (rail + title) */
+  .hero-bl{
+    margin: 0;
+    align-items: center; /* Center the rail and title */
+    order: 1; /* Show this block first */
+    gap: 20px;
+  }
+  .hero-title{
+    text-align: center; /* Center the title text */
+    font-size: clamp(26px, 7.2vw, 34px);
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    max-width: 20ch;
+    text-shadow: 0 2px 14px rgba(0,0,0,.25);
+  }
+
+  /* Kicker + CTA block */
+  .hero-br{
+    margin: 0;
+    max-width: 36ch;
+    gap: 16px;
+    align-self: center;
+    justify-items: center;
+    text-align: center;
+    order: 2; /* Show this block second */
+  }
+  .hero-kicker{ font-size: clamp(13px, 3.6vw, 15px); opacity: .92; }
+  .cta{ margin: 0 auto; padding: 12px 16px; font-weight: 700; }
+}
+
+/* ===================== SMALL (≤420px) ===================== */
+@media (max-width:420px){
+  .hero-title{ font-size: clamp(24px, 8.6vw, 30px); }
+  .rail-btn{ width: 40px; height: 40px; }
+  .cta{ padding: 11px 14px; }
+}
+
+body{ background: #000; }
+
+.rail-btn {
+  pointer-events: none; /* No se puede hacer click */
+  opacity: 0.8; /* opcional, para que se note que no son interactivos */
+  cursor: default; /* quita el puntero de mano */
+}

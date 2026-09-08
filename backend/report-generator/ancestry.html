@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/topojson@3"></script>
+  <style>
+    :root {
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --page-padding-x: 15mm;
+      --page-padding-y: 10mm;
+      --hero-height: 30mm;
+      --page-bg: #f8fafc;
+    }
+
+    @page { 
+      size: A4; 
+      margin: 0; 
+    }
+    
+    * { box-sizing: border-box; }
+    
+    html {
+      -webkit-print-color-adjust: exact;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: var(--page-width);
+      height: var(--page-height);
+    }
+
+    body { 
+      font-family: 'Inter', sans-serif;
+      background: var(--page-bg);
+      color: #334155;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* === HEADER BRUTALIST === */
+    .hero-header {
+      position: relative;
+      width: 100%;
+      height: var(--hero-height);
+      overflow: hidden;
+      background: #0c4a6e;
+      display: flex;
+      align-items: center;
+      padding: 0 var(--page-padding-x);
+      margin-bottom: 0;
+    }
+
+    .hero-number {
+      position: absolute;
+      font-size: 280px;
+      font-weight: 900;
+      color: rgba(6, 182, 212, 0.1);
+      right: -20px;
+      top: -80px;
+      font-family: 'Montserrat', sans-serif;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 160mm;
+    }
+
+    .hero-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin: 0 0 4px 0;
+      color: #e0f2fe;
+      letter-spacing: -1px;
+      text-transform: uppercase;
+    }
+    
+    .hero-subtitle {
+      font-size: 11px;
+      line-height: 1.4;
+      color: #bae6fd;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    /* === CONTENT === */
+    .content-wrapper {
+      padding: var(--page-padding-y) var(--page-padding-x);
+      background: #f8fafc;
+      flex: 1;
+    }
+
+    /* === WORLD MAP SECTION === */
+    .map-section {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 6mm;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .map-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .map-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #7c3aed, #6d28d9);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    .world-map-container {
+      width: 100%;
+      height: 280px;
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #d3Map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .country {
+      fill: #e2e8f0;
+      stroke: #ffffff;
+      stroke-width: 0.5px;
+      transition: fill 0.3s;
+    }
+    
+    .country.highlight {
+      fill: #7c3aed;
+      stroke: #6d28d9;
+    }
+
+    .country.highlight:hover {
+      fill: #6d28d9;
+      filter: brightness(1.1);
+    }
+
+    .ancestry-breakdown {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px 12px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    .breakdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .breakdown-dot {
+      width: 10px;
+      height: 10px;
+      background: #7c3aed;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px #ddd6fe;
+    }
+
+    .breakdown-info {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+
+    .breakdown-name {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .breakdown-pct {
+      font-size: 9px;
+      font-weight: 600;
+      color: #7c3aed;
+    }
+
+    /* === CHILE ANCESTRY SECTION === */
+    .chile-section {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .chile-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .chile-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #0891b2, #0e7490);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    .indigenous-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .indigenous-chart {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+      width: 100%;
+    }
+
+    .pie-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #indigenousPie {
+      width: 160px;
+      height: 160px;
+    }
+
+    .pie-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      font-size: 8.5px;
+      color: #475569;
+      font-weight: 600;
+      width: 100%;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .pie-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pie-legend-item::after {
+      content: "|";
+      margin-left: 8px;
+      color: #cbd5e1;
+    }
+
+    .pie-legend-item:last-child::after {
+      content: "";
+      margin: 0;
+    }
+
+    .pie-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      text-transform: uppercase;
+    }
+
+    .pie-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .indigenous-info {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+    }
+
+    .info-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #0f172a;
+      margin: 0 0 6px 0;
+    }
+
+    .info-text {
+      font-size: 9px;
+      line-height: 1.5;
+      color: #64748b;
+      margin: 0 0 8px 0;
+    }
+
+    .info-list {
+      margin: 0;
+      padding-left: 14px;
+      font-size: 9px;
+      color: #475569;
+      line-height: 1.4;
+    }
+
+    .no-data-message {
+      text-align: center;
+      padding: 40px;
+      color: #94a3b8;
+      font-style: italic;
+      font-size: 11px;
+    }
+
+    .footer {
+      text-align: right;
+      font-size: 8px;
+      color: #cbd5e1;
+      margin-top: auto;
+      padding: 0 var(--page-padding-x) 6mm;
+    }
+
+  </style>
+</head>
+<body>
+
+  <header class="hero-header">
+    <div class="hero-number">{{heroNumber}}</div>
+    <div class="hero-content">
+      <h1 class="hero-title">An&aacute;lisis de Ancestr&iacute;a</h1>
+      <p class="hero-subtitle">
+        Composici&oacute;n gen&eacute;tica ancestral basada en comparaciones con poblaciones de referencia mundial e ind&iacute;gena.
+      </p>
+    </div>
+  </header>
+
+  <div class="content-wrapper">
+    
+    <!-- WORLD MAP -->
+    <div class="map-section">
+      <div class="map-title">
+        <div class="map-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M2 12h20"></path>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+        </div>
+        Distribuci&oacute;n Geogr&aacute;fica Global
+      </div>
+
+      <div class="world-map-container">
+        <svg id="d3Map"></svg>
+      </div>
+
+      <div id="ancestryBreakdown" class="ancestry-breakdown">
+        <!-- JS injected items -->
+      </div>
+    </div>
+
+    <!-- CHILE ANCESTRY -->
+    <div class="chile-section">
+      <div class="chile-title">
+        <div class="chile-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+        </div>
+        Ancestr&iacute;a Chilena e Ind&iacute;gena
+      </div>
+
+      <div class="indigenous-layout">
+        <div class="indigenous-info">
+          <div class="info-title">Interpretaci&oacute;n</div>
+          <p class="info-text">
+            Esta distribuci&oacute;n refleja el peso relativo de las ra&iacute;ces ancestrales dentro del
+            componente ind&iacute;gena local. Los porcentajes son estimaciones basadas en marcadores de referencia.
+          </p>
+          <ul class="info-list">
+            <li>Los grupos con mayor porcentaje indican mayor afinidad gen&eacute;tica.</li>
+            <li>Las diferencias son esperadas por variaci&oacute;n poblacional.</li>
+            <li>Sirve como contexto hist&oacute;rico, no como diagn&oacute;stico cl&iacute;nico.</li>
+          </ul>
+        </div>
+        <div class="indigenous-chart">
+          <div class="pie-wrap">
+            <svg id="indigenousPie" viewBox="0 0 200 200"></svg>
+          </div>
+          <div id="indigenousLegend" class="pie-legend"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="footer">Pag {{pageNumber}} de {{pageTotal}}</footer>
+
+  <script>
+    const ancestryData = {{ancestryDataJson}};
+    const indigenousData = {{indigenousDataJson}};
+
+    // Render Breakdown List
+    const breakdownContainer = document.getElementById('ancestryBreakdown');
+    
+    const sortedData = Object.entries(ancestryData)
+      .filter(([, pct]) => pct !== null && pct !== undefined)
+      .sort((a, b) => b[1] - a[1]);
+
+    if (!sortedData.length) {
+      breakdownContainer.innerHTML = '<div class="no-data-message">No hay datos de ancestr&iacute;a disponibles.</div>';
+    } else {
+      sortedData.forEach(([country, pct]) => {
+        const pctValue = Number(pct);
+        const pctDisplay = Number.isFinite(pctValue)
+          ? (Number.isInteger(pctValue) ? pctValue : pctValue.toFixed(1))
+          : pct;
+        const item = document.createElement('div');
+        item.className = 'breakdown-item';
+        item.innerHTML = `
+          <div class="breakdown-dot"></div>
+          <div class="breakdown-info">
+            <span class="breakdown-name">${country}</span>
+            <span class="breakdown-pct">${pctDisplay}%</span>
+          </div>
+        `;
+        breakdownContainer.appendChild(item);
+      });
+    }
+
+    const normalizeKey = (value) => {
+      if (!value) return '';
+      return String(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+    };
+
+    const aliasMapping = {
+      "mexico": ["Mexico"],
+      "espana": ["Spain"],
+      "italia": ["Italy"],
+      "portugal": ["Portugal"],
+      "francia": ["France"],
+      "estados unidos": ["United States of America"],
+      "eeuu": ["United States of America"],
+      "usa": ["United States of America"],
+      "brasil": ["Brazil"],
+      "chile": ["Chile"],
+      "argentina": ["Argentina"],
+      "reino unido": ["United Kingdom"],
+      "alemania": ["Germany"],
+      "rusia": ["Russia"],
+      "paises bajos": ["Netherlands"],
+      "corea del sur": ["South Korea", "Korea, Republic of"],
+      "corea del norte": ["North Korea", "Korea, Democratic People's Republic of"],
+      "republica checa": ["Czechia"],
+      "republica dominicana": ["Dominican Republic"],
+      "costa de marfil": ["Cote d'Ivoire"],
+      "iran": ["Iran"],
+      "siria": ["Syria"],
+      "tanzania": ["United Republic of Tanzania", "Tanzania"],
+      "vietnam": ["Viet Nam", "Vietnam"],
+      "laos": ["Lao People's Democratic Republic", "Laos"],
+      "emiratos arabes unidos": ["United Arab Emirates"],
+      "africa del norte": ["Morocco", "Algeria", "Tunisia", "Egypt", "Libya"]
+    };
+
+    const hasD3 = typeof d3 !== 'undefined' && typeof topojson !== 'undefined';
+
+    // Inicializar Mapa D3
+    if (hasD3) {
+      Promise.all([
+        d3.json('https://unpkg.com/world-atlas@2.0.2/countries-110m.json')
+      ]).then(([worldData]) => {
+      
+      const countries = topojson.feature(worldData, worldData.objects.countries);
+      const svg = d3.select("#d3Map");
+      const container = document.querySelector('.world-map-container');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      const projection = d3.geoEqualEarth()
+        .fitSize([width, height], countries);
+
+      const path = d3.geoPath().projection(projection);
+      const countryIndex = new Map();
+      countries.features.forEach((feature) => {
+        const name = feature.properties.name;
+        const key = normalizeKey(name);
+        if (key && !countryIndex.has(key)) {
+          countryIndex.set(key, name);
+        }
+      });
+
+      const highlightNames = new Set();
+      const addHighlight = (value) => {
+        const normalized = normalizeKey(value);
+        if (!normalized) return;
+        const aliases = aliasMapping[normalized];
+        if (aliases && aliases.length) {
+          aliases.forEach((alias) => {
+            const aliasKey = normalizeKey(alias);
+            const mapped = countryIndex.get(aliasKey);
+            if (mapped) highlightNames.add(mapped);
+          });
+          return;
+        }
+        const direct = countryIndex.get(normalized);
+        if (direct) {
+          highlightNames.add(direct);
+          return;
+        }
+        for (const [countryKey, countryName] of countryIndex.entries()) {
+          if (countryKey.includes(normalized) || normalized.includes(countryKey)) {
+            highlightNames.add(countryName);
+          }
+        }
+      };
+
+      Object.keys(ancestryData || {}).forEach(addHighlight);
+
+      svg.selectAll("path")
+        .data(countries.features)
+        .enter().append("path")
+        .attr("d", path)
+        .attr("class", d => {
+          const countryName = d.properties.name;
+          const isHighlight = highlightNames.has(countryName);
+          return isHighlight ? "country highlight" : "country";
+        })
+        .append("title") 
+        .text(d => d.properties.name);
+
+      }).catch(err => {
+        console.error("Error cargando el mapa:", err);
+        d3.select(".world-map-container").html("<div class='no-data-message'>No se pudo cargar el mapa interactivo. Verifique su conexi&oacute;n.</div>");
+      });
+    } else {
+      const mapContainer = document.querySelector('.world-map-container');
+      if (mapContainer) {
+        mapContainer.innerHTML = "<div class='no-data-message'>No se pudo cargar el mapa interactivo.</div>";
+      }
+    }
+
+    // --- Indigenous Pie Chart ---
+    const pieTarget = document.getElementById('indigenousPie');
+    const pieLegend = document.getElementById('indigenousLegend');
+    const palette = ['#c4b5fd', '#fdba74', '#fde68a', '#bbf7d0', '#93c5fd', '#fda4af'];
+    const pieData = (Array.isArray(indigenousData) ? indigenousData : [])
+      .filter(item => item && typeof item.percentage === 'number' && item.percentage > 0)
+      .map((item, idx) => ({
+        name: item.name || 'Sin nombre',
+        value: item.percentage,
+        color: palette[idx % palette.length]
+      }));
+
+    if (pieTarget && pieData.length > 0 && hasD3) {
+      const size = 200;
+      const radius = size / 2;
+      const svgPie = d3.select(pieTarget)
+        .attr('viewBox', `0 0 ${size} ${size}`);
+
+      const pieGroup = svgPie.append('g')
+        .attr('transform', `translate(${radius},${radius})`);
+
+      const pie = d3.pie().value(d => d.value).sort(null);
+      const arc = d3.arc().innerRadius(0).outerRadius(radius - 6);
+
+      pieGroup.selectAll('path')
+        .data(pie(pieData))
+        .enter()
+        .append('path')
+        .attr('d', arc)
+        .attr('fill', d => d.data.color)
+        .attr('stroke', '#ffffff')
+        .attr('stroke-width', 2);
+
+      if (pieLegend) {
+        pieLegend.innerHTML = pieData.map(item => `
+          <div class="pie-legend-item">
+            <span class="pie-left">
+              <span class="pie-swatch" style="background:${item.color}"></span>
+              <span>${item.name}</span>
+            </span>
+            <span>${item.value}%</span>
+          </div>
+        `).join('');
+      }
+    } else if (pieLegend) {
+      pieLegend.innerHTML = '<div class=\"no-data-message\">No hay datos ind&iacute;genas disponibles.</div>';
+    }
+  </script>
+
+</body>
+</html>

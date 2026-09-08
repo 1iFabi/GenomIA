@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --page-padding-x: 15mm;
+      --page-padding-y: 10mm;
+      --hero-height: 30mm;
+      --page-bg: #f8fafc;
+    }
+
+    @page { 
+      size: A4; 
+      margin: 0;
+      background-color: #f8fafc;
+    }
+    
+    * { box-sizing: border-box; }
+    
+    html { -webkit-print-color-adjust: exact; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: var(--page-width);
+      height: var(--page-height);
+    }
+
+    body { 
+      font-family: 'Inter', sans-serif;
+      background: var(--page-bg);
+      color: #334155;
+    }
+
+    /* === HERO HEADER BRUTALIST === */
+    .hero-header {
+      position: relative;
+      width: 100%;
+      height: var(--hero-height);
+      overflow: hidden;
+      background: #0c4a6e;
+      display: flex;
+      align-items: center;
+      padding: 0 var(--page-padding-x);
+    }
+
+    .hero-number {
+      position: absolute;
+      font-size: 280px;
+      font-weight: 900;
+      color: rgba(6, 182, 212, 0.1);
+      right: -20px;
+      top: -80px;
+      font-family: 'Montserrat', sans-serif;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+    }
+
+    .hero-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin: 0 0 4px 0;
+      color: #e0f2fe;
+      letter-spacing: -1px;
+      text-transform: uppercase;
+    }
+    .hero-subtitle {
+      font-size: 11px;
+      line-height: 1.4;
+      color: #bae6fd;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    /* === CONTENT === */
+    .content-wrapper {
+      padding: var(--page-padding-y) var(--page-padding-x);
+    }
+
+    .intro-section {
+      margin-bottom: 8mm;
+    }
+
+    .section-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 4mm;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 16px;
+      background: linear-gradient(180deg, #0891b2 0%, #06b6d4 100%);
+      border-radius: 2px;
+    }
+
+    .card-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      border: 1px solid #e2e8f0;
+      margin-bottom: 7mm;
+    }
+    
+    .card-box p {
+      margin: 0 0 10px 0;
+      font-size: 10px;
+      line-height: 1.7;
+      color: #475569;
+    }
+
+    .sections-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .section-pill {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border: 1px solid #bae6fd;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 9px;
+      font-weight: 600;
+      color: #0369a1;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .warning-box {
+      background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 100%);
+      border-left: 4px solid #f9d689;
+      padding: 12px 14px;
+      border-radius: 8px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .warning-icon {
+      font-size: 18px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .warning-content {
+      flex: 1;
+      font-size: 9.5px;
+      line-height: 1.6;
+      color: #92400e;
+    }
+
+    .warning-content strong {
+      font-weight: 700;
+      color: #78350f;
+    }
+
+    /* Conceptos Grid */
+    .concepts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .concept-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .concept-card:hover {
+      border-color: #0891b2;
+      box-shadow: 0 2px 8px rgba(8, 145, 178, 0.15);
+    }
+
+    .concept-term {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #0891b2;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .concept-text {
+      font-size: 9px;
+      line-height: 1.5;
+      color: #64748b;
+    }
+
+    /* Niveles de Riesgo */
+    .risk-levels {
+      display: flex;
+      gap: 10px;
+    }
+
+    .risk-level-card {
+      flex: 1;
+      padding: 14px 12px;
+      border-radius: 10px;
+      text-align: center;
+      border: 2px solid;
+      transition: all 0.2s;
+    }
+    
+    .rl-low { 
+      background: linear-gradient(135deg, #e8f8f5 0%, #d1f2eb 100%);
+      border-color: #7dcea0; 
+      color: #1e8449; 
+    }
+    .rl-mid { 
+      background: linear-gradient(135deg, #fef5e7 0%, #fdeaa3 100%);
+      border-color: #f9ca7d; 
+      color: #b7791f; 
+    }
+    .rl-high { 
+      background: linear-gradient(135deg, #fdecea 0%, #fadbd8 100%);
+      border-color: #f5b7b1; 
+      color: #a93226; 
+    }
+    
+    .rl-title { 
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800; 
+      font-size: 11px; 
+      margin-bottom: 5px;
+      letter-spacing: 0.5px;
+    }
+    .rl-desc { 
+      font-size: 8.5px; 
+      line-height: 1.4; 
+    }
+
+    /* Metodología Grid */
+    .method-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .method-item {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-left: 3px solid #0891b2;
+      padding: 14px 16px;
+      border-radius: 10px;
+      transition: all 0.2s;
+    }
+
+    .method-item:hover {
+      border-left-color: #06b6d4;
+      box-shadow: 0 2px 8px rgba(6, 182, 212, 0.15);
+    }
+
+    .method-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 9.5px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .method-desc { 
+      font-size: 8.5px; 
+      color: #64748b; 
+      line-height: 1.5; 
+    }
+
+    /* FOOTER */
+    .footer-fixed {
+      position: fixed;
+      bottom: 10mm;
+      right: 15mm;
+      font-size: 8px;
+      color: #94a3b8;
+      text-align: right;
+      background: rgba(255,255,255,0.9);
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+  </style>
+</head>
+<body>
+
+  <header class="hero-header">
+    <div class="hero-number">{{heroNumber}}</div>
+    <div class="hero-content">
+      <h1 class="hero-title">Introducción</h1>
+      <p class="hero-subtitle">
+        Resumen de tu información genética organizada por áreas de salud, características biológicas y antecedentes de origen.
+      </p>
+    </div>
+  </header>
+
+  <div class="content-wrapper">
+
+    <!-- 1. Intro General -->
+    <div class="card-box">
+      <p>
+        <strong>Bienvenido/a a tu informe GenomIA.</strong> Aquí encontrarás un resumen de tu información genética organizada por áreas de salud, biología y origen. Analizamos variantes específicas de tu ADN y las comparamos con evidencia científica para estimar predisposiciones.
+      </p>
+      <div class="sections-grid">
+        <div class="section-pill">Enfermedades</div>
+        <div class="section-pill">Farmacogenética</div>
+        <div class="section-pill">Ancestría</div>
+        <div class="section-pill">Biomarcadores</div>
+        <div class="section-pill">Rasgos</div>
+        <div class="section-pill">Biométricas</div>
+      </div>
+      <div class="warning-box" style="margin-top: 8px; padding: 8px 12px;">
+        <div class="warning-icon">⚠️</div>
+        <div class="warning-content">
+          <strong>Dato clave:</strong> Esto NO es un diagnóstico médico. Es información estadística genética. Si algo te preocupa, consúltalo con un profesional de la salud.
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.1 Conceptos -->
+    <div class="intro-section">
+      <div class="section-title">Conceptos Básicos</div>
+      <div class="concepts-grid">
+        <div class="concept-card">
+          <span class="concept-term">rsID</span>
+          <span class="concept-text">El "código de catálogo" universal para identificar una variante genética (ej: rs429358).</span>
+        </div>
+        <div class="concept-card">
+          <span class="concept-term">Genotipo</span>
+          <span class="concept-text">Tu combinación específica de letras (alelos) en esa variante (ej: A/G o C/C).</span>
+        </div>
+        <div class="concept-card">
+          <span class="concept-term">Fenotipo</span>
+          <span class="concept-text">La manifestación física o biológica observable (ej: niveles de una vitamina).</span>
+        </div>
+        <div class="concept-card">
+          <span class="concept-term">Portador/a</span>
+          <span class="concept-text">Poseer una variante asociada a una condición sin presentarla necesariamente.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.2 Niveles de Riesgo -->
+    <div class="intro-section">
+      <div class="section-title">Niveles de Riesgo</div>
+      <div class="risk-levels">
+        <div class="risk-level-card rl-low">
+          <div class="rl-title">BAJO</div>
+          <div class="rl-desc">Predisposición menor o similar al promedio poblacional.</div>
+        </div>
+        <div class="risk-level-card rl-mid">
+          <div class="rl-title">MEDIO</div>
+          <div class="rl-desc">Cerca del promedio o levemente alterado.</div>
+        </div>
+        <div class="risk-level-card rl-high">
+          <div class="rl-title">ALTO</div>
+          <div class="rl-desc">Predisposición genética mayor que la mayoría.</div>
+        </div>
+      </div>
+      <p style="font-size: 8px; color: #64748b; margin-top: 6px; font-style: italic;">
+        * "Riesgo Alto" no es certeza de enfermedad. Factores ambientales y estilo de vida son clave.
+      </p>
+    </div>
+
+    <!-- 1.3 Metodología -->
+    <div class="intro-section">
+      <div class="section-title">Qué analizamos</div>
+      <div class="method-grid">
+        <div class="method-item">
+          <div class="method-title">ENFERMEDADES</div>
+          <div class="method-desc">Predisposiciones basadas en estudios GWAS. Orienta a la prevención.</div>
+        </div>
+        <div class="method-item">
+          <div class="method-title">ANCESTRÍA</div>
+          <div class="method-desc">Estimación de origen geográfico comparado con poblaciones de referencia.</div>
+        </div>
+        <div class="method-item">
+          <div class="method-title">BIOMARCADORES</div>
+          <div class="method-desc">Tendencias genéticas en niveles metabólicos o nutricionales.</div>
+        </div>
+        <div class="method-item">
+          <div class="method-title">BIOMÉTRICAS</div>
+          <div class="method-desc">Tendencias relacionadas con composición corporal y metabolismo basal.</div>
+        </div>
+        <div class="method-item">
+          <div class="method-title">RASGOS</div>
+          <div class="method-desc">Características biológicas interpretativas basadas en evidencia poblacional.</div>
+        </div>
+        <div class="method-item">
+          <div class="method-title">FARMACOGENÉTICA</div>
+          <div class="method-desc">Influencia genética en respuesta y metabolismo de fármacos.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="warning-box">
+      <div class="warning-icon">ℹ️</div>
+      <div class="warning-content">
+        <strong>Avisos Importantes:</strong> Los resultados dependen de la calidad de la evidencia actual. La ciencia genética evoluciona y nuevas interpretaciones pueden surgir. Este informe es una herramienta de autoconocimiento.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer-fixed">
+    Pag {{pageNumber}} de {{pageTotal}}
+  </div>
+
+</body>
+</html>

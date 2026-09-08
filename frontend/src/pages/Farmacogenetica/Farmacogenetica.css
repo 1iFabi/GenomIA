@@ -1,0 +1,465 @@
+/* Farmacogenetica.css */
+.farmacogenetica-layout-new {
+  display: flex;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f3f7ff 0%, #ffffff 60%);
+  color: #1e293b;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  position: relative;
+}
+
+.farmaco-main-content {
+  flex: 1;
+  padding: 1.5rem 2.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.farmaco-page-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Burger Button (Matched to Biometrics) */
+.farmaco-burger {
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 1100;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  display: none; /* Shown in media query */
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(11, 122, 208, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  outline: none;
+  backdrop-filter: blur(10px);
+}
+
+.farmaco-burger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(11, 122, 208, 0.45), 0 4px 12px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
+}
+
+.farmaco-burger:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 16px rgba(11, 122, 208, 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.farmaco-grid-wrapper {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 3rem;
+  margin-top: 2rem;
+  align-items: start;
+}
+
+/* Filter Styles */
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding: 0 0.25rem;
+}
+
+.filter-help-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  cursor: help;
+  transition: color 0.2s;
+}
+
+.filter-help-trigger:hover {
+  color: #64748b;
+}
+
+.filter-reset-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.filter-reset-btn:hover {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.impact-card-active {
+  ring: 2px solid;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+}
+
+.impact-summary-card-minimal--alto.impact-card-active {
+  box-shadow: 0 0 0 2px #ef4444;
+}
+
+.impact-summary-card-minimal--medio.impact-card-active {
+  box-shadow: 0 0 0 2px #f59e0b;
+}
+
+.impact-summary-card-minimal--bajo.impact-card-active {
+  box-shadow: 0 0 0 2px #10b981;
+}
+
+.no-results-message {
+  padding: 2rem;
+  text-align: center;
+  background: white;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+/* Listado de Sistemas */
+.farmaco-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.impact-summary-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Nuevas Tarjetas Minimalistas de Impacto */
+.impact-summary-card-minimal {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  transition: all 0.25s ease;
+}
+
+.impact-summary-card-minimal:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+  border-color: #cbd5e1;
+}
+
+/* Modificadores de color para Impacto */
+.impact-summary-card-minimal--alto {
+  background-color: #fee2e2;
+  border-color: #fecaca;
+}
+.impact-summary-card-minimal--alto:hover {
+  border-color: #fca5a5;
+  box-shadow: 0 10px 25px -5px rgba(220, 38, 38, 0.15), 0 8px 10px -6px rgba(220, 38, 38, 0.1);
+}
+.impact-summary-card-minimal--alto .impact-minimal-label {
+  color: #991b1b;
+}
+.impact-summary-card-minimal--alto .impact-minimal-sub {
+  color: #b91c1c;
+}
+
+.impact-summary-card-minimal--medio {
+  background-color: #fffbeb; /* Amber-50ish */
+  border-color: #fde68a;
+}
+.impact-summary-card-minimal--medio:hover {
+  border-color: #fcd34d;
+  box-shadow: 0 10px 25px -5px rgba(217, 119, 6, 0.15), 0 8px 10px -6px rgba(217, 119, 6, 0.1);
+}
+.impact-summary-card-minimal--medio .impact-minimal-label {
+  color: #92400e;
+}
+.impact-summary-card-minimal--medio .impact-minimal-sub {
+  color: #b45309;
+}
+
+.impact-summary-card-minimal--bajo {
+  background-color: #d1fae5;
+  border-color: #a7f3d0;
+}
+.impact-summary-card-minimal--bajo:hover {
+  border-color: #6ee7b7;
+  box-shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.15), 0 8px 10px -6px rgba(5, 150, 105, 0.1);
+}
+.impact-summary-card-minimal--bajo .impact-minimal-label {
+  color: #065f46;
+}
+.impact-summary-card-minimal--bajo .impact-minimal-sub {
+  color: #047857;
+}
+
+.impact-minimal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.impact-minimal-count {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.impact-minimal-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.impact-minimal-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.impact-minimal-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+
+/* Tarjetas de Sistemas */
+.systems-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.system-card-new {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.system-card-new:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+}
+
+.system-card-header {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  background: white;
+  transition: background 0.2s ease;
+}
+
+.system-card-header:hover {
+  background: #f8fafc;
+}
+
+.system-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.system-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  box-shadow: 0 0 0 2px white, 0 0 0 3px var(--accent-light, #f1f5f9);
+}
+
+.system-card-new h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.drug-count-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 99px;
+  transition: transform 0.2s;
+}
+
+.chevron-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #94a3b8;
+  transition: transform 0.3s ease;
+}
+
+.chevron-icon.open { transform: rotate(180deg); color: #64748b; }
+
+.system-drug-list {
+  padding: 0 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 1px dashed #e2e8f0; /* Dashed separator like Biometrics details */
+  padding-top: 1.5rem;
+  background: #ffffff;
+}
+
+/* Panel Derecho: Gráfico */
+.farmaco-chart-section {
+  position: sticky;
+  top: 2rem;
+}
+
+.chart-sticky-box {
+  background: white;
+  padding: 1.25rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.chart-header-minimal {
+  width: 100%;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.chart-header-minimal h4 {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.help-icon-minimal {
+  color: #cbd5e1;
+  cursor: help;
+  transition: color 0.2s;
+}
+
+.help-icon-minimal:hover {
+  color: #64748b;
+}
+
+.chart-tooltip-content {
+  text-align: left;
+  min-width: 200px;
+}
+
+/* Spinner */
+.loading-state { display: flex; justify-content: center; padding: 5rem; width: 100%; }
+.spinner-blue { width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top-color: #0b7ad0; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1200px) {
+  .farmaco-grid-wrapper { grid-template-columns: 1fr; }
+  .farmaco-chart-section { order: -1; position: static; margin-bottom: 2rem; }
+  .chart-sticky-box { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 2rem; }
+  .chart-header-minimal { width: 100%; justify-content: space-between; margin-bottom: 0; }
+}
+
+@media (max-width: 1024px) {
+  .farmacogenetica-layout-new { flex-direction: column; }
+  
+  .farmaco-burger {
+    display: flex !important;
+  }
+
+  .farmaco-sidebar-area {
+    position: fixed; 
+    left: 0; 
+    top: 0; 
+    height: 100vh; 
+    z-index: 1000; 
+    background: transparent;
+    width: auto;
+    min-width: 0;
+  }
+  
+  .farmaco-main-content { 
+    padding: 6rem 1.5rem 2rem; 
+    width: 100%;
+    margin: 0;
+  }
+}
+
+/* --- FIX: alinear badge + chevron en una sola línea --- */
+.system-card-meta{
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* (opcional) un poquito más "UI pro" para que no parezca breadcrumb */
+.drug-count-badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  line-height: 1;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35); /* slate-400-ish */
+}
+
+/* Flecha como mini-botón (se entiende que “despliega”) */
+.system-toggle-icon{
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.system-card-header:hover .system-toggle-icon{
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.system-toggle-icon .chevron-icon{
+  color: #64748b;
+}
+
+.system-toggle-icon .chevron-icon.open{
+  transform: rotate(180deg);
+}

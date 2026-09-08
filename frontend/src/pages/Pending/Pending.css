@@ -1,0 +1,174 @@
+/* ==========================================================================
+   Pending — Card centrada limpia (rediseño sobre la marca GenomIA)
+   Dirección "Dimension": títulos Geist · cuerpo DM Sans · un solo acento azul
+   Se conserva la animación de carga (Wait) recoloreada a azul de marca.
+   Sin fondo animado Threads, sin glassmorphism, sin pulse, sin degradados.
+   ========================================================================== */
+
+.pending-page {
+  /* tokens locales */
+  --gp-ink: #0f2341;
+  --gp-navy: #0d5e8c;
+  --gp-blue: #0b7ad0;
+  --gp-body: #4f637c;
+  --gp-muted: #5b6b80;
+  --gp-line: #e8edf4;
+  --gp-bg: #f6f8fb;
+
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 3rem);
+
+  font-family: "DM Sans", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--gp-body);
+
+  background:
+    radial-gradient(1100px 700px at 75% -20%, rgba(13, 94, 140, 0.06), transparent 60%),
+    var(--gp-bg);
+}
+
+/* ===== Card ===== */
+.pending-card {
+  background: #ffffff;
+  border: 1px solid var(--gp-line);
+  border-radius: 24px;
+  max-width: 520px;
+  width: 100%;
+  padding: clamp(2rem, 5vw, 3rem);
+  box-shadow:
+    0 1px 2px rgba(13, 94, 140, 0.05),
+    0 20px 44px -16px rgba(13, 94, 140, 0.14);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fadeInUp 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* ===== Animación de carga ===== */
+.wait-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1.75rem;
+  padding: 0.5rem 0;
+}
+
+/* ===== Mensaje central ===== */
+.message-section {
+  text-align: center;
+  width: 100%;
+}
+
+.pending-title {
+  font-family: "Geist", "DM Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(1.6rem, 4vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--gp-ink);
+  margin: 0;
+}
+
+.greeting {
+  margin: 0.5rem 0 1.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--gp-muted);
+}
+
+/* Badge de estado: contenido, no decorativo */
+.status-badge.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #eef4fb;
+  border: 1px solid #d8e6f4;
+  color: var(--gp-navy);
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0 auto 1.75rem;
+}
+
+.status-badge svg {
+  flex-shrink: 0;
+}
+
+.pending-message {
+  margin: 0;
+  color: var(--gp-body);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+/* ===== Cerrar sesión ===== */
+.logout-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 2rem;
+  padding: 0.65rem 1.35rem;
+  border-radius: 999px;
+  border: 1px solid #d5e1ee;
+  background: #ffffff;
+  color: var(--gp-navy);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.logout-button:hover {
+  background: #f2f7fc;
+  border-color: #bcd2ea;
+}
+
+.logout-button:active {
+  transform: scale(0.98);
+}
+
+.logout-button svg {
+  flex-shrink: 0;
+}
+
+/* ===== Animación de entrada (una sola vez) ===== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Responsivo ===== */
+@media (max-width: 480px) {
+  .pending-page {
+    padding: 1rem;
+    align-items: flex-start;
+  }
+
+  .pending-card {
+    border-radius: 20px;
+    padding: 2rem 1.25rem 1.75rem;
+  }
+}
+
+/* ===== Movimiento reducido ===== */
+@media (prefers-reduced-motion: reduce) {
+  .pending-card {
+    animation: none;
+  }
+
+  .logout-button {
+    transition: none;
+  }
+}

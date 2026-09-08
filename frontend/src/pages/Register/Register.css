@@ -1,0 +1,1264 @@
+/* Register.css - Diseño mejorado con distribución en dos columnas */
+
+/* ============ BASE LAYOUT ============ */
+
+* { box-sizing: border-box; }
+
+.register-layout {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+  background: #f8fafc;
+  overflow: visible;
+  font-family: 'DM Sans', 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+.auth.register-layout { background: #f8fafc; }
+.auth.register-layout .auth-left { background: #f8fafc; }
+.auth.register-layout .auth-right { background: #ffffff; }
+
+.auth.mirror { flex-direction: row-reverse; }
+
+/* Lado izquierdo (formulario) */
+.register-left {
+  width: 50%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  overflow-y: auto;
+  overflow-x: visible;
+  padding: 2rem 0;
+}
+.register-left::-webkit-scrollbar { width: 6px; }
+.register-left::-webkit-scrollbar-track { background: #f1f5f9; }
+.register-left::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.register-left::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Contenedor interno del card - MÁS ANGOSTO Y MENOS ALTO */
+.register-inner {
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 1rem 0;
+  border: none;
+}
+
+/* Lado derecho (imagen) */
+.register-right {
+  width: 50%;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.register-right img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ============ TÍTULOS ============ */
+
+.register-title {
+  margin: 1rem 0 0.5rem 0;
+  font-weight: 700;
+  text-align: center;
+  color: #0f172a;
+  font-size: clamp(1.1rem, 3vw, 1.3rem);
+}
+
+.register-subtitle {
+  margin: 0 0 0 0;
+  font-size: clamp(0.8rem, 2.4vw, 0.88rem);
+  color: #64748b;
+  text-align: center;
+  line-height: 1.3;
+}
+/* ============ CARD & FORM ============ */
+
+.login-card {
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.register-form {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0rem;
+  border: none;
+}
+
+/* ============ DISTRIBUCIÓN EN 2 COLUMNAS ============ */
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;  /* Gap entre columnas */
+}
+
+/* ============ INPUTS ============ */
+
+.uv-field {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.uv-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.uv-input {
+  width: 100%;
+  padding: 11px 12px 11px 42px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  background: #ffffff;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  color: #1e293b;
+  flex-shrink: 0;
+}
+
+.uv-input::placeholder {
+  color: #94a3b8;
+  opacity: 0.8;
+}
+
+.uv-input:focus {
+  outline: none;
+  border-color: #4A90E2;
+  box-shadow: 0 0 0 3px rgba(74,144,226,0.1);
+  background: #fafbfc;
+}
+
+.uv-input:focus + .uv-label {
+  color: #4A90E2;
+}
+
+.uv-label {
+  position: absolute;
+  left: 14px;
+  top: 0;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #4A90E2;
+  pointer-events: none;
+  transition: none;
+  background: white;
+  padding: 0 5px;
+  font-weight: 600;
+  z-index: 1;
+}
+
+.uv-input:focus ~ .uv-label {
+  color: #4A90E2;
+}
+
+.uv-focus-bg {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #4A90E2, #357abd);
+  transition: width 0.3s ease;
+}
+
+.uv-input:focus ~ .uv-focus-bg {
+  width: 100%;
+}
+
+/* ============ PASSWORD FIELD & VALIDATOR ============ */
+
+.password-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.password-field-container {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.password-field-container .uv-input { 
+  padding-right: 48px; 
+}
+
+.pwd-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  display: grid;
+  place-items: center;
+  color: #6b7280;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  z-index: 2;
+}
+
+.pwd-toggle:hover { 
+  color: #374151; 
+  background-color: #f3f4f6; 
+}
+
+.pwd-toggle:focus { 
+  outline: 2px solid #4A90E2; 
+  outline-offset: 2px; 
+}
+
+.pwd-toggle:active { 
+  transform: translateY(-50%) scale(0.96); 
+}
+
+.pwd-toggle svg { 
+  width: 18px; 
+  height: 18px; 
+  stroke: currentColor; 
+  fill: none; 
+  stroke-width: 2; 
+}
+
+/* Validador flotante (desktop) */
+.password-validator {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 14px);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.75rem;
+  min-width: 240px;
+  max-width: 280px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  animation: slideInRight 0.25s ease;
+  z-index: 10;
+}
+
+.validator-header {
+  margin-bottom: 0.35rem;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 0.3rem;
+}
+
+.validator-title {
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.7rem;
+}
+
+.validator-rules { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 0.3rem; 
+}
+
+.validator-rule {
+  display: flex; 
+  align-items: center; 
+  gap: 0.3rem;
+  font-size: 0.68rem; 
+  transition: all 0.2s ease;
+}
+
+.validator-rule.valid { color: #10b981; }
+.validator-rule.invalid { color: #ef4444; }
+
+.validator-icon {
+  width: 12px; 
+  height: 12px;
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 9px; 
+  font-weight: 700; 
+  flex-shrink: 0;
+}
+
+.validator-rule.valid .validator-icon { 
+  background: #dcfce7; 
+  color: #16a34a; 
+}
+
+.validator-rule.invalid .validator-icon { 
+  background: #fecaca; 
+  color: #dc2626; 
+}
+
+.validator-text { 
+  line-height: 1.3; 
+}
+
+/* Variante responsiva - ahora debajo del campo */
+.password-validator-responsive {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.6rem;
+  width: 100%;
+  margin-top: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideInRight {
+  0% { opacity: 0; transform: translateX(-10px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideDown {
+  0% { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ============ VALIDATION & STATES ============ */
+
+.input-error {
+  border-color: #ef4444 !important;
+  background-color: #fef2f2 !important;
+}
+
+.password-error {
+  margin-top: 4px;
+  font-size: 0.65rem;
+  color: #dc2626;
+  font-weight: 400;
+  display: block;
+  line-height: 1.2;
+  padding-left: 2px;
+}
+
+.validation-error {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+/* Error state for fields */
+.uv-field-error .uv-input {
+  border-color: #ef4444 !important;
+  background-color: #fef2f2 !important;
+}
+
+.uv-field-error .uv-label {
+  color: #ef4444 !important;
+}
+
+.uv-field-error .uv-icon {
+  color: #ef4444 !important;
+}
+
+.field-error-message {
+  position: relative;
+  margin-top: 4px;
+  font-size: 0.65rem;
+  color: #dc2626;
+  font-weight: 400;
+  display: block;
+  line-height: 1.2;
+  padding-left: 2px;
+  width: 100%;
+  z-index: 1;
+}
+
+/* Error state for checkbox */
+.checkbox-error {
+  color: #ef4444 !important;
+}
+
+.checkbox-error input[type="checkbox"] {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
+.field-hint {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* ============ CHECKBOX ============ */
+
+.checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #475569;
+  font-size: 0.8rem;
+  user-select: none;
+  margin-top: 0.1rem;
+}
+
+.checkbox-line input[type="checkbox"] { 
+  width: 16px; 
+  height: 16px; 
+  cursor: pointer;
+  accent-color: #4A90E2;
+}
+
+/* ============ BUTTONS ============ */
+
+.login-button {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #4A90E2 0%, #357abd 100%);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 0.3rem;
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+}
+
+.login-button:hover { 
+  background: linear-gradient(135deg, #357abd 0%, #2a5f92 100%);
+  transform: translateY(-2px); 
+  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4); 
+}
+
+.login-button:active { 
+  transform: translateY(0); 
+}
+
+.login-button:focus { 
+  outline: 2px solid #4A90E2; 
+  outline-offset: 2px; 
+}
+
+.button-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #9ca3af !important;
+  box-shadow: none !important;
+}
+
+.button-disabled:hover { 
+  transform: none !important; 
+  box-shadow: none !important; 
+}
+
+/* ============ LOGIN HELP ============ */
+
+.login-help {
+  text-align: center;
+  margin-top: 0.5rem;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.login-link {
+  color: #4A90E2;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.login-link:hover {
+  color: #357abd;
+  text-decoration: underline;
+}
+
+/* ============ PAGE TRANSITIONS ============ */
+
+.auth { 
+  will-change: transform, opacity; 
+  backface-visibility: hidden; 
+}
+
+.auth.page-enter { 
+  animation: pageEnter 0.2s cubic-bezier(0.25,0.46,0.45,0.94) forwards; 
+}
+
+.auth.page-exit { 
+  animation: pageExit 0.15s cubic-bezier(0.55,0.085,0.68,0.53) forwards; 
+}
+
+@keyframes pageEnter { 
+  0% { opacity: 0; transform: translateX(-24px) scale(0.985); } 
+  100% { opacity: 1; transform: translateX(0) scale(1); } 
+}
+
+@keyframes pageExit { 
+  0% { opacity: 1; transform: translateX(0) scale(1); } 
+  100% { opacity: 0; transform: translateX(24px) scale(0.985); } 
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth.page-enter, .auth.page-exit { animation-duration: .2s; }
+  @keyframes pageEnter { 0%{opacity:0} 100%{opacity:1} }
+  @keyframes pageExit { 0%{opacity:1} 100%{opacity:0} }
+  .password-validator { animation: none; }
+}
+
+/* Logo igual tamaño que Login */
+.register-page .logo-container {
+  margin-bottom: 0.5rem;
+}
+/* Logo del mismo tamaño que Login */
+.register-page .welcome-logo {
+  width: 80px;
+  height: auto;
+}
+
+/* Aplicar mismo responsive que Login */
+@media (max-width: 1024px) {
+  .register-page .welcome-logo {
+    width: clamp(60px, 15vw, 80px);
+  }
+}
+
+/* Title underline oculto en Register */
+.register-page .title-underline {
+  display: none;
+}
+
+/* ============ FLOATING LABELS LIKE LOGIN ============ */
+/* Usar mismo estilo flotante que Login pero con iconos ocultos */
+
+.register-page .uv-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  }
+
+/* Ocultar iconos en Register (limpio, solo label y texto) */
+.register-page .uv-icon {
+  display: none !important;
+}
+
+/* Asegurar que los iconos no afecten el error state */
+.uv-field-error .uv-icon {
+  color: #ef4444 !important;
+}
+
+/* Input con padding izquierdo normal (sin icono) */
+.register-page .uv-input {
+  width: 100%;
+  padding: 14px 16px !important;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #ffffff;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.register-page .uv-input:focus {
+  border-color: #4A90E2;
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+/* Label flotante - posición inicial */
+.register-page .uv-label {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 14px;
+  font-weight: 400;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  z-index: 1;
+  background: transparent;
+}
+
+/* Label flotante - cuando está enfocado o tiene contenido */
+.register-page .uv-input:focus + .uv-label,
+.register-page .uv-input:not(:placeholder-shown) + .uv-label {
+  transform: translateY(-40px) scale(0.85);
+  color: #4A90E2;
+  background: #ffffff;
+  padding: 0 6px;
+}
+
+/* Label flotante - cuando hay error */
+.register-page .uv-field-error .uv-label {
+  transform: translateY(-40px) scale(0.85) !important;
+  background: #ffffff;
+  padding: 0 6px;
+  top: 50%;
+}
+
+/* ====== REGISTER: override login-form para evitar solapamiento ======
+   Register.jsx usa la clase "login-form" que arrastra estilos de Login.css
+   (label estático arriba del input). Estos selectores con mayor especificidad
+   restauran el label flotante propio de Register sin afectar la página de login. */
+.register-page .login-form .uv-field {
+  gap: 0;
+}
+
+.register-page .login-form .uv-label {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 14px;
+  font-weight: 400;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  border: none;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.register-page .login-form .uv-input:focus + .uv-label,
+.register-page .login-form .uv-input:not(:placeholder-shown) + .uv-label {
+  transform: translateY(-30px) scale(0.85);
+  color: #4A90E2;
+  background: #ffffff;
+  padding: 0 6px;
+}
+
+/* ====== TELÉFONO: prefijo fijo "+569 -" y label estático ====== */
+.register-page .login-form .phone-prefix-field .uv-label {
+  position: static;
+  top: auto;
+  left: auto;
+  transform: none;
+  background: none;
+  padding: 0 0 0 2px;
+  margin: 0 0 6px;
+  color: #4A90E2;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.register-page .login-form .phone-prefix-field .phone-input-group {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.register-page .login-form .phone-prefix-field .phone-input-group:focus-within {
+  border-color: #4A90E2;
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.register-page .login-form .phone-prefix-field .phone-prefix {
+  padding-left: 16px;
+  color: #334155;
+  font-size: 14px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.register-page .login-form .phone-prefix-field .uv-input {
+  flex: 1 1 auto;
+  width: auto;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: 0 8px 8px 0;
+  padding: 14px 16px 14px 4px !important;
+}
+
+.register-page .login-form .phone-prefix-field .uv-input:focus {
+  box-shadow: none !important;
+}
+
+/* Password toggle button */
+.register-page .password-field-container .uv-input {
+  padding-right: 48px !important;
+}
+
+/* Validation errors debajo del campo */
+.register-page .validation-error,
+.register-page .field-hint {
+  position: static;
+  margin-top: 6px;
+}
+
+/* Validador de contraseña - Desktop AFUERA a la derecha, Mobile debajo */
+.register-page .password-wrapper {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+}
+
+/* Desktop: validador AFUERA del card, a la derecha */
+@media (min-width: 1024px) {
+  .register-page .password-wrapper {
+    flex-direction: column;
+  }
+  
+  .register-page .password-field-container {
+    width: 100%;
+  }
+  
+  .register-page .password-validator,
+  .register-page .password-validator-responsive {
+    position: absolute !important;
+    left: calc(100% + 0.8rem) !important;
+    top: 0 !important;
+    width: 180px;
+    min-width: 180px;
+    max-width: 180px;
+    margin-top: 0;
+    border-radius: 8px;
+    padding: 0.5rem 0.6rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    animation: slideInRight 0.25s ease;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    z-index: 1000;
+  }
+  
+  .register-page .password-validator .validator-title,
+  .register-page .password-validator-responsive .validator-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  
+  .register-page .password-validator .validator-text,
+  .register-page .password-validator-responsive .validator-text {
+    font-size: 0.68rem;
+  }
+}
+
+/* Mobile/Tablet: validador debajo */
+@media (max-width: 1023px) {
+  .register-page .password-wrapper {
+    flex-direction: column;
+  }
+  
+  .register-page .password-validator,
+  .register-page .password-validator-responsive {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 0.5rem;
+    border-radius: 10px;
+    padding: 0.75rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    animation: slideDown 0.2s ease;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+  }
+}
+
+/* Validador de RUT - Siempre debajo */
+.rut-wrapper {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+}
+
+.rut-wrapper .phone-validator {
+  position: static;
+  width: 100%;
+  margin-top: 0.5rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.6rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  animation: slideDown 0.2s ease;
+  z-index: 1;
+}
+
+/* Validador de teléfono - Siempre debajo */
+.phone-wrapper {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+}
+
+.phone-validator {
+  position: static;
+  width: 100%;
+  margin-top: 0.5rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.6rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  animation: slideDown 0.2s ease;
+  z-index: 1;
+}
+
+/* Mensaje de ayuda al hacer focus - dentro del input */
+.input-hint {
+  position: absolute;
+  left: 16px;
+  top: 11px;
+  font-size: 14px;
+  color: #9ca3af;
+  font-style: normal;
+  animation: fadeInHint 0.15s ease;
+  pointer-events: none;
+  z-index: 5;
+  white-space: nowrap;
+}
+
+@keyframes fadeInHint {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Wrapper interno para agrupar input + label + icon */
+.uv-field-wrapper {
+  position: relative;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+/* Asegurar que password field container también use flex column */
+.password-field-container {
+  display: flex;
+  flex-direction: column;
+}
+
+/* (Removido) Regla de asterisco para evitar duplicados en Register */
+
+/* ============ TERMS MODAL ============ */
+
+.terms-modal-overlay {
+  position: fixed; 
+  inset: 0;
+  background-color: rgba(0,0,0,.75);
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  z-index: 1000; 
+  padding: 1rem; 
+  overflow-y: auto;
+}
+
+.terms-modal {
+  background: #fff; 
+  border-radius: 12px;
+  max-width: 800px; 
+  width: 100%;
+  max-height: 90vh; 
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,.25);
+  animation: modalSlideIn .3s cubic-bezier(.25,.46,.45,.94);
+}
+
+@keyframes modalSlideIn {
+  0% { opacity: 0; transform: translateY(-30px) scale(.95); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.terms-modal-header {
+  position: sticky; 
+  top: 0;
+  background: #fff; 
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1.25rem 1.75rem; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  border-radius: 12px 12px 0 0; 
+  z-index: 10;
+}
+
+.terms-modal-header h2 {
+  color: #277EAF; 
+  font-size: 1.35rem; 
+  font-weight: 700; 
+  margin: 0; 
+  line-height: 1.2;
+}
+
+.terms-modal-close {
+  background: none; 
+  border: none; 
+  font-size: 1.5rem; 
+  color: #6b7280; 
+  cursor: pointer;
+  width: 2rem; 
+  height: 2rem; 
+  display: grid; 
+  place-items: center; 
+  border-radius: 50%;
+  transition: all .2s ease; 
+  flex-shrink: 0;
+}
+
+.terms-modal-close:hover { 
+  background: #f3f4f6; 
+  color: #374151; 
+}
+
+.terms-modal-close:focus { 
+  outline: 2px solid #4A90E2; 
+  outline-offset: 2px; 
+}
+
+.terms-modal-content { 
+  padding: 1.75rem; 
+  line-height: 1.6; 
+  color: #374151; 
+}
+
+.terms-modal-content h3 { 
+  color: #277EAF; 
+  font-size: 1.15rem; 
+  font-weight: 700; 
+  margin: 1.25rem 0 0.6rem 0; 
+}
+
+.terms-modal-content h4 { 
+  color: #277EAF; 
+  font-size: 1rem; 
+  font-weight: 600; 
+  margin: .85rem 0 .45rem 0; 
+}
+
+.terms-modal-content p { 
+  margin: 0 0 1rem 0; 
+  font-size: .95rem; 
+}
+
+.terms-modal-content ul { 
+  margin: .5rem 0 1rem 1rem; 
+  padding-left: 1rem; 
+}
+
+.terms-modal-content li { 
+  margin: .25rem 0; 
+  font-size: .95rem; 
+}
+
+.terms-modal-footer {
+  position: sticky; 
+  bottom: 0; 
+  background: #fff; 
+  border-top: 1px solid #e5e7eb;
+  padding: 1.25rem 1.75rem; 
+  display: flex; 
+  justify-content: flex-end; 
+  border-radius: 0 0 12px 12px;
+}
+
+.terms-modal-accept {
+  background: #4A90E2; 
+  color: #fff; 
+  border: none;
+  padding: .75rem 1.5rem; 
+  border-radius: 10px; 
+  font-size: .95rem; 
+  font-weight: 600; 
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.terms-modal-accept:hover { 
+  background: #357abd; 
+  transform: translateY(-1px); 
+  box-shadow: 0 6px 16px rgba(74,144,226,.35); 
+}
+
+.terms-modal-accept:focus { 
+  outline: 2px solid #4A90E2; 
+  outline-offset: 2px; 
+}
+
+.terms-modal-accept:active { 
+  transform: translateY(0); 
+}
+
+.terms-link { 
+  transition: all .2s ease; 
+}
+
+.terms-link:hover { 
+  color: #357abd !important; 
+  text-decoration-thickness: 2px !important; 
+}
+
+.terms-link:focus { 
+  outline: 2px solid #4A90E2; 
+  outline-offset: 2px; 
+  border-radius: 2px; 
+}
+
+/* ============ SUCCESS MODAL ============ */
+
+.success-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.success-modal {
+  background: white;
+  border-radius: 16px;
+  padding: 2.5rem;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease;
+}
+
+.success-icon {
+  margin-bottom: 1.5rem;
+}
+
+.success-circle {
+  animation: drawCircle 0.6s ease forwards;
+}
+
+.success-check {
+  animation: drawCheck 0.4s ease 0.3s forwards;
+}
+
+@keyframes drawCircle {
+  from { stroke-dashoffset: 63; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes drawCheck {
+  from { stroke-dashoffset: 8; }
+  to { stroke-dashoffset: 0; }
+}
+
+.success-title {
+  color: #0f172a;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+}
+
+.success-message {
+  color: #64748b;
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* ============ STEP SPACER - Reduce espacio entre campos y botones en pasos 1 y 3 ============ */
+
+.step-spacer {
+  height: 0;
+  margin-bottom: -1rem;
+}
+
+/* Móvil: ajuste diferente */
+@media (max-width: 768px) {
+  .step-spacer {
+    margin-bottom: -1rem;
+  }
+}
+
+/* ============ RESPONSIVE ============ */
+
+/* Desktop grande - Card más ancho para acomodar validador */
+@media (min-width: 1400px) {
+  .register-page .register-inner { max-width: 550px; }
+  .register-page .login-card { padding: 0.85rem 1.1rem; }
+}
+
+@media (min-width: 1600px) {
+  .register-page .register-inner { max-width: 600px; }
+  .register-page .login-card { padding: 0.9rem 1.2rem; }
+}
+
+@media (min-width: 1920px) {
+  .register-page .register-inner { max-width: 650px; }
+  .register-page .login-card { padding: 1rem 1.3rem; }
+}
+
+/* Pantallas medianas - Ocultar imagen antes */
+@media (max-width: 1200px) {
+  .register-layout.mirror {
+    flex-direction: column;
+  }
+  
+  .register-layout.mirror .register-right,
+  .register-right { 
+    display: none !important; 
+  }
+  
+  .register-layout.mirror .register-left,
+  .register-left {
+    width: 100% !important;
+    min-height: 100vh;
+  }
+  
+  .register-inner {
+    max-width: 400px;
+  }
+}
+
+/* Tablets */
+@media (max-width: 1024px) {
+  .register-right {
+    display: none !important;
+  }
+  
+  .register-left {
+    width: 100% !important;
+    padding: 2rem 1.5rem;
+  }
+
+  .register-inner {
+    max-width: 420px;
+    padding: 0.5rem 0;
+  }
+
+  /* Mantener 2 columnas en tablet */
+  .form-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .password-validator,
+  .password-validator-responsive {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 0.5rem !important;
+  }
+
+  .password-wrapper { 
+    flex-direction: column; 
+  }
+  
+  .login-card {
+    padding: 1rem 1.2rem;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .register-right {
+    display: none !important;
+  }
+  
+  .register-left { 
+    width: 100% !important;
+    padding: 1.5rem 1.5rem; 
+  }
+  
+  .login-card { 
+    padding: 1.5rem 0.9rem; 
+    border-radius: 14px; 
+    max-width: 95%;
+    margin: 0 auto;
+  }
+
+  /* Cambiar a 1 columna en mobile */
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .register-title { 
+    font-size: clamp(1.35rem, 5vw, 1.5rem); 
+  }
+  
+  .register-subtitle { 
+    font-size: clamp(0.9rem, 3.5vw, 1rem); 
+  }
+}
+
+/* Mobile pequeño */
+@media (max-width: 480px) {
+  .register-right {
+    display: none !important;
+  }
+  
+  .register-left { 
+    width: 100% !important;
+    padding: 1rem 1rem; 
+  }
+  
+  .login-card { 
+    padding: 1.25rem 0.75rem;
+    max-width: 92%;
+  }
+  
+  .register-form {
+    gap: 0.85rem;
+  }
+  
+  .uv-input {
+    padding: 13px 13px 13px 44px;
+    font-size: 14px;
+  }
+}
+
+/* Landscape bajo */
+@media (max-height: 600px) and (orientation: landscape) {
+  .register-layout { 
+    flex-direction: row; 
+  }
+  
+  .register-right { 
+    display: flex !important;
+    flex: 0.4; 
+  }
+  
+  .register-left { 
+    flex: 0.6; 
+    padding: 1rem; 
+  }
+  
+  .register-form { 
+    gap: 0.65rem; 
+  }
+  
+  .login-card { 
+    padding: 1rem 1.25rem; 
+  }
+  
+  .password-validator {
+    position: fixed; 
+    top: 50%; 
+    right: 10px; 
+    transform: translateY(-50%);
+    z-index: 100;
+  }
+}

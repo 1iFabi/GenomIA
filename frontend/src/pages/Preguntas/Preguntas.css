@@ -1,0 +1,221 @@
+.preguntas-section {
+  --uoh: #277EAF;
+  --fg: #fff;
+  --fg-soft: rgba(255,255,255,.85);
+  padding: 100px 40px 40px;
+  width: 100vw;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--fg);
+  font-family: 'DM Sans','Inter', system-ui, -apple-system, 'Segoe UI', 'Roboto', sans-serif;
+  background-color: var(--uoh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.title {
+  margin: 25px 0 12px 0;
+  font-weight: 600;
+  font-size: clamp(28px, 5vw, 48px);
+  line-height: 1.06;
+  letter-spacing: -0.015em;
+  color: var(--fg);
+  text-align: center;
+}
+
+.subtitle {
+  margin: 0 auto;
+  max-width: 65ch;
+  font-size: clamp(15px, 1.5vw, 18px);
+  line-height: 1.45;
+  color: var(--fg-soft);
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+/* Grid de preguntas */
+.preguntas-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  max-width: 1000px;
+  width: 100%;
+  align-items: start; 
+}
+
+/* Card de pregunta */
+.pregunta-card {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 25px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.pregunta-card:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.pregunta-card.open {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+/* Header clickeable */
+.pregunta-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 25px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 70px;
+}
+
+.pregunta-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--fg);
+  line-height: 1.4;
+  margin-right: 15px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+/* Botón expandir */
+.expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+  cursor: pointer;
+}
+
+.expand-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ---------------------------------------------------- */
+/* NUEVOS ESTILOS PARA LA ANIMACIÓN DEL ICONO */
+/* ---------------------------------------------------- */
+
+.expand-btn svg {
+  transition: transform 0.3s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+/* 1. Rotación suave del círculo (opcional, pero añade elegancia) */
+.expand-btn svg.rotated {
+  transform: rotate(180deg); /* Gira el círculo completo 180 grados */
+}
+
+/* 2. Estilos de transición para la barra vertical */
+.expand-btn svg path:last-child {
+  /* Habilita la transición para transform (escalado) y opacity */
+  transition: transform 0.3s ease, opacity 0.3s ease; 
+  /* Asegura que el punto de escalado sea el centro */
+  transform-origin: center; 
+}
+
+/* 3. Estado de la barra vertical cuando la pregunta está abierta */
+.expand-btn svg .collapsed-path {
+  /* Escala la barra vertical a un ancho casi nulo (aplastamiento) */
+  transform: scaleY(0.1); 
+  /* Opcional: bajar la opacidad mientras se aplasta */
+  opacity: 0; 
+}
+/* ---------------------------------------------------- */
+
+
+/* Contenido de respuesta */
+.pregunta-content {
+  padding: 0 25px 25px 25px;
+  background: rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  animation: slideDown 0.3s ease forwards;
+}
+
+.pregunta-content p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--fg-soft);
+  animation: fadeInUp 0.3s ease 0.1s both;
+}
+
+/* Animaciones */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .preguntas-section {
+    padding: 100px 20px 40px;
+  }
+  
+  .preguntas-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  
+  .pregunta-header {
+    padding: 16px 20px;
+  }
+  
+  .pregunta-text {
+    font-size: 15px;
+  }
+  
+  .pregunta-content {
+    padding: 0 20px 20px 20px;
+  }
+  
+  .pregunta-content p {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pregunta-header {
+    padding: 14px 18px;
+  }
+  
+  .pregunta-text {
+    font-size: 14px;
+  }
+  
+  .pregunta-content {
+    padding: 0 18px 18px 18px;
+  }
+  
+  .pregunta-content p {
+    font-size: 13px;
+  }
+}

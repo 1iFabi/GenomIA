@@ -1,0 +1,40 @@
+.skeleton-card {
+  background: var(--card-background-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color);
+  margin-bottom: 2rem;
+}
+
+.skeleton-line {
+  background-color: #e5e7eb;
+  border-radius: 4px;
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.skeleton-line--title {
+  height: 24px;
+  width: 40%;
+  margin-bottom: 1rem;
+}
+
+.skeleton-line--text {
+  height: 16px;
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+.skeleton-line--text:last-child {
+  width: 80%;
+  margin-bottom: 0;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

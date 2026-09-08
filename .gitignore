@@ -1,0 +1,49 @@
+# Local secrets (Gmail OAuth)
+backend/sequoh/config/credentials.json
+backend/sequoh/config/token.json
+
+# Environment files
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Test files
+test_files/
+
+# SNP database folder
+backend/snps/
+
+# node modules
+**/node_modules/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django database
+*.sqlite3
+db.sqlite3
+
+# Report generator output (generated PDFs / manifest)
+backend/report-generator/out/
+backend/report-generator/out-smoke/
+
+
+# Tool / agent
+.pi/
+.opencode/
+.agents/
+.atl/
+.playwright-mcp/
+skills-lock.json
+
+# Excluded from the new repository upload
+/Tests/
+/openspec/
+/docs/
+/frontend/styleguide.html
+/frontend/vercel.json
+/backend/vercel.json
+/render.yaml

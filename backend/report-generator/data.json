@@ -1,0 +1,78 @@
+{
+  "people": [
+    {
+      "name": "Dylan Parrao",
+      "reportId": "GNM-2025-0001",
+      "date": "29/04/2025",
+      "link": "https://pds-kappa.vercel.app/",
+      "summary": {
+        "snpsAnalyzed": 650,
+        "riskCounts": { "high": 32, "mid": 8, "low": 21, "neutral": 589 }
+      },
+      "areas": {
+        "biometricas":   { "total": 120, "counts": { "high": 3, "mid": 6, "low": 8, "neutral": 103 } },
+        "biomarcadores": { "total": 110, "counts": { "high": 7, "mid": 5, "low": 6, "neutral": 92 } },
+        "enfermedades":  { "total": 180, "counts": { "high": 9, "mid": 8, "low": 7, "neutral": 156 } },
+        "farmacogenetica": { "total": 90, "counts": { "high": 6, "mid": 4, "low": 5, "neutral": 75 } },
+        "rasgos":        { "total": 150, "counts": { "high": 7, "mid": 3, "low": 4, "neutral": 136 } }
+      },
+      "ancestryTop5": [
+        { "country": "México", "pct": 45 },
+        { "country": "España", "pct": 25 },
+        { "country": "Italia", "pct": 15 },
+        { "country": "Nativo Americano", "pct": 10 },
+        { "country": "África del Norte", "pct": 5 }
+      ],
+      "rsids": [
+        {
+          "rsid": "rs429358",
+          "fenotipo": "Degeneracion macular relacionada a la edad",
+          "categoria": "enfermedades",
+          "riesgo": "Alto",
+          "aleloReferencia": "C",
+          "aleloAlternativo": "T",
+          "cromosoma": "19",
+          "posicion": "44908684",
+          "fuente": "GWAS Catalog",
+          "porcentajeChilenos": 12.5
+        },
+        {
+          "rsid": "rs4988235",
+          "fenotipo": "Persistencia de lactasa en adultos",
+          "categoria": "rasgos",
+          "riesgo": "Medio",
+          "aleloReferencia": "C",
+          "aleloAlternativo": "T",
+          "cromosoma": "2",
+          "posicion": "136608646",
+          "fuente": "1000 Genomes",
+          "porcentajeChilenos": 34
+        },
+        {
+          "rsid": "rs7903146",
+          "fenotipo": "Riesgo aumentado de diabetes tipo 2",
+          "categoria": "enfermedades",
+          "riesgo": "Alto",
+          "aleloReferencia": "C",
+          "aleloAlternativo": "T",
+          "cromosoma": "10",
+          "posicion": "114758349",
+          "fuente": "GWAS Catalog",
+          "porcentajeChilenos": 18
+        },
+        {
+          "rsid": "rs1801282",
+          "fenotipo": "Metabolismo lipidico y respuesta a dieta",
+          "categoria": "biomarcadores",
+          "riesgo": "Bajo",
+          "aleloReferencia": "C",
+          "aleloAlternativo": "G",
+          "cromosoma": "3",
+          "posicion": "12351626",
+          "fuente": "ClinVar",
+          "porcentajeChilenos": 7.8
+        }
+      ]
+    }
+  ]
+}

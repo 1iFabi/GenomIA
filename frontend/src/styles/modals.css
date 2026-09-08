@@ -1,0 +1,527 @@
+/* Shared modal stylesheet — single source for all auth + account modals.
+   Class names and structure are preserved verbatim; DeleteAccount's red theme
+   is scoped via .delete-account-modal so it stays distinct without renaming. */
+
+/* ==== Shared overlay & container ==== */
+.forgot-password-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.forgot-password-modal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: visible;
+}
+
+.delete-account-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.delete-account-modal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  max-width: 550px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* ==== Header ==== */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 24px 0;
+  margin-bottom: 16px;
+}
+
+.modal-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-content {
+  padding: 0 24px 24px;
+}
+
+.modal-description {
+  color: #6b7280;
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0 0 24px 0;
+}
+
+.forgot-password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.modal-error {
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.modal-submit-btn {
+  background: linear-gradient(135deg, var(--genomia-blue) 0%, var(--genomia-blue-dark) 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+}
+
+.modal-submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(74, 144, 226, 0.4);
+}
+
+.modal-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.success-icon {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #059669;
+}
+
+.success-message {
+  color: #1f2937;
+  font-size: 16px;
+  line-height: 1.5;
+  text-align: center;
+  margin: 0 0 20px 0;
+}
+
+.success-note {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+  color: #92400e;
+  margin-bottom: 24px;
+}
+
+/* ==== Shared floating-label field styling ==== */
+.uv-field {
+  position: relative;
+  margin-bottom: 0;
+}
+
+.uv-input {
+  width: 100%;
+  padding: 16px 50px 16px 48px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 16px;
+  background: #fafafa;
+  color: #374151;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.uv-input:focus {
+  outline: none;
+  border-color: var(--genomia-blue);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.uv-input:not(:placeholder-shown) {
+  background: white;
+}
+
+.uv-label {
+  position: absolute;
+  left: 48px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: #9ca3af;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  background: linear-gradient(to bottom, transparent 0%, transparent 45%, #fafafa 45%, #fafafa 55%, transparent 55%);
+  padding: 0 8px;
+}
+
+.uv-input:focus + .uv-label,
+.uv-input:not(:placeholder-shown) + .uv-label {
+  top: 0;
+  font-size: 14px;
+  color: var(--genomia-blue);
+  font-weight: 500;
+  background: linear-gradient(to bottom, transparent 0%, transparent 45%, white 45%, white 55%, transparent 55%);
+}
+
+.uv-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  z-index: 1;
+}
+
+.uv-input:focus ~ .uv-icon {
+  color: var(--genomia-blue);
+}
+
+.uv-focus-bg {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  background: transparent;
+  border-radius: 10px;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.pwd-toggle {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.pwd-toggle:hover {
+  color: var(--genomia-blue);
+  background: rgba(74, 144, 226, 0.1);
+}
+
+.pwd-toggle:focus {
+  outline: none;
+  color: var(--genomia-blue);
+}
+
+/* ==== Password validator + match indicators ==== */
+.password-validator {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0 !important;
+  font-size: 14px;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  z-index: 10;
+}
+
+.validator-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  transition: all 0.3s ease;
+}
+
+.validator-item:last-child {
+  margin-bottom: 0;
+}
+
+.validator-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.validator-item.valid .validator-icon {
+  background: #10b981;
+  color: white;
+}
+
+.validator-item.invalid .validator-icon {
+  background: #ef4444;
+  color: white;
+}
+
+.validator-item.valid {
+  color: #065f46;
+}
+
+.validator-item.invalid {
+  color: #991b1b;
+}
+
+.password-match {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.password-match.valid {
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  color: #065f46;
+}
+
+.password-match.invalid {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.password-match .validator-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.password-match.valid .validator-icon {
+  background: #10b981;
+  color: white;
+}
+
+.password-match.invalid .validator-icon {
+  background: #ef4444;
+  color: white;
+}
+
+/* ==== DeleteAccount-specific (red theme), scoped to avoid cascade conflicts ==== */
+.delete-account-modal .modal-title {
+  color: #dc2626;
+}
+
+.delete-account-modal .modal-close-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.delete-account-modal .uv-input:focus {
+  border-color: #dc2626;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.delete-account-modal .uv-input:focus + .uv-label,
+.delete-account-modal .uv-input:not(:placeholder-shown) + .uv-label {
+  color: #dc2626;
+}
+
+.delete-account-modal .uv-input:focus ~ .uv-icon {
+  color: #dc2626;
+}
+
+.delete-account-modal .pwd-toggle:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.delete-account-modal .pwd-toggle:focus {
+  color: #dc2626;
+}
+
+.warning-banner {
+  display: flex;
+  gap: 12px;
+  background: #fef2f2;
+  border: 2px solid #fecaca;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.warning-icon {
+  color: #dc2626;
+  flex-shrink: 0;
+}
+
+.warning-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #991b1b;
+  margin: 0 0 6px 0;
+}
+
+.warning-text {
+  font-size: 14px;
+  color: #7f1d1d;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.delete-account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.confirmation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confirmation-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.confirmation-label strong {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.confirmation-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 16px;
+  background: #fafafa;
+  color: #374151;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.confirmation-input:focus {
+  outline: none;
+  border-color: #dc2626;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.modal-delete-btn {
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.modal-delete-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.5);
+}
+
+.modal-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.disclaimer-text {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+  text-align: center;
+  margin: 0;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+/* ==== Responsive ==== */
+@media (max-width: 480px) {
+  .forgot-password-modal,
+  .delete-account-modal {
+    margin: 0 10px;
+  }
+
+  .modal-header {
+    padding: 20px 20px 0;
+  }
+
+  .modal-content {
+    padding: 0 20px 20px;
+  }
+
+  .modal-title {
+    font-size: 20px;
+  }
+}

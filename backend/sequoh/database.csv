@@ -1,0 +1,462 @@
+ï»¿id,rs_id,genotipo,fenotipo,categoria,alelo_alternativo,alelo_referencia,cromosoma,posicion,fecha_actualizacion,fuente_base_datos,magnitud_efecto,nivel_riesgo,tipo_evidencia,continente,af_continente,fuente_continente,poblacion_continente,pais,af_pais,fuente_pais,poblacion_pais,grupo_rasgos
+1,rs1393350,G/A,Riesgo intermedio de melanoma (MITF),rasgos,A,G,3,69967107,2024,GWAS Catalog,1.2,Intermedio,GWAS,Europa,0.325,gnomAD_v4,IBS,España,0.325,gnomAD_v4,IBS,Apariencia Física
+2,rs1393350,A/A,Riesgo elevado de melanoma (MITF),rasgos,A,G,3,69967107,2024,GWAS Catalog,1.45,Alto,GWAS,Europa,0.325,gnomAD_v4,IBS,España,0.325,gnomAD_v4,IBS,Apariencia Física
+3,rs1393350,G/G,Riesgo reducido de melanoma (MITF),rasgos,A,G,3,69967107,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.325,gnomAD_v4,IBS,España,0.325,gnomAD_v4,IBS,Apariencia Física
+4,rs1815739,C/T,Rendimiento atlético mixto (ACTN3),rasgos,T,C,11,66328095,2024,SNPedia,1.5,Intermedio,Metaanálisis,Asia Oriental,0.198,gnomAD_v4,CHB,China,0.198,gnomAD_v4,CHB,Rendimiento Físico y Sensorial
+5,rs1815739,T/T,Mayor resistencia deportiva (ACTN3),rasgos,T,C,11,66328095,2024,SNPedia,2.0,Neutral,Metaanálisis,Asia Oriental,0.198,gnomAD_v4,CHB,China,0.198,gnomAD_v4,CHB,Rendimiento Físico y Sensorial
+6,rs1815739,C/C,Mayor potencia muscular (ACTN3),rasgos,T,C,11,66328095,2024,SNPedia,2.0,Neutral,Metaanálisis,Asia Oriental,0.198,gnomAD_v4,CHB,China,0.198,gnomAD_v4,CHB,Rendimiento Físico y Sensorial
+7,rs1801133,C/T,Metabolismo intermedio de folato (MTHFR),biometrica,T,C,1,11856378,2024,ClinVar,1.4,Intermedio,Clínico,Asia Oriental,0.389,gnomAD_v4,EAS,China,0.389,gnomAD_v4,EAS,
+8,rs1801133,T/T,Metabolismo reducido de folato (MTHFR),biometrica,T,C,1,11856378,2024,ClinVar,2.2,Alto,Clínico,Asia Oriental,0.389,gnomAD_v4,EAS,China,0.389,gnomAD_v4,EAS,
+9,rs1801133,C/C,Metabolismo normal de folato (MTHFR),biometrica,T,C,1,11856378,2024,ClinVar,1.0,Bajo,Clínico,Asia Oriental,0.389,gnomAD_v4,EAS,China,0.389,gnomAD_v4,EAS,
+10,rs429358,C/C,Genotipo APOE e3/e3 - Riesgo estándar Alzheimer,enfermedades,C,T,19,44908684,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.165,gnomAD_v4,FIN,Finlandia,0.165,gnomAD_v4,FIN,
+11,rs429358,C/T,Genotipo APOE e3/e4 - Riesgo elevado Alzheimer,enfermedades,C,T,19,44908684,2024,ClinVar,3.2,Alto,Clínico,Europa,0.165,gnomAD_v4,FIN,Finlandia,0.165,gnomAD_v4,FIN,
+12,rs429358,T/T,Genotipo APOE e4/e4 - Riesgo muy elevado Alzheimer,enfermedades,C,T,19,44908684,2024,ClinVar,12.0,Alto,Clínico,Europa,0.165,gnomAD_v4,FIN,Finlandia,0.165,gnomAD_v4,FIN,
+13,rs7412,C/T,Factor protector cardiovascular (APOE),biometrica,T,C,19,44908822,2024,ClinVar,0.8,Bajo,Clínico,Europa,0.085,gnomAD_v4,FIN,Finlandia,0.085,gnomAD_v4,FIN,
+14,rs7412,T/T,Protección cardiovascular moderada (APOE),biometrica,T,C,19,44908822,2024,ClinVar,0.7,Bajo,Clínico,Europa,0.085,gnomAD_v4,FIN,Finlandia,0.085,gnomAD_v4,FIN,
+15,rs1800497,A/G,Susceptibilidad intermedia a adicciones (DRD2),rasgos,G,A,11,113283368,2024,GWAS Catalog,1.3,Intermedio,GWAS,Àfrica,0.321,gnomAD_v4,AFR,Nigeria,0.321,gnomAD_v4,AFR,Bienestar y Salud
+16,rs1800497,G/G,Mayor susceptibilidad a adicciones (DRD2),rasgos,G,A,11,113283368,2024,GWAS Catalog,1.6,Alto,GWAS,Àfrica,0.321,gnomAD_v4,AFR,Nigeria,0.321,gnomAD_v4,AFR,Bienestar y Salud
+17,rs1800497,A/A,Menor susceptibilidad a adicciones (DRD2),rasgos,G,A,11,113283368,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.321,gnomAD_v4,AFR,Nigeria,0.321,gnomAD_v4,AFR,Bienestar y Salud
+18,rs4680,A/G,Metabolismo intermedio de dopamina (COMT),rasgos,G,A,22,19963748,2024,SNPedia,1.5,Intermedio,Metaanálisis,Europa,0.495,gnomAD_v4,FIN,Finlandia,0.495,gnomAD_v4,FIN,Metabolismo
+19,rs4680,G/G,Metabolismo rápido de dopamina (COMT),rasgos,G,A,22,19963748,2024,SNPedia,2.0,Neutral,Metaanálisis,Europa,0.495,gnomAD_v4,FIN,Finlandia,0.495,gnomAD_v4,FIN,Metabolismo
+20,rs4680,A/A,Metabolismo lento de dopamina (COMT),rasgos,G,A,22,19963748,2024,SNPedia,2.0,Neutral,Metaanálisis,Europa,0.495,gnomAD_v4,FIN,Finlandia,0.495,gnomAD_v4,FIN,Metabolismo
+21,rs1801282,C/G,Sensibilidad intermedia a insulina (PPARG),biometrica,G,C,3,12351626,2024,ClinVar,1.25,Intermedio,GWAS,Àfrica,0.0689,gnomAD_v4,AFR,Nigeria,0.0689,gnomAD_v4,AFR,
+22,rs1801282,G/G,Mayor sensibilidad a insulina (PPARG),biometrica,G,C,3,12351626,2024,ClinVar,0.8,Bajo,GWAS,Àfrica,0.0689,gnomAD_v4,AFR,Nigeria,0.0689,gnomAD_v4,AFR,
+23,rs1801282,C/C,Riesgo estándar de diabetes tipo 2 (PPARG),biometrica,G,C,3,12351626,2024,ClinVar,1.0,Bajo,GWAS,Àfrica,0.0689,gnomAD_v4,AFR,Nigeria,0.0689,gnomAD_v4,AFR,
+24,rs1333049,C/G,Riesgo intermedio de enfermedad coronaria,enfermedades,G,C,9,22125504,2024,GWAS Catalog,1.3,Intermedio,GWAS,Europa,0.522,gnomAD_v4,IBS,España,0.522,gnomAD_v4,IBS,
+25,rs1333049,G/G,Riesgo elevado de enfermedad coronaria,enfermedades,G,C,9,22125504,2024,GWAS Catalog,1.7,Alto,GWAS,Europa,0.522,gnomAD_v4,IBS,España,0.522,gnomAD_v4,IBS,
+26,rs1333049,C/C,Riesgo reducido de enfermedad coronaria,enfermedades,G,C,9,22125504,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.522,gnomAD_v4,IBS,España,0.522,gnomAD_v4,IBS,
+27,rs1800896,C/T,Respuesta inmune intermedia (IL10),biomarcadores,T,C,1,206773552,2024,dbSNP,1.2,Intermedio,Clínico,Américas,0.2345,gnomAD_v4,AMR,México,0.2345,gnomAD_v4,AMR,
+28,rs1800896,T/T,Menor producción de interleucina-10 (IL10),biomarcadores,T,C,1,206773552,2024,dbSNP,1.5,Alto,Clínico,Américas,0.2345,gnomAD_v4,AMR,México,0.2345,gnomAD_v4,AMR,
+29,rs1800896,C/C,Producción normal de interleucina-10 (IL10),biomarcadores,T,C,1,206773552,2024,dbSNP,1.0,Bajo,Clínico,Américas,0.2345,gnomAD_v4,AMR,México,0.2345,gnomAD_v4,AMR,
+30,rs1799853,C/T,Metabolizador intermedio de warfarina (CYP2C9),farmacogenetica,T,C,10,94942290,2024,PharmGKB,2.5,Alto,Clínico,Américas,0.1123,gnomAD_v4,AMR,México,0.1123,gnomAD_v4,AMR,
+31,rs1799853,T/T,Metabolizador lento de warfarina (CYP2C9),farmacogenetica,T,C,10,94942290,2024,PharmGKB,4.0,Alto,Clínico,Américas,0.1123,gnomAD_v4,AMR,México,0.1123,gnomAD_v4,AMR,
+32,rs1799853,C/C,Metabolizador normal de warfarina (CYP2C9),farmacogenetica,T,C,10,94942290,2024,PharmGKB,1.0,Bajo,Clínico,Américas,0.1123,gnomAD_v4,AMR,México,0.1123,gnomAD_v4,AMR,
+33,rs1057910,A/C,Metabolismo reducido de warfarina (CYP2C9),farmacogenetica,C,A,10,94981296,2024,PharmGKB,2.0,Alto,Clínico,Asia Oriental,0.0845,gnomAD_v4,EAS,China,0.0845,gnomAD_v4,EAS,
+34,rs1057910,C/C,Metabolismo muy reducido de warfarina (CYP2C9),farmacogenetica,C,A,10,94981296,2024,PharmGKB,3.5,Alto,Clínico,Asia Oriental,0.0845,gnomAD_v4,EAS,China,0.0845,gnomAD_v4,EAS,
+35,rs1057910,A/A,Metabolismo normal de warfarina (CYP2C9),farmacogenetica,C,A,10,94981296,2024,PharmGKB,1.0,Bajo,Clínico,Asia Oriental,0.0845,gnomAD_v4,EAS,China,0.0845,gnomAD_v4,EAS,
+36,rs4244285,A/G,Metabolizador intermedio de clopidogrel (CYP2C19),farmacogenetica,G,A,10,94781859,2024,PharmGKB,2.0,Alto,Clínico,Asia Oriental,0.312,gnomAD_v4,CHB,China,0.312,gnomAD_v4,CHB,
+37,rs4244285,G/G,Metabolizador pobre de clopidogrel (CYP2C19),farmacogenetica,G,A,10,94781859,2024,PharmGKB,3.0,Alto,Clínico,Asia Oriental,0.312,gnomAD_v4,CHB,China,0.312,gnomAD_v4,CHB,
+38,rs4244285,A/A,Metabolizador normal de clopidogrel (CYP2C19),farmacogenetica,G,A,10,94781859,2024,PharmGKB,1.0,Bajo,Clínico,Asia Oriental,0.312,gnomAD_v4,CHB,China,0.312,gnomAD_v4,CHB,
+39,rs12248560,C/T,Metabolizador ultra-rápido intermedio (CYP2C19),farmacogenetica,T,C,10,94852914,2024,PharmGKB,1.5,Intermedio,Clínico,Europa,0.289,gnomAD_v4,FIN,Finlandia,0.289,gnomAD_v4,FIN,
+40,rs12248560,T/T,Metabolizador ultra-rápido de omeprazol (CYP2C19),farmacogenetica,T,C,10,94852914,2024,PharmGKB,0.5,Bajo,Clínico,Europa,0.289,gnomAD_v4,FIN,Finlandia,0.289,gnomAD_v4,FIN,
+41,rs1065852,C/T,Metabolismo intermedio de antipsicóticos (CYP2D6),farmacogenetica,T,C,22,42523943,2024,PharmGKB,1.5,Intermedio,Clínico,Américas,0.0834,gnomAD_v4,AMR,México,0.0834,gnomAD_v4,AMR,
+42,rs1065852,T/T,Metabolizador pobre de codeína (CYP2D6),farmacogenetica,T,C,22,42523943,2024,PharmGKB,2.5,Alto,Clínico,Américas,0.0834,gnomAD_v4,AMR,México,0.0834,gnomAD_v4,AMR,
+43,rs1065852,C/C,Metabolizador normal de codeína (CYP2D6),farmacogenetica,T,C,22,42523943,2024,PharmGKB,1.0,Bajo,Clínico,Américas,0.0834,gnomAD_v4,AMR,México,0.0834,gnomAD_v4,AMR,
+44,rs776746,C/T,Actividad enzimática reducida (CYP3A5),farmacogenetica,T,C,7,99672916,2024,PharmGKB,1.8,Intermedio,Clínico,Àfrica,0.5632,gnomAD_v4,AFR,Nigeria,0.5632,gnomAD_v4,AFR,
+45,rs776746,T/T,Metabolizador muy reducido de tacrolimus (CYP3A5),farmacogenetica,T,C,7,99672916,2024,PharmGKB,2.5,Alto,Clínico,Àfrica,0.5632,gnomAD_v4,AFR,Nigeria,0.5632,gnomAD_v4,AFR,
+46,rs776746,C/C,Metabolizador extenso de tacrolimus (CYP3A5),farmacogenetica,T,C,7,99672916,2024,PharmGKB,1.0,Bajo,Clínico,Àfrica,0.5632,gnomAD_v4,AFR,Nigeria,0.5632,gnomAD_v4,AFR,
+47,rs1051730,C/T,Aumento moderado de dependencia nicotínica (CHRNA3),rasgos,T,C,15,78882925,2024,GWAS Catalog,1.3,Intermedio,GWAS,Europa,0.238,gnomAD_v4,FIN,Finlandia,0.238,gnomAD_v4,FIN,Bienestar y Salud
+48,rs1051730,T/T,Mayor riesgo de adicción al tabaco (CHRNA3),rasgos,T,C,15,78882925,2024,GWAS Catalog,1.8,Alto,GWAS,Europa,0.238,gnomAD_v4,FIN,Finlandia,0.238,gnomAD_v4,FIN,Bienestar y Salud
+49,rs1051730,C/C,Menor susceptibilidad a dependencia nicotínica (CHRNA3),rasgos,T,C,15,78882925,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.238,gnomAD_v4,FIN,Finlandia,0.238,gnomAD_v4,FIN,Bienestar y Salud
+50,rs9939609,A/T,Riesgo intermedio de obesidad (FTO),biometrica,T,A,16,53820527,2024,GWAS Catalog,1.3,Intermedio,GWAS,Américas,0.452,gnomAD_v4,PUR,Puerto Rico,0.452,gnomAD_v4,PUR,
+51,rs9939609,T/T,Riesgo elevado de obesidad (FTO),biometrica,T,A,16,53820527,2024,GWAS Catalog,1.67,Alto,GWAS,Américas,0.452,gnomAD_v4,PUR,Puerto Rico,0.452,gnomAD_v4,PUR,
+52,rs9939609,A/A,Riesgo estándar de obesidad (FTO),biometrica,T,A,16,53820527,2024,GWAS Catalog,1.0,Bajo,GWAS,Américas,0.452,gnomAD_v4,PUR,Puerto Rico,0.452,gnomAD_v4,PUR,
+53,rs7903146,C/T,Riesgo intermedio de diabetes tipo 2 (TCF7L2),enfermedades,T,C,10,114758349,2024,ClinVar,1.4,Intermedio,Clínico,Europa,0.318,gnomAD_v4,FIN,Finlandia,0.318,gnomAD_v4,FIN,
+54,rs7903146,T/T,Riesgo elevado de diabetes tipo 2 (TCF7L2),enfermedades,T,C,10,114758349,2024,ClinVar,1.9,Alto,Clínico,Europa,0.318,gnomAD_v4,FIN,Finlandia,0.318,gnomAD_v4,FIN,
+55,rs7903146,C/C,Riesgo estándar de diabetes tipo 2 (TCF7L2),enfermedades,T,C,10,114758349,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.318,gnomAD_v4,FIN,Finlandia,0.318,gnomAD_v4,FIN,
+56,rs6152,G/A,Niveles intermedios de hormona de crecimiento (GH1),biomarcadores,A,G,17,64462906,2024,dbSNP,1.2,Intermedio,GWAS,Àfrica,0.3421,gnomAD_v4,AFR,Nigeria,0.3421,gnomAD_v4,AFR,
+57,rs6152,A/A,Niveles elevados de hormona de crecimiento (GH1),biomarcadores,A,G,17,64462906,2024,dbSNP,1.5,Alto,GWAS,Àfrica,0.3421,gnomAD_v4,AFR,Nigeria,0.3421,gnomAD_v4,AFR,
+58,rs6152,G/G,Niveles normales de hormona de crecimiento (GH1),biomarcadores,A,G,17,64462906,2024,dbSNP,1.0,Bajo,GWAS,Àfrica,0.3421,gnomAD_v4,AFR,Nigeria,0.3421,gnomAD_v4,AFR,
+59,rs1800795,G/C,Niveles intermedios de proteína C reactiva (IL6),biomarcadores,C,G,7,22726627,2024,dbSNP,1.25,Intermedio,Clínico,Europa,0.268,gnomAD_v4,FIN,Finlandia,0.268,gnomAD_v4,FIN,
+60,rs1800795,C/C,Niveles elevados de proteína C reactiva (IL6),biomarcadores,C,G,7,22726627,2024,dbSNP,1.6,Alto,Clínico,Europa,0.268,gnomAD_v4,FIN,Finlandia,0.268,gnomAD_v4,FIN,
+61,rs1800795,G/G,Niveles normales de proteína C reactiva (IL6),biomarcadores,C,G,7,22726627,2024,dbSNP,1.0,Bajo,Clínico,Europa,0.268,gnomAD_v4,FIN,Finlandia,0.268,gnomAD_v4,FIN,
+62,rs5219,C/T,Riesgo intermedio de diabetes tipo 2 (KCNJ11),enfermedades,T,C,11,17409572,2024,GWAS Catalog,1.15,Intermedio,GWAS,Àfrica,0.3452,gnomAD_v4,AFR,Nigeria,0.3452,gnomAD_v4,AFR,
+63,rs5219,T/T,Riesgo elevado de diabetes tipo 2 (KCNJ11),enfermedades,T,C,11,17409572,2024,GWAS Catalog,1.35,Alto,GWAS,Àfrica,0.3452,gnomAD_v4,AFR,Nigeria,0.3452,gnomAD_v4,AFR,
+64,rs5219,C/C,Riesgo estándar de diabetes tipo 2 (KCNJ11),enfermedades,T,C,11,17409572,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.3452,gnomAD_v4,AFR,Nigeria,0.3452,gnomAD_v4,AFR,
+65,rs1800469,C/T,Niveles intermedios de TGF-beta1 (TGFB1),biomarcadores,T,C,19,41860296,2024,dbSNP,1.3,Intermedio,Clínico,Europa,0.38,gnomAD_v4,NFE,España,0.36,gnomAD_v4,IBS,
+66,rs1800469,T/T,Niveles elevados de TGF-beta1 (TGFB1),biomarcadores,T,C,19,41860296,2024,dbSNP,1.7,Alto,Clínico,Europa,0.38,gnomAD_v4,NFE,España,0.36,gnomAD_v4,IBS,
+67,rs1800469,C/C,Niveles normales de TGF-beta1 (TGFB1),biomarcadores,T,C,19,41860296,2024,dbSNP,1.0,Bajo,Clínico,Europa,0.38,gnomAD_v4,NFE,España,0.36,gnomAD_v4,IBS,
+68,rs6265,C/T,Niveles intermedios de BDNF cerebral (BDNF),biomarcadores,T,C,11,27658369,2024,SNPedia,1.4,Intermedio,Metaanálisis,Asia Oriental,0.342,gnomAD_v4,CHB,China,0.342,gnomAD_v4,CHB,
+69,rs6265,T/T,Niveles reducidos de BDNF cerebral (BDNF),biomarcadores,T,C,11,27658369,2024,SNPedia,1.8,Alto,Metaanálisis,Asia Oriental,0.342,gnomAD_v4,CHB,China,0.342,gnomAD_v4,CHB,
+70,rs6265,C/C,Niveles normales de BDNF cerebral (BDNF),biomarcadores,T,C,11,27658369,2024,SNPedia,1.0,Bajo,Metaanálisis,Asia Oriental,0.342,gnomAD_v4,CHB,China,0.342,gnomAD_v4,CHB,
+71,rs1799945,C/G,Sobrecarga intermedia de hierro (HFE),biomarcadores,G,C,6,26092913,2024,ClinVar,1.5,Intermedio,Clínico,Europa,0.14,gnomAD_v4,NFE,España,0.15,gnomAD_v4,IBS,
+72,rs1799945,G/G,Sobrecarga elevada de hierro (HFE),biomarcadores,G,C,6,26092913,2024,ClinVar,2.3,Alto,Clínico,Europa,0.14,gnomAD_v4,NFE,España,0.15,gnomAD_v4,IBS,
+73,rs1799945,C/C,Niveles normales de hierro (HFE),biomarcadores,G,C,6,26092913,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.14,gnomAD_v4,NFE,España,0.15,gnomAD_v4,IBS,
+74,rs1800562,G/A,Hemocromatosis hereditaria intermedia (HFE),enfermedades,A,G,6,26093141,2024,ClinVar,3.5,Alto,Clínico,Europa,0.065,gnomAD_v4,NFE,España,0.048,gnomAD_v4,IBS,
+75,rs1800562,A/A,Hemocromatosis hereditaria severa (HFE),enfermedades,A,G,6,26093141,2024,ClinVar,8.0,Alto,Clínico,Europa,0.065,gnomAD_v4,NFE,España,0.048,gnomAD_v4,IBS,
+76,rs1800562,G/G,Sin riesgo de hemocromatosis (HFE),enfermedades,A,G,6,26093141,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.065,gnomAD_v4,NFE,España,0.048,gnomAD_v4,IBS,
+77,rs3754686,C/T,Sensibilidad intermedia al alcohol (ADH1B),rasgos,T,C,4,99318162,2024,GWAS Catalog,1.35,Intermedio,GWAS,Asia Oriental,0.6789,gnomAD_v4,CHB,China,0.6789,gnomAD_v4,CHB,Rendimiento Físico y Sensorial
+78,rs3754686,T/T,Metabolismo rápido del alcohol (ADH1B),rasgos,T,C,4,99318162,2024,GWAS Catalog,0.7,Bajo,GWAS,Asia Oriental,0.6789,gnomAD_v4,CHB,China,0.6789,gnomAD_v4,CHB,Metabolismo
+79,rs3754686,C/C,Metabolismo lento del alcohol (ADH1B),rasgos,T,C,4,99318162,2024,GWAS Catalog,1.0,Neutral,GWAS,Asia Oriental,0.6789,gnomAD_v4,CHB,China,0.6789,gnomAD_v4,CHB,Metabolismo
+80,rs671,G/A,Intolerancia moderada al alcohol (ALDH2),rasgos,A,G,12,111803962,2024,SNPedia,2.5,Alto,Clínico,Asia Oriental,0.4123,gnomAD_v4,CHB,China,0.4123,gnomAD_v4,CHB,Metabolismo
+81,rs671,A/A,Intolerancia severa al alcohol (ALDH2),rasgos,A,G,12,111803962,2024,SNPedia,4.0,Alto,Clínico,Asia Oriental,0.4123,gnomAD_v4,CHB,China,0.4123,gnomAD_v4,CHB,Metabolismo
+82,rs671,G/G,Tolerancia normal al alcohol (ALDH2),rasgos,A,G,12,111803962,2024,SNPedia,1.0,Bajo,Clínico,Asia Oriental,0.4123,gnomAD_v4,CHB,China,0.4123,gnomAD_v4,CHB,Metabolismo
+83,rs1042713,A/G,Respuesta intermedia a broncodilatadores (ADRB2),farmacogenetica,G,A,5,148826910,2024,PharmGKB,1.4,Intermedio,Clínico,Àfrica,0.4521,gnomAD_v4,AFR,Nigeria,0.4521,gnomAD_v4,AFR,
+84,rs1042713,G/G,Mayor respuesta a agonistas beta-2 (ADRB2),farmacogenetica,G,A,5,148826910,2024,PharmGKB,1.7,Alto,Clínico,Àfrica,0.4521,gnomAD_v4,AFR,Nigeria,0.4521,gnomAD_v4,AFR,
+85,rs1042713,A/A,Respuesta estándar a broncodilatadores (ADRB2),farmacogenetica,G,A,5,148826910,2024,PharmGKB,1.0,Bajo,Clínico,Àfrica,0.4521,gnomAD_v4,AFR,Nigeria,0.4521,gnomAD_v4,AFR,
+86,rs1042714,C/G,Respuesta intermedia a salbutamol (ADRB2),farmacogenetica,G,C,5,148826877,2024,PharmGKB,1.3,Intermedio,Clínico,Américas,0.2345,gnomAD_v4,AMR,México,0.2345,gnomAD_v4,AMR,
+87,rs1042714,G/G,Respuesta reducida a salbutamol (ADRB2),farmacogenetica,G,C,5,148826877,2024,PharmGKB,1.6,Alto,Clínico,Américas,0.2345,gnomAD_v4,AMR,México,0.2345,gnomAD_v4,AMR,
+88,rs1042714,C/C,Respuesta óptima a salbutamol (ADRB2),farmacogenetica,G,C,5,148826877,2024,PharmGKB,1.0,Bajo,Clínico,Américas,0.2345,gnomAD_v4,AMR,México,0.2345,gnomAD_v4,AMR,
+89,rs2228570,T/C,Niveles intermedios de vitamina D (VDR),biomarcadores,C,T,12,47879112,2024,dbSNP,1.2,Intermedio,GWAS,Àfrica,0.5234,gnomAD_v4,AFR,Nigeria,0.5234,gnomAD_v4,AFR,
+90,rs2228570,C/C,Niveles reducidos de vitamina D (VDR),biomarcadores,C,T,12,47879112,2024,dbSNP,1.5,Alto,GWAS,Àfrica,0.5234,gnomAD_v4,AFR,Nigeria,0.5234,gnomAD_v4,AFR,
+91,rs2228570,T/T,Niveles óptimos de vitamina D (VDR),biomarcadores,C,T,12,47879112,2024,dbSNP,1.0,Bajo,GWAS,Àfrica,0.5234,gnomAD_v4,AFR,Nigeria,0.5234,gnomAD_v4,AFR,
+92,rs1800871,C/T,Producción intermedia de IL-10 (IL10),biomarcadores,T,C,1,206773289,2024,dbSNP,1.25,Intermedio,Clínico,Américas,0.1834,gnomAD_v4,AMR,México,0.1834,gnomAD_v4,AMR,
+93,rs1800871,T/T,Producción reducida de IL-10 (IL10),biomarcadores,T,C,1,206773289,2024,dbSNP,1.55,Alto,Clínico,Américas,0.1834,gnomAD_v4,AMR,México,0.1834,gnomAD_v4,AMR,
+94,rs1800871,C/C,Producción normal de IL-10 (IL10),biomarcadores,T,C,1,206773289,2024,dbSNP,1.0,Bajo,Clínico,Américas,0.1834,gnomAD_v4,AMR,México,0.1834,gnomAD_v4,AMR,
+95,rs7566605,C/G,Riesgo intermedio de obesidad (INSIG2),biometrica,G,C,2,118552255,2024,GWAS Catalog,1.2,Intermedio,GWAS,Àfrica,0.2145,gnomAD_v4,AFR,Nigeria,0.2145,gnomAD_v4,AFR,
+96,rs7566605,G/G,Riesgo elevado de obesidad (INSIG2),biometrica,G,C,2,118552255,2024,GWAS Catalog,1.5,Alto,GWAS,Àfrica,0.2145,gnomAD_v4,AFR,Nigeria,0.2145,gnomAD_v4,AFR,
+97,rs7566605,C/C,Riesgo estándar de obesidad (INSIG2),biometrica,G,C,2,118552255,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.2145,gnomAD_v4,AFR,Nigeria,0.2145,gnomAD_v4,AFR,
+98,rs10811661,C/T,Riesgo intermedio de obesidad infantil (BDNF),biometrica,T,C,11,27701242,2024,GWAS Catalog,1.25,Intermedio,GWAS,Àfrica,0.3421,gnomAD_v4,AFR,Nigeria,0.3421,gnomAD_v4,AFR,
+99,rs10811661,T/T,Riesgo elevado de obesidad infantil (BDNF),biometrica,T,C,11,27701242,2024,GWAS Catalog,1.55,Alto,GWAS,Àfrica,0.3421,gnomAD_v4,AFR,Nigeria,0.3421,gnomAD_v4,AFR,
+100,rs10811661,C/C,Riesgo estándar de obesidad infantil (BDNF),biometrica,T,C,11,27701242,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.3421,gnomAD_v4,AFR,Nigeria,0.3421,gnomAD_v4,AFR,
+101,rs1229984,C/T,Protección intermedia contra alcoholismo (ADH1B),rasgos,T,C,4,99318162,2024,GWAS Catalog,0.7,Bajo,GWAS,Asia Oriental,0.3567,gnomAD_v4,CHB,China,0.3567,gnomAD_v4,CHB,Bienestar y Salud
+102,rs1229984,T/T,Protección elevada contra alcoholismo (ADH1B),rasgos,T,C,4,99318162,2024,GWAS Catalog,0.4,Bajo,GWAS,Asia Oriental,0.3567,gnomAD_v4,CHB,China,0.3567,gnomAD_v4,CHB,Bienestar y Salud
+103,rs1229984,C/C,Susceptibilidad estándar a alcoholismo (ADH1B),rasgos,T,C,4,99318162,2024,GWAS Catalog,1.0,Neutral,GWAS,Asia Oriental,0.3567,gnomAD_v4,CHB,China,0.3567,gnomAD_v4,CHB,Bienestar y Salud
+104,rs1801394,A/G,Niveles intermedios de homocisteína (MTRR),biomarcadores,G,A,5,7870860,2024,ClinVar,1.3,Intermedio,Clínico,Europa,0.356,gnomAD_v4,FIN,Finlandia,0.356,gnomAD_v4,FIN,
+105,rs1801394,G/G,Niveles elevados de homocisteína (MTRR),biomarcadores,G,A,5,7870860,2024,ClinVar,1.65,Alto,Clínico,Europa,0.356,gnomAD_v4,FIN,Finlandia,0.356,gnomAD_v4,FIN,
+106,rs1801394,A/A,Niveles normales de homocisteína (MTRR),biomarcadores,G,A,5,7870860,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.356,gnomAD_v4,FIN,Finlandia,0.356,gnomAD_v4,FIN,
+107,rs4994,A/G,Respuesta intermedia a estatinas (ADRB1),farmacogenetica,G,A,10,114045297,2024,PharmGKB,1.3,Intermedio,Clínico,Àfrica,0.4234,gnomAD_v4,AFR,Nigeria,0.4234,gnomAD_v4,AFR,
+108,rs4994,G/G,Mayor respuesta a atenolol (ADRB1),farmacogenetica,G,A,10,114045297,2024,PharmGKB,1.6,Alto,Clínico,Àfrica,0.4234,gnomAD_v4,AFR,Nigeria,0.4234,gnomAD_v4,AFR,
+109,rs4994,A/A,Respuesta estándar a estatinas (ADRB1),farmacogenetica,G,A,10,114045297,2024,PharmGKB,1.0,Bajo,Clínico,Àfrica,0.4234,gnomAD_v4,AFR,Nigeria,0.4234,gnomAD_v4,AFR,
+110,rs5186,A/C,Riesgo intermedio de hipertensión (AGTR1),enfermedades,C,A,3,148742201,2024,GWAS Catalog,1.25,Intermedio,GWAS,Asia Oriental,0.3456,gnomAD_v4,EAS,China,0.3456,gnomAD_v4,EAS,
+111,rs5186,C/C,Riesgo elevado de hipertensión (AGTR1),enfermedades,C,A,3,148742201,2024,GWAS Catalog,1.55,Alto,GWAS,Asia Oriental,0.3456,gnomAD_v4,EAS,China,0.3456,gnomAD_v4,EAS,
+112,rs5186,A/A,Riesgo estándar de hipertensión (AGTR1),enfermedades,C,A,3,148742201,2024,GWAS Catalog,1.0,Bajo,GWAS,Asia Oriental,0.3456,gnomAD_v4,EAS,China,0.3456,gnomAD_v4,EAS,
+113,rs1800566,G/A,Actividad enzimática intermedia (NQO1),farmacogenetica,A,G,16,69745145,2024,PharmGKB,1.5,Intermedio,Clínico,Asia Oriental,0.378,gnomAD_v4,CHB,China,0.378,gnomAD_v4,CHB,
+114,rs1800566,A/A,Deficiencia de NQO1 - Mayor toxicidad (NQO1),farmacogenetica,A,G,16,69745145,2024,PharmGKB,2.5,Alto,Clínico,Asia Oriental,0.378,gnomAD_v4,CHB,China,0.378,gnomAD_v4,CHB,
+115,rs1800566,G/G,Actividad normal de NQO1 (NQO1),farmacogenetica,A,G,16,69745145,2024,PharmGKB,1.0,Bajo,Clínico,Asia Oriental,0.378,gnomAD_v4,CHB,China,0.378,gnomAD_v4,CHB,
+116,rs1695,A/G,Capacidad intermedia de desintoxicación (GSTP1),farmacogenetica,G,A,11,67585218,2024,PharmGKB,1.35,Intermedio,Clínico,Américas,0.2145,gnomAD_v4,AMR,México,0.2145,gnomAD_v4,AMR,
+117,rs1695,G/G,Menor capacidad de desintoxicación (GSTP1),farmacogenetica,G,A,11,67585218,2024,PharmGKB,1.7,Alto,Clínico,Américas,0.2145,gnomAD_v4,AMR,México,0.2145,gnomAD_v4,AMR,
+118,rs1695,A/A,Capacidad normal de desintoxicación (GSTP1),farmacogenetica,G,A,11,67585218,2024,PharmGKB,1.0,Bajo,Clínico,Américas,0.2145,gnomAD_v4,AMR,México,0.2145,gnomAD_v4,AMR,
+119,rs1799971,A/G,Sensibilidad intermedia a opioides (OPRM1),farmacogenetica,G,A,6,154039662,2024,PharmGKB,1.4,Intermedio,Clínico,Américas,0.0867,gnomAD_v4,AMR,México,0.0867,gnomAD_v4,AMR,
+120,rs1799971,G/G,Mayor sensibilidad a morfina (OPRM1),farmacogenetica,G,A,6,154039662,2024,PharmGKB,1.8,Alto,Clínico,Américas,0.0867,gnomAD_v4,AMR,México,0.0867,gnomAD_v4,AMR,
+121,rs1799971,A/A,Sensibilidad estándar a opioides (OPRM1),farmacogenetica,G,A,6,154039662,2024,PharmGKB,1.0,Bajo,Clínico,Américas,0.0867,gnomAD_v4,AMR,México,0.0867,gnomAD_v4,AMR,
+122,rs2279115,A/G,Susceptibilidad intermedia a migraña (MTHFR),enfermedades,G,A,1,11847077,2024,GWAS Catalog,1.3,Intermedio,GWAS,Àfrica,0.2134,gnomAD_v4,AFR,Nigeria,0.2134,gnomAD_v4,AFR,
+123,rs2279115,G/G,Mayor susceptibilidad a migraña (MTHFR),enfermedades,G,A,1,11847077,2024,GWAS Catalog,1.65,Alto,GWAS,Àfrica,0.2134,gnomAD_v4,AFR,Nigeria,0.2134,gnomAD_v4,AFR,
+124,rs2279115,A/A,Susceptibilidad estándar a migraña (MTHFR),enfermedades,G,A,1,11847077,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.2134,gnomAD_v4,AFR,Nigeria,0.2134,gnomAD_v4,AFR,
+125,rs1126809,C/T,Riesgo intermedio de vitíligo (TYR),enfermedades,T,C,11,89017961,2024,GWAS Catalog,1.35,Intermedio,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+126,rs1126809,T/T,Riesgo elevado de vitíligo (TYR),enfermedades,T,C,11,89017961,2024,GWAS Catalog,1.7,Alto,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+127,rs1126809,C/C,Riesgo estándar de vitíligo (TYR),enfermedades,T,C,11,89017961,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+128,rs12255372,G/T,Riesgo intermedio de diabetes gestacional (TCF7L2),enfermedades,T,G,10,114808902,2024,ClinVar,1.4,Intermedio,Clínico,Europa,0.328,gnomAD_v4,FIN,Finlandia,0.328,gnomAD_v4,FIN,
+129,rs12255372,T/T,Riesgo elevado de diabetes gestacional (TCF7L2),enfermedades,T,G,10,114808902,2024,ClinVar,1.95,Alto,Clínico,Europa,0.328,gnomAD_v4,FIN,Finlandia,0.328,gnomAD_v4,FIN,
+130,rs12255372,G/G,Riesgo estándar de diabetes gestacional (TCF7L2),enfermedades,T,G,10,114808902,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.328,gnomAD_v4,FIN,Finlandia,0.328,gnomAD_v4,FIN,
+131,rs1801252,C/G,Respuesta intermedia a betabloqueadores (ADRB1),farmacogenetica,G,C,10,114044877,2024,PharmGKB,1.45,Intermedio,Clínico,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+132,rs1801252,G/G,Mayor respuesta a betabloqueadores (ADRB1),farmacogenetica,G,C,10,114044877,2024,PharmGKB,1.85,Alto,Clínico,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+133,rs1801252,C/C,Respuesta estándar a betabloqueadores (ADRB1),farmacogenetica,G,C,10,114044877,2024,PharmGKB,1.0,Bajo,Clínico,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+134,rs2231142,C/A,Transporte intermedio de fármacos (ABCG2),farmacogenetica,A,C,4,89052323,2024,PharmGKB,1.5,Intermedio,Clínico,Asia Oriental,0.489,gnomAD_v4,CHB,China,0.489,gnomAD_v4,CHB,
+135,rs2231142,A/A,Transporte reducido de estatinas (ABCG2),farmacogenetica,A,C,4,89052323,2024,PharmGKB,2.3,Alto,Clínico,Asia Oriental,0.489,gnomAD_v4,CHB,China,0.489,gnomAD_v4,CHB,
+136,rs2231142,C/C,Transporte normal de fármacos (ABCG2),farmacogenetica,A,C,4,89052323,2024,PharmGKB,1.0,Bajo,Clínico,Asia Oriental,0.489,gnomAD_v4,CHB,China,0.489,gnomAD_v4,CHB,
+137,rs4986893,A/G,Metabolismo intermedio de anticoagulantes (CYP2C9),farmacogenetica,G,A,10,94989020,2024,PharmGKB,1.6,Intermedio,Clínico,Américas,0.0234,gnomAD_v4,AMR,México,0.0234,gnomAD_v4,AMR,
+138,rs4986893,G/G,Metabolismo lento de anticoagulantes (CYP2C9),farmacogenetica,G,A,10,94989020,2024,PharmGKB,2.4,Alto,Clínico,Américas,0.0234,gnomAD_v4,AMR,México,0.0234,gnomAD_v4,AMR,
+139,rs4986893,A/A,Metabolismo normal de anticoagulantes (CYP2C9),farmacogenetica,G,A,10,94989020,2024,PharmGKB,1.0,Bajo,Clínico,Américas,0.0234,gnomAD_v4,AMR,México,0.0234,gnomAD_v4,AMR,
+140,rs3745274,G/A,Metabolismo intermedio de efavirenz (CYP2B6),farmacogenetica,A,G,19,40991224,2024,PharmGKB,1.75,Intermedio,Clínico,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+141,rs3745274,A/A,Metabolismo lento de efavirenz (CYP2B6),farmacogenetica,A,G,19,40991224,2024,PharmGKB,3.0,Alto,Clínico,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+142,rs3745274,G/G,Metabolismo normal de efavirenz (CYP2B6),farmacogenetica,A,G,19,40991224,2024,PharmGKB,1.0,Bajo,Clínico,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+143,rs1800629,G/A,Producción intermedia de TNF-alfa (TNF),biomarcadores,A,G,6,31543031,2024,dbSNP,1.35,Intermedio,Clínico,Américas,0.2145,gnomAD_v4,AMR,México,0.2145,gnomAD_v4,AMR,
+144,rs1800629,A/A,Producción elevada de TNF-alfa (TNF),biomarcadores,A,G,6,31543031,2024,dbSNP,1.8,Alto,Clínico,Américas,0.2145,gnomAD_v4,AMR,México,0.2145,gnomAD_v4,AMR,
+145,rs1800629,G/G,Producción normal de TNF-alfa (TNF),biomarcadores,A,G,6,31543031,2024,dbSNP,1.0,Bajo,Clínico,Américas,0.2145,gnomAD_v4,AMR,México,0.2145,gnomAD_v4,AMR,
+146,rs662799,A/G,Niveles intermedios de HDL colesterol (APOA5),biometrica,G,A,11,116789970,2024,GWAS Catalog,1.25,Intermedio,GWAS,Américas,0.389,gnomAD_v4,PUR,Puerto Rico,0.389,gnomAD_v4,PUR,
+147,rs662799,G/G,Niveles bajos de HDL colesterol (APOA5),biometrica,G,A,11,116789970,2024,GWAS Catalog,1.6,Alto,GWAS,Américas,0.389,gnomAD_v4,PUR,Puerto Rico,0.389,gnomAD_v4,PUR,
+148,rs662799,A/A,Niveles normales de HDL colesterol (APOA5),biometrica,G,A,11,116789970,2024,GWAS Catalog,1.0,Bajo,GWAS,Américas,0.389,gnomAD_v4,PUR,Puerto Rico,0.389,gnomAD_v4,PUR,
+149,rs1801131,A/C,Niveles intermedios de homocisteína (MTHFR),biomarcadores,C,A,1,11854476,2024,ClinVar,1.2,Intermedio,Clínico,Asia Oriental,0.368,gnomAD_v4,CHB,China,0.368,gnomAD_v4,CHB,
+150,rs1801131,C/C,Niveles elevados de homocisteína (MTHFR),biomarcadores,C,A,1,11854476,2024,ClinVar,1.45,Alto,Clínico,Asia Oriental,0.368,gnomAD_v4,CHB,China,0.368,gnomAD_v4,CHB,
+151,rs1801131,A/A,Niveles normales de homocisteína (MTHFR),biomarcadores,C,A,1,11854476,2024,ClinVar,1.0,Bajo,Clínico,Asia Oriental,0.368,gnomAD_v4,CHB,China,0.368,gnomAD_v4,CHB,
+152,rs1800790,A/G,Niveles intermedios de factor V Leiden (F5),enfermedades,G,A,1,169549811,2024,ClinVar,1.4,Intermedio,Clínico,Europa,0.1867,gnomAD_v4,EUR,España,0.1867,gnomAD_v4,EUR,
+153,rs1800790,G/G,Mayor riesgo de trombosis venosa (F5),enfermedades,G,A,1,169549811,2024,ClinVar,2.1,Alto,Clínico,Europa,0.1867,gnomAD_v4,EUR,España,0.1867,gnomAD_v4,EUR,
+154,rs1800790,A/A,Riesgo estándar de trombosis (F5),enfermedades,G,A,1,169549811,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.1867,gnomAD_v4,EUR,España,0.1867,gnomAD_v4,EUR,
+155,rs6025,C/T,Factor V Leiden intermedio (F5),enfermedades,T,C,1,169519049,2024,ClinVar,4.0,Alto,Clínico,Europa,0.045,gnomAD_v4,FIN,Finlandia,0.045,gnomAD_v4,FIN,
+156,rs6025,T/T,Factor V Leiden severo (F5),enfermedades,T,C,1,169519049,2024,ClinVar,80.0,Alto,Clínico,Europa,0.045,gnomAD_v4,FIN,Finlandia,0.045,gnomAD_v4,FIN,
+157,rs6025,C/C,Sin Factor V Leiden (F5),enfermedades,T,C,1,169519049,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.045,gnomAD_v4,FIN,Finlandia,0.045,gnomAD_v4,FIN,
+158,rs1799963,G/A,Protrombina intermedia G20210A (F2),enfermedades,A,G,11,46761055,2024,ClinVar,2.8,Alto,Clínico,Europa,0.032,gnomAD_v4,FIN,Finlandia,0.032,gnomAD_v4,FIN,
+159,rs1799963,A/A,Protrombina G20210A severa (F2),enfermedades,A,G,11,46761055,2024,ClinVar,8.0,Alto,Clínico,Europa,0.032,gnomAD_v4,FIN,Finlandia,0.032,gnomAD_v4,FIN,
+160,rs1799963,G/G,Sin mutación protrombina (F2),enfermedades,A,G,11,46761055,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.032,gnomAD_v4,FIN,Finlandia,0.032,gnomAD_v4,FIN,
+161,rs1805007,C/T,Piel clara y cabello rojizo intermedio (MC1R),rasgos,T,C,16,89986091,2024,SNPedia,1.8,Intermedio,GWAS,Europa,0.105,gnomAD_v4,FIN,Finlandia,0.105,gnomAD_v4,FIN,Apariencia Física
+162,rs1805007,T/T,Piel muy clara y cabello rojizo (MC1R),rasgos,T,C,16,89986091,2024,SNPedia,3.0,Alto,GWAS,Europa,0.105,gnomAD_v4,FIN,Finlandia,0.105,gnomAD_v4,FIN,Apariencia Física
+163,rs1805007,C/C,Pigmentación estándar (MC1R),rasgos,T,C,16,89986091,2024,SNPedia,1.0,Bajo,GWAS,Europa,0.105,gnomAD_v4,FIN,Finlandia,0.105,gnomAD_v4,FIN,Apariencia Física
+164,rs1805008,C/G,Tendencia a pecas y piel clara (MC1R),rasgos,G,C,16,89985940,2024,SNPedia,1.6,Intermedio,GWAS,Europa,0.067,gnomAD_v4,FIN,Finlandia,0.067,gnomAD_v4,FIN,Apariencia Física
+165,rs1805008,G/G,Piel muy clara con pecas (MC1R),rasgos,G,C,16,89985940,2024,SNPedia,2.5,Alto,GWAS,Europa,0.067,gnomAD_v4,FIN,Finlandia,0.067,gnomAD_v4,FIN,Apariencia Física
+166,rs1805008,C/C,Pigmentación normal (MC1R),rasgos,G,C,16,89985940,2024,SNPedia,1.0,Bajo,GWAS,Europa,0.067,gnomAD_v4,FIN,Finlandia,0.067,gnomAD_v4,FIN,Apariencia Física
+167,rs12913832,A/G,Ojos intermedios verde-avellana (HERC2),rasgos,G,A,15,28365618,2024,SNPedia,2.0,Intermedio,GWAS,Europa,0.852,gnomAD_v4,FIN,Finlandia,0.852,gnomAD_v4,FIN,Apariencia Física
+168,rs12913832,G/G,Ojos azules (HERC2),rasgos,G,A,15,28365618,2024,SNPedia,3.5,Alto,GWAS,Europa,0.852,gnomAD_v4,FIN,Finlandia,0.852,gnomAD_v4,FIN,Apariencia Física
+169,rs12913832,A/A,Ojos marrones (HERC2),rasgos,G,A,15,28365618,2024,SNPedia,1.0,Bajo,GWAS,Europa,0.852,gnomAD_v4,FIN,Finlandia,0.852,gnomAD_v4,FIN,Apariencia Física
+170,rs1800407,C/T,Pigmentación intermedia de piel y ojos (OCA2),rasgos,T,C,15,28197037,2024,SNPedia,1.4,Intermedio,GWAS,Europa,0.389,gnomAD_v4,FIN,Finlandia,0.389,gnomAD_v4,FIN,Apariencia Física
+171,rs1800407,T/T,Piel y ojos más claros (OCA2),rasgos,T,C,15,28197037,2024,SNPedia,2.0,Alto,GWAS,Europa,0.389,gnomAD_v4,FIN,Finlandia,0.389,gnomAD_v4,FIN,Apariencia Física
+172,rs1800407,C/C,Pigmentación estándar (OCA2),rasgos,T,C,15,28197037,2024,SNPedia,1.0,Bajo,GWAS,Europa,0.389,gnomAD_v4,FIN,Finlandia,0.389,gnomAD_v4,FIN,Apariencia Física
+173,rs1426654,A/G,Pigmentación intermedia de piel (SLC24A5),rasgos,G,A,15,48426484,2024,GWAS Catalog,2.5,Intermedio,GWAS,Europa,0.998,gnomAD_v4,FIN,Finlandia,0.998,gnomAD_v4,FIN,Apariencia Física
+174,rs1426654,G/G,Piel clara europea (SLC24A5),rasgos,G,A,15,48426484,2024,GWAS Catalog,4.0,Alto,GWAS,Europa,0.998,gnomAD_v4,FIN,Finlandia,0.998,gnomAD_v4,FIN,Apariencia Física
+175,rs1426654,A/A,Piel oscura (SLC24A5),rasgos,G,A,15,48426484,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.998,gnomAD_v4,FIN,Finlandia,0.998,gnomAD_v4,FIN,Apariencia Física
+176,rs17822931,C/T,Cabello intermedio rubio-castaño (ABCC11),rasgos,T,C,16,48258198,2024,SNPedia,1.5,Intermedio,GWAS,Asia Oriental,0.8567,gnomAD_v4,CHB,China,0.8567,gnomAD_v4,CHB,Apariencia Física
+177,rs17822931,T/T,Cerumen seco y menos olor corporal (ABCC11),rasgos,T,C,16,48258198,2024,SNPedia,2.5,Alto,GWAS,Asia Oriental,0.8567,gnomAD_v4,CHB,China,0.8567,gnomAD_v4,CHB,Apariencia Física
+178,rs17822931,C/C,Cerumen hÀºmedo (ABCC11),rasgos,T,C,16,48258198,2024,SNPedia,1.0,Bajo,GWAS,Asia Oriental,0.8567,gnomAD_v4,CHB,China,0.8567,gnomAD_v4,CHB,Apariencia Física
+179,rs4988235,C/T,Tolerancia intermedia a lactosa (LCT),rasgos,T,C,2,135851076,2024,SNPedia,1.8,Intermedio,GWAS,Europa,0.928,gnomAD_v4,FIN,Finlandia,0.928,gnomAD_v4,FIN,Metabolismo
+180,rs4988235,T/T,Persistencia de lactasa (LCT),rasgos,T,C,2,135851076,2024,SNPedia,3.0,Alto,GWAS,Europa,0.928,gnomAD_v4,FIN,Finlandia,0.928,gnomAD_v4,FIN,Metabolismo
+181,rs4988235,C/C,Intolerancia a lactosa (LCT),rasgos,T,C,2,135851076,2024,SNPedia,1.0,Alto,GWAS,Europa,0.928,gnomAD_v4,FIN,Finlandia,0.928,gnomAD_v4,FIN,Metabolismo
+182,rs713598,C/G,Sensibilidad intermedia al sabor amargo (TAS2R38),rasgos,G,C,7,141972604,2024,SNPedia,1.6,Intermedio,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,Rendimiento Físico y Sensorial
+183,rs713598,G/G,Alta sensibilidad al sabor amargo (TAS2R38),rasgos,G,C,7,141972604,2024,SNPedia,2.5,Alto,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,Rendimiento Físico y Sensorial
+184,rs713598,C/C,Baja sensibilidad al sabor amargo (TAS2R38),rasgos,G,C,7,141972604,2024,SNPedia,1.0,Bajo,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,Rendimiento Físico y Sensorial
+185,rs1800497,A/G,Función intermedia de receptores dopamina (ANKK1),rasgos,G,A,11,113270828,2024,SNPedia,1.35,Intermedio,GWAS,Àfrica,0.321,gnomAD_v4,AFR,Nigeria,0.321,gnomAD_v4,AFR,Bienestar y Salud
+186,rs53576,A/G,Comportamiento social intermedio (OXTR),rasgos,G,A,3,8762685,2024,SNPedia,1.4,Intermedio,GWAS,Asia Oriental,0.2456,gnomAD_v4,EAS,China,0.2456,gnomAD_v4,EAS,Bienestar y Salud
+187,rs53576,G/G,Mayor empatía y sociabilidad (OXTR),rasgos,G,A,3,8762685,2024,SNPedia,2.0,Neutral,GWAS,Asia Oriental,0.2456,gnomAD_v4,EAS,China,0.2456,gnomAD_v4,EAS,Bienestar y Salud
+188,rs53576,A/A,Menor sensibilidad social (OXTR),rasgos,G,A,3,8762685,2024,SNPedia,1.5,Intermedio,GWAS,Asia Oriental,0.2456,gnomAD_v4,EAS,China,0.2456,gnomAD_v4,EAS,Bienestar y Salud
+189,rs6318,C/T,Regulación intermedia del estado de ánimo (HTR2C),rasgos,T,C,23,114731326,2024,SNPedia,1.3,Intermedio,GWAS,Àfrica,0.1234,gnomAD_v4,AFR,Nigeria,0.1234,gnomAD_v4,AFR,Bienestar y Salud
+190,rs6318,T/T,Mayor susceptibilidad a trastornos del ánimo (HTR2C),rasgos,T,C,23,114731326,2024,SNPedia,1.65,Alto,GWAS,Àfrica,0.1234,gnomAD_v4,AFR,Nigeria,0.1234,gnomAD_v4,AFR,Bienestar y Salud
+191,rs6318,C/C,Regulación estándar del ánimo (HTR2C),rasgos,T,C,23,114731326,2024,SNPedia,1.0,Bajo,GWAS,Àfrica,0.1234,gnomAD_v4,AFR,Nigeria,0.1234,gnomAD_v4,AFR,Bienestar y Salud
+192,rs2180439,A/G,Riesgo intermedio de psoriasis (PSORS1C1),enfermedades,G,A,6,31138322,2024,GWAS Catalog,1.5,Intermedio,GWAS,Europa,0.2456,gnomAD_v4,EUR,España,0.2456,gnomAD_v4,EUR,
+193,rs2180439,G/G,Riesgo elevado de psoriasis (PSORS1C1),enfermedades,G,A,6,31138322,2024,GWAS Catalog,2.3,Alto,GWAS,Europa,0.2456,gnomAD_v4,EUR,España,0.2456,gnomAD_v4,EUR,
+194,rs2180439,A/A,Riesgo estándar de psoriasis (PSORS1C1),enfermedades,G,A,6,31138322,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.2456,gnomAD_v4,EUR,España,0.2456,gnomAD_v4,EUR,
+195,rs6457327,C/T,Susceptibilidad intermedia a enfermedad celíaca (HLA-DQA1),enfermedades,T,C,6,32605421,2024,ClinVar,2.5,Alto,Clínico,Europa,0.389,gnomAD_v4,FIN,Finlandia,0.389,gnomAD_v4,FIN,
+196,rs6457327,T/T,Alta susceptibilidad a enfermedad celíaca (HLA-DQA1),enfermedades,T,C,6,32605421,2024,ClinVar,5.0,Alto,Clínico,Europa,0.389,gnomAD_v4,FIN,Finlandia,0.389,gnomAD_v4,FIN,
+197,rs6457327,C/C,Susceptibilidad baja a enfermedad celíaca (HLA-DQA1),enfermedades,T,C,6,32605421,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.389,gnomAD_v4,FIN,Finlandia,0.389,gnomAD_v4,FIN,
+198,rs2476601,A/G,Riesgo intermedio de artritis reumatoide (PTPN22),enfermedades,G,A,1,114377568,2024,GWAS Catalog,1.7,Intermedio,GWAS,Europa,0.0945,gnomAD_v4,EUR,España,0.0945,gnomAD_v4,EUR,
+199,rs2476601,G/G,Riesgo elevado de artritis reumatoide (PTPN22),enfermedades,G,A,1,114377568,2024,GWAS Catalog,3.0,Alto,GWAS,Europa,0.0945,gnomAD_v4,EUR,España,0.0945,gnomAD_v4,EUR,
+200,rs2476601,A/A,Riesgo estándar de artritis reumatoide (PTPN22),enfermedades,G,A,1,114377568,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.0945,gnomAD_v4,EUR,España,0.0945,gnomAD_v4,EUR,
+201,rs1801394,A/G,Metabolismo intermedio de metionina (MTRR),biomarcadores,G,A,5,7870860,2024,ClinVar,1.25,Intermedio,Clínico,Europa,0.356,gnomAD_v4,FIN,Finlandia,0.356,gnomAD_v4,FIN,
+202,rs1801394,G/G,Metabolismo reducido de metionina (MTRR),biomarcadores,G,A,5,7870860,2024,ClinVar,1.6,Alto,Clínico,Europa,0.356,gnomAD_v4,FIN,Finlandia,0.356,gnomAD_v4,FIN,
+203,rs1801394,A/A,Metabolismo normal de metionina (MTRR),biomarcadores,G,A,5,7870860,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.356,gnomAD_v4,FIN,Finlandia,0.356,gnomAD_v4,FIN,
+204,rs3827760,A/G,Regulación intermedia de estrógenos (ESSR1),biometrica,G,A,6,152011643,2024,GWAS Catalog,1.3,Intermedio,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+205,rs3827760,G/G,Mayor sensibilidad a estrógenos (ESSR1),biometrica,G,A,6,152011643,2024,GWAS Catalog,1.7,Alto,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+206,rs3827760,A/A,Sensibilidad estándar a estrógenos (ESSR1),biometrica,G,A,6,152011643,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+207,rs1800972,G/A,Niveles intermedios de calcitonina (CALCA),biomarcadores,A,G,11,15185045,2024,dbSNP,1.2,Intermedio,Clínico,Europa,0.1567,gnomAD_v4,EUR,España,0.1567,gnomAD_v4,EUR,
+208,rs1800972,A/A,Niveles elevados de calcitonina (CALCA),biomarcadores,A,G,11,15185045,2024,dbSNP,1.55,Alto,Clínico,Europa,0.1567,gnomAD_v4,EUR,España,0.1567,gnomAD_v4,EUR,
+209,rs1800972,G/G,Niveles normales de calcitonina (CALCA),biomarcadores,A,G,11,15185045,2024,dbSNP,1.0,Bajo,Clínico,Europa,0.1567,gnomAD_v4,EUR,España,0.1567,gnomAD_v4,EUR,
+210,rs5882,G/A,Niveles intermedios de HDL colesterol (CETP),biometrica,A,G,16,56995236,2024,GWAS Catalog,1.25,Intermedio,GWAS,Àfrica,0.2345,gnomAD_v4,AFR,Nigeria,0.2345,gnomAD_v4,AFR,
+211,rs5882,A/A,Niveles elevados de HDL colesterol (CETP),biometrica,A,G,16,56995236,2024,GWAS Catalog,1.6,Bajo,GWAS,Àfrica,0.2345,gnomAD_v4,AFR,Nigeria,0.2345,gnomAD_v4,AFR,
+212,rs5882,G/G,Niveles estándar de HDL colesterol (CETP),biometrica,A,G,16,56995236,2024,GWAS Catalog,1.0,Neutral,GWAS,Àfrica,0.2345,gnomAD_v4,AFR,Nigeria,0.2345,gnomAD_v4,AFR,
+213,rs601338,G/A,Secreción intermedia de antígenos ABO (FUT2),rasgos,A,G,19,48703417,2024,SNPedia,1.4,Intermedio,GWAS,Américas,0.2456,gnomAD_v4,AMR,México,0.2456,gnomAD_v4,AMR,Bienestar y Salud
+214,rs601338,A/A,No secretor de antígenos ABO (FUT2),rasgos,A,G,19,48703417,2024,SNPedia,2.0,Alto,GWAS,Américas,0.2456,gnomAD_v4,AMR,México,0.2456,gnomAD_v4,AMR,Bienestar y Salud
+215,rs601338,G/G,Secretor de antígenos ABO (FUT2),rasgos,A,G,19,48703417,2024,SNPedia,1.0,Bajo,GWAS,Américas,0.2456,gnomAD_v4,AMR,México,0.2456,gnomAD_v4,AMR,Bienestar y Salud
+216,rs11568820,C/T,Riesgo intermedio de degeneración macular (CFH),enfermedades,T,C,1,196690107,2024,ClinVar,2.5,Intermedio,Clínico,Europa,0.1567,gnomAD_v4,EUR,España,0.1567,gnomAD_v4,EUR,
+217,rs11568820,T/T,Riesgo elevado de degeneración macular (CFH),enfermedades,T,C,1,196690107,2024,ClinVar,5.0,Alto,Clínico,Europa,0.1567,gnomAD_v4,EUR,España,0.1567,gnomAD_v4,EUR,
+218,rs11568820,C/C,Riesgo estándar de degeneración macular (CFH),enfermedades,T,C,1,196690107,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.1567,gnomAD_v4,EUR,España,0.1567,gnomAD_v4,EUR,
+219,rs1061170,T/C,Riesgo intermedio de AMD (CFH),enfermedades,C,T,1,196690117,2024,ClinVar,2.7,Intermedio,Clínico,Europa,0.389,gnomAD_v4,FIN,Finlandia,0.389,gnomAD_v4,FIN,
+220,rs1061170,C/C,Riesgo muy elevado de AMD (CFH),enfermedades,C,T,1,196690117,2024,ClinVar,6.3,Alto,Clínico,Europa,0.389,gnomAD_v4,FIN,Finlandia,0.389,gnomAD_v4,FIN,
+221,rs1061170,T/T,Riesgo bajo de AMD (CFH),enfermedades,C,T,1,196690117,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.389,gnomAD_v4,FIN,Finlandia,0.389,gnomAD_v4,FIN,
+222,rs7754840,C/G,Riesgo intermedio de diabetes tipo 2 (CDKAL1),enfermedades,G,C,6,20661019,2024,GWAS Catalog,1.15,Intermedio,GWAS,Europa,0.2145,gnomAD_v4,EUR,España,0.2145,gnomAD_v4,EUR,
+223,rs7754840,G/G,Riesgo elevado de diabetes tipo 2 (CDKAL1),enfermedades,G,C,6,20661019,2024,GWAS Catalog,1.35,Alto,GWAS,Europa,0.2145,gnomAD_v4,EUR,España,0.2145,gnomAD_v4,EUR,
+224,rs7754840,C/C,Riesgo estándar de diabetes tipo 2 (CDKAL1),enfermedades,G,C,6,20661019,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.2145,gnomAD_v4,EUR,España,0.2145,gnomAD_v4,EUR,
+225,rs10830963,C/G,Riesgo intermedio de diabetes tipo 2 (MTNR1B),enfermedades,G,C,11,92708710,2024,GWAS Catalog,1.2,Intermedio,GWAS,Europa,0.3,gnomAD_v4,NFE,España,0.28,gnomAD_v4,IBS,
+226,rs10830963,G/G,Riesgo elevado de diabetes tipo 2 (MTNR1B),enfermedades,G,C,11,92708710,2024,GWAS Catalog,1.45,Alto,GWAS,Europa,0.3,gnomAD_v4,NFE,España,0.28,gnomAD_v4,IBS,
+227,rs10830963,C/C,Riesgo estándar de diabetes tipo 2 (MTNR1B),enfermedades,G,C,11,92708710,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.3,gnomAD_v4,NFE,España,0.28,gnomAD_v4,IBS,
+228,rs2943641,C/A,Riesgo intermedio de colesterol elevado (IRS1),biometrica,A,C,2,226795828,2024,GWAS Catalog,1.18,Intermedio,GWAS,Europa,0.365,gnomAD_v4,FIN,Finlandia,0.365,gnomAD_v4,FIN,
+229,rs2943641,A/A,Riesgo elevado de colesterol elevado (IRS1),biometrica,A,C,2,226795828,2024,GWAS Catalog,1.4,Alto,GWAS,Europa,0.365,gnomAD_v4,FIN,Finlandia,0.365,gnomAD_v4,FIN,
+230,rs2943641,C/C,Riesgo estándar de colesterol elevado (IRS1),biometrica,A,C,2,226795828,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.365,gnomAD_v4,FIN,Finlandia,0.365,gnomAD_v4,FIN,
+231,rs17300539,A/G,Protección intermedia contra obesidad (ADIPOQ),biometrica,G,A,3,186560856,2024,GWAS Catalog,0.8,Bajo,GWAS,Europa,0.2456,gnomAD_v4,EUR,España,0.2456,gnomAD_v4,EUR,
+232,rs17300539,G/G,Mayor protección contra obesidad (ADIPOQ),biometrica,G,A,3,186560856,2024,GWAS Catalog,0.65,Bajo,GWAS,Europa,0.2456,gnomAD_v4,EUR,España,0.2456,gnomAD_v4,EUR,
+233,rs17300539,A/A,Susceptibilidad estándar a obesidad (ADIPOQ),biometrica,G,A,3,186560856,2024,GWAS Catalog,1.0,Neutral,GWAS,Europa,0.2456,gnomAD_v4,EUR,España,0.2456,gnomAD_v4,EUR,
+234,rs4402960,T/G,Riesgo intermedio de diabetes tipo 2 (IGF2BP2),enfermedades,G,T,3,185793899,2024,GWAS Catalog,1.15,Intermedio,GWAS,Europa,0.439,gnomAD_v4,IBS,España,0.439,gnomAD_v4,IBS,
+235,rs4402960,G/G,Riesgo elevado de diabetes tipo 2 (IGF2BP2),enfermedades,G,T,3,185793899,2024,GWAS Catalog,1.35,Alto,GWAS,Europa,0.439,gnomAD_v4,IBS,España,0.439,gnomAD_v4,IBS,
+236,rs4402960,T/T,Riesgo estándar de diabetes tipo 2 (IGF2BP2),enfermedades,G,T,3,185793899,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.439,gnomAD_v4,IBS,España,0.439,gnomAD_v4,IBS,
+237,rs1121980,A/G,Riesgo intermedio de glaucoma (TMCO1),enfermedades,G,A,1,233019719,2024,GWAS Catalog,1.35,Intermedio,GWAS,Américas,0.398,gnomAD_v4,PEL,PerÀº,0.398,gnomAD_v4,PEL,
+238,rs1121980,G/G,Riesgo elevado de glaucoma (TMCO1),enfermedades,G,A,1,233019719,2024,GWAS Catalog,1.75,Alto,GWAS,Américas,0.398,gnomAD_v4,PEL,PerÀº,0.398,gnomAD_v4,PEL,
+239,rs1121980,A/A,Riesgo estándar de glaucoma (TMCO1),enfermedades,G,A,1,233019719,2024,GWAS Catalog,1.0,Bajo,GWAS,Américas,0.398,gnomAD_v4,PEL,PerÀº,0.398,gnomAD_v4,PEL,
+240,rs6983267,G/T,Riesgo intermedio de cáncer colorrectal (CASC8),enfermedades,T,G,8,127401060,2024,GWAS Catalog,1.2,Intermedio,GWAS,Europa,0.478,gnomAD_v4,IBS,España,0.478,gnomAD_v4,IBS,
+241,rs6983267,T/T,Riesgo elevado de cáncer colorrectal (CASC8),enfermedades,T,G,8,127401060,2024,GWAS Catalog,1.47,Alto,GWAS,Europa,0.478,gnomAD_v4,IBS,España,0.478,gnomAD_v4,IBS,
+242,rs6983267,G/G,Riesgo estándar de cáncer colorrectal (CASC8),enfermedades,T,G,8,127401060,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.478,gnomAD_v4,IBS,España,0.478,gnomAD_v4,IBS,
+243,rs2295080,G/T,Riesgo intermedio de cáncer de próstata (MSMB),enfermedades,T,G,10,46007304,2024,GWAS Catalog,1.25,Intermedio,GWAS,Europa,0.3012,gnomAD_v4,EUR,España,0.3012,gnomAD_v4,EUR,
+244,rs2295080,T/T,Riesgo elevado de cáncer de próstata (MSMB),enfermedades,T,G,10,46007304,2024,GWAS Catalog,1.6,Alto,GWAS,Europa,0.3012,gnomAD_v4,EUR,España,0.3012,gnomAD_v4,EUR,
+245,rs2295080,G/G,Riesgo estándar de cáncer de próstata (MSMB),enfermedades,T,G,10,46007304,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.3012,gnomAD_v4,EUR,España,0.3012,gnomAD_v4,EUR,
+246,rs3803662,A/G,Riesgo intermedio de cáncer de mama (TNRC9),enfermedades,G,A,16,52586341,2024,GWAS Catalog,1.2,Intermedio,GWAS,Europa,0.2856,gnomAD_v4,EUR,España,0.2856,gnomAD_v4,EUR,
+247,rs3803662,G/G,Riesgo elevado de cáncer de mama (TNRC9),enfermedades,G,A,16,52586341,2024,GWAS Catalog,1.5,Alto,GWAS,Europa,0.2856,gnomAD_v4,EUR,España,0.2856,gnomAD_v4,EUR,
+248,rs3803662,A/A,Riesgo estándar de cáncer de mama (TNRC9),enfermedades,G,A,16,52586341,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.2856,gnomAD_v4,EUR,España,0.2856,gnomAD_v4,EUR,
+249,rs2981582,A/G,Riesgo intermedio de cáncer de mama (FGFR2),enfermedades,G,A,10,123353311,2024,GWAS Catalog,1.25,Intermedio,GWAS,Asia Oriental,0.368,gnomAD_v4,CHB,China,0.368,gnomAD_v4,CHB,
+250,rs2981582,G/G,Riesgo elevado de cáncer de mama (FGFR2),enfermedades,G,A,10,123353311,2024,GWAS Catalog,1.6,Alto,GWAS,Asia Oriental,0.368,gnomAD_v4,CHB,China,0.368,gnomAD_v4,CHB,
+251,rs2981582,A/A,Riesgo estándar de cáncer de mama (FGFR2),enfermedades,G,A,10,123353311,2024,GWAS Catalog,1.0,Bajo,GWAS,Asia Oriental,0.368,gnomAD_v4,CHB,China,0.368,gnomAD_v4,CHB,
+252,rs11200014,A/G,Riesgo intermedio de cáncer de ovario (HOXD1),enfermedades,G,A,2,176151385,2024,GWAS Catalog,1.18,Intermedio,GWAS,Europa,0.1867,gnomAD_v4,EUR,España,0.1867,gnomAD_v4,EUR,
+253,rs11200014,G/G,Riesgo elevado de cáncer de ovario (HOXD1),enfermedades,G,A,2,176151385,2024,GWAS Catalog,1.4,Alto,GWAS,Europa,0.1867,gnomAD_v4,EUR,España,0.1867,gnomAD_v4,EUR,
+254,rs11200014,A/A,Riesgo estándar de cáncer de ovario (HOXD1),enfermedades,G,A,2,176151385,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.1867,gnomAD_v4,EUR,España,0.1867,gnomAD_v4,EUR,
+255,rs10993994,C/T,Riesgo intermedio de cáncer de pulmón (CHRNA5),enfermedades,T,C,15,78894339,2024,GWAS Catalog,1.3,Intermedio,GWAS,Américas,0.0567,gnomAD_v4,AMR,México,0.0567,gnomAD_v4,AMR,
+256,rs10993994,T/T,Riesgo elevado de cáncer de pulmón (CHRNA5),enfermedades,T,C,15,78894339,2024,GWAS Catalog,1.8,Alto,GWAS,Américas,0.0567,gnomAD_v4,AMR,México,0.0567,gnomAD_v4,AMR,
+257,rs10993994,C/C,Riesgo estándar de cáncer de pulmón (CHRNA5),enfermedades,T,C,15,78894339,2024,GWAS Catalog,1.0,Bajo,GWAS,Américas,0.0567,gnomAD_v4,AMR,México,0.0567,gnomAD_v4,AMR,
+258,rs11571833,A/G,Riesgo intermedio de melanoma (BRCA2),enfermedades,G,A,13,32929232,2024,GWAS Catalog,1.25,Intermedio,GWAS,Europa,0.2456,gnomAD_v4,EUR,España,0.2456,gnomAD_v4,EUR,
+259,rs11571833,G/G,Riesgo elevado de melanoma (BRCA2),enfermedades,G,A,13,32929232,2024,GWAS Catalog,1.58,Alto,GWAS,Europa,0.2456,gnomAD_v4,EUR,España,0.2456,gnomAD_v4,EUR,
+260,rs11571833,A/A,Riesgo estándar de melanoma (BRCA2),enfermedades,G,A,13,32929232,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.2456,gnomAD_v4,EUR,España,0.2456,gnomAD_v4,EUR,
+261,rs4769874,A/G,Riesgo intermedio de cáncer de vejiga (NAT2),enfermedades,G,A,8,18258103,2024,GWAS Catalog,1.2,Intermedio,GWAS,Europa,0.1678,gnomAD_v4,EUR,España,0.1678,gnomAD_v4,EUR,
+262,rs4769874,G/G,Riesgo elevado de cáncer de vejiga (NAT2),enfermedades,G,A,8,18258103,2024,GWAS Catalog,1.45,Alto,GWAS,Europa,0.1678,gnomAD_v4,EUR,España,0.1678,gnomAD_v4,EUR,
+263,rs4769874,A/A,Riesgo estándar de cáncer de vejiga (NAT2),enfermedades,G,A,8,18258103,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.1678,gnomAD_v4,EUR,España,0.1678,gnomAD_v4,EUR,
+264,rs1800734,C/T,Riesgo intermedio de cáncer gástrico (PSCA),enfermedades,T,C,8,142680948,2024,GWAS Catalog,1.22,Intermedio,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+265,rs1800734,T/T,Riesgo elevado de cáncer gástrico (PSCA),enfermedades,T,C,8,142680948,2024,GWAS Catalog,1.5,Alto,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+266,rs1800734,C/C,Riesgo estándar de cáncer gástrico (PSCA),enfermedades,T,C,8,142680948,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+267,rs9264942,C/T,Riesgo intermedio de hepatitis B crónica (HLA-DQ),enfermedades,T,C,6,32627241,2024,GWAS Catalog,1.35,Intermedio,GWAS,Asia Oriental,0.3012,gnomAD_v4,EAS,China,0.3012,gnomAD_v4,EAS,
+268,rs9264942,T/T,Riesgo elevado de hepatitis B crónica (HLA-DQ),enfermedades,T,C,6,32627241,2024,GWAS Catalog,1.75,Alto,GWAS,Asia Oriental,0.3012,gnomAD_v4,EAS,China,0.3012,gnomAD_v4,EAS,
+269,rs9264942,C/C,Riesgo estándar de hepatitis B crónica (HLA-DQ),enfermedades,T,C,6,32627241,2024,GWAS Catalog,1.0,Bajo,GWAS,Asia Oriental,0.3012,gnomAD_v4,EAS,China,0.3012,gnomAD_v4,EAS,
+270,rs231775,A/G,Riesgo intermedio de enfermedades autoinmunes (CTLA4),enfermedades,G,A,2,203867991,2024,GWAS Catalog,1.4,Intermedio,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+271,rs231775,G/G,Riesgo elevado de enfermedades autoinmunes (CTLA4),enfermedades,G,A,2,203867991,2024,GWAS Catalog,1.85,Alto,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+272,rs231775,A/A,Riesgo estándar de enfermedades autoinmunes (CTLA4),enfermedades,G,A,2,203867991,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+273,rs3761847,A/G,Riesgo intermedio de enfermedad de Crohn (IRGM),enfermedades,G,A,5,150240076,2024,GWAS Catalog,1.3,Intermedio,GWAS,Europa,0.4,gnomAD_v4,NFE,España,0.38,gnomAD_v4,IBS,
+274,rs3761847,G/G,Riesgo elevado de enfermedad de Crohn (IRGM),enfermedades,G,A,5,150240076,2024,GWAS Catalog,1.7,Alto,GWAS,Europa,0.4,gnomAD_v4,NFE,España,0.38,gnomAD_v4,IBS,
+275,rs3761847,A/A,Riesgo estándar de enfermedad de Crohn (IRGM),enfermedades,G,A,5,150240076,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.4,gnomAD_v4,NFE,España,0.38,gnomAD_v4,IBS,
+276,rs2241880,A/G,Riesgo intermedio de enfermedad de Crohn (ATG16L1),enfermedades,G,A,2,233267120,2024,GWAS Catalog,1.2,Intermedio,GWAS,Américas,0.0456,gnomAD_v4,AMR,México,0.0456,gnomAD_v4,AMR,
+277,rs2241880,G/G,Riesgo elevado de enfermedad de Crohn (ATG16L1),enfermedades,G,A,2,233267120,2024,GWAS Catalog,1.5,Alto,GWAS,Américas,0.0456,gnomAD_v4,AMR,México,0.0456,gnomAD_v4,AMR,
+278,rs2241880,A/A,Riesgo estándar de enfermedad de Crohn (ATG16L1),enfermedades,G,A,2,233267120,2024,GWAS Catalog,1.0,Bajo,GWAS,Américas,0.0456,gnomAD_v4,AMR,México,0.0456,gnomAD_v4,AMR,
+279,rs11465804,C/T,Riesgo intermedio de colitis ulcerosa (IL23R),enfermedades,T,C,1,67478546,2024,GWAS Catalog,1.25,Intermedio,GWAS,Asia Oriental,0.368,gnomAD_v4,CHB,China,0.368,gnomAD_v4,CHB,
+280,rs11465804,T/T,Riesgo elevado de colitis ulcerosa (IL23R),enfermedades,T,C,1,67478546,2024,GWAS Catalog,1.6,Alto,GWAS,Asia Oriental,0.368,gnomAD_v4,CHB,China,0.368,gnomAD_v4,CHB,
+281,rs11465804,C/C,Riesgo estándar de colitis ulcerosa (IL23R),enfermedades,T,C,1,67478546,2024,GWAS Catalog,1.0,Bajo,GWAS,Asia Oriental,0.368,gnomAD_v4,CHB,China,0.368,gnomAD_v4,CHB,
+282,rs3197999,A/G,Riesgo intermedio de esclerosis mÀºltiple (MST1),enfermedades,G,A,3,49721532,2024,GWAS Catalog,1.15,Intermedio,GWAS,Àfrica,0.2145,gnomAD_v4,AFR,Nigeria,0.2145,gnomAD_v4,AFR,
+283,rs3197999,G/G,Riesgo elevado de esclerosis mÀºltiple (MST1),enfermedades,G,A,3,49721532,2024,GWAS Catalog,1.35,Alto,GWAS,Àfrica,0.2145,gnomAD_v4,AFR,Nigeria,0.2145,gnomAD_v4,AFR,
+284,rs3197999,A/A,Riesgo estándar de esclerosis mÀºltiple (MST1),enfermedades,G,A,3,49721532,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.2145,gnomAD_v4,AFR,Nigeria,0.2145,gnomAD_v4,AFR,
+285,rs3135388,A/C,Riesgo intermedio de esclerosis mÀºltiple (HLA-DRA),enfermedades,C,A,6,32546456,2024,ClinVar,3.0,Alto,Clínico,Asia Oriental,0.3234,gnomAD_v4,EAS,China,0.3234,gnomAD_v4,EAS,
+286,rs3135388,C/C,Riesgo muy elevado de esclerosis mÀºltiple (HLA-DRA),enfermedades,C,A,6,32546456,2024,ClinVar,6.0,Alto,Clínico,Asia Oriental,0.3234,gnomAD_v4,EAS,China,0.3234,gnomAD_v4,EAS,
+287,rs3135388,A/A,Riesgo estándar de esclerosis mÀºltiple (HLA-DRA),enfermedades,C,A,6,32546456,2024,ClinVar,1.0,Bajo,Clínico,Asia Oriental,0.3234,gnomAD_v4,EAS,China,0.3234,gnomAD_v4,EAS,
+288,rs9271366,A/G,Riesgo intermedio de lupus eritematoso (HLA-DRB1),enfermedades,G,A,6,32584306,2024,GWAS Catalog,1.45,Intermedio,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+289,rs9271366,G/G,Riesgo elevado de lupus eritematoso (HLA-DRB1),enfermedades,G,A,6,32584306,2024,GWAS Catalog,2.1,Alto,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+290,rs9271366,A/A,Riesgo estándar de lupus eritematoso (HLA-DRB1),enfermedades,G,A,6,32584306,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+291,rs2104286,A/G,Riesgo intermedio de lupus eritematoso sistémico (TNFSF4),enfermedades,G,A,1,173231350,2024,GWAS Catalog,1.3,Intermedio,GWAS,Àfrica,0.2834,gnomAD_v4,AFR,Nigeria,0.2834,gnomAD_v4,AFR,
+292,rs2104286,G/G,Riesgo elevado de lupus eritematoso sistémico (TNFSF4),enfermedades,G,A,1,173231350,2024,GWAS Catalog,1.7,Alto,GWAS,Àfrica,0.2834,gnomAD_v4,AFR,Nigeria,0.2834,gnomAD_v4,AFR,
+293,rs2104286,A/A,Riesgo estándar de lupus eritematoso sistémico (TNFSF4),enfermedades,G,A,1,173231350,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.2834,gnomAD_v4,AFR,Nigeria,0.2834,gnomAD_v4,AFR,
+294,rs4430796,A/G,Riesgo intermedio de asma (IL33),enfermedades,G,A,9,6215786,2024,GWAS Catalog,1.2,Intermedio,GWAS,Asia Oriental,0.1923,gnomAD_v4,EAS,China,0.1923,gnomAD_v4,EAS,
+295,rs4430796,G/G,Riesgo elevado de asma (IL33),enfermedades,G,A,9,6215786,2024,GWAS Catalog,1.45,Alto,GWAS,Asia Oriental,0.1923,gnomAD_v4,EAS,China,0.1923,gnomAD_v4,EAS,
+296,rs4430796,A/A,Riesgo estándar de asma (IL33),enfermedades,G,A,9,6215786,2024,GWAS Catalog,1.0,Bajo,GWAS,Asia Oriental,0.1923,gnomAD_v4,EAS,China,0.1923,gnomAD_v4,EAS,
+297,rs7216389,C/T,Riesgo intermedio de asma infantil (ORMDL3),enfermedades,T,C,17,38062196,2024,GWAS Catalog,1.3,Intermedio,GWAS,Asia Oriental,0.2856,gnomAD_v4,EAS,China,0.2856,gnomAD_v4,EAS,
+298,rs7216389,T/T,Riesgo elevado de asma infantil (ORMDL3),enfermedades,T,C,17,38062196,2024,GWAS Catalog,1.75,Alto,GWAS,Asia Oriental,0.2856,gnomAD_v4,EAS,China,0.2856,gnomAD_v4,EAS,
+299,rs7216389,C/C,Riesgo estándar de asma infantil (ORMDL3),enfermedades,T,C,17,38062196,2024,GWAS Catalog,1.0,Bajo,GWAS,Asia Oriental,0.2856,gnomAD_v4,EAS,China,0.2856,gnomAD_v4,EAS,
+300,rs2069762,G/A,Niveles intermedios de interferón gamma (IFNG),biomarcadores,A,G,12,68158742,2024,dbSNP,1.3,Intermedio,Clínico,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+301,rs2069762,A/A,Niveles elevados de interferón gamma (IFNG),biomarcadores,A,G,12,68158742,2024,dbSNP,1.65,Alto,Clínico,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+302,rs2069762,G/G,Niveles normales de interferón gamma (IFNG),biomarcadores,A,G,12,68158742,2024,dbSNP,1.0,Bajo,Clínico,Àfrica,0.3456,gnomAD_v4,AFR,Nigeria,0.3456,gnomAD_v4,AFR,
+303,rs2430561,A/T,Producción intermedia de interferón gamma (IFNG),biomarcadores,T,A,12,68158744,2024,dbSNP,1.25,Intermedio,Clínico,Américas,0.2456,gnomAD_v4,AMR,México,0.2456,gnomAD_v4,AMR,
+304,rs2430561,T/T,Producción elevada de interferón gamma (IFNG),biomarcadores,T,A,12,68158744,2024,dbSNP,1.6,Alto,Clínico,Américas,0.2456,gnomAD_v4,AMR,México,0.2456,gnomAD_v4,AMR,
+305,rs2430561,A/A,Producción normal de interferón gamma (IFNG),biomarcadores,T,A,12,68158744,2024,dbSNP,1.0,Bajo,Clínico,Américas,0.2456,gnomAD_v4,AMR,México,0.2456,gnomAD_v4,AMR,
+306,rs1544410,C/T,Densidad ósea intermedia (VDR),biometrica,T,C,12,47846052,2024,GWAS Catalog,1.2,Intermedio,GWAS,Àfrica,0.4567,gnomAD_v4,AFR,Nigeria,0.4567,gnomAD_v4,AFR,
+307,rs1544410,T/T,Menor densidad ósea (VDR),biometrica,T,C,12,47846052,2024,GWAS Catalog,1.5,Alto,GWAS,Àfrica,0.4567,gnomAD_v4,AFR,Nigeria,0.4567,gnomAD_v4,AFR,
+308,rs1544410,C/C,Densidad ósea normal (VDR),biometrica,T,C,12,47846052,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.4567,gnomAD_v4,AFR,Nigeria,0.4567,gnomAD_v4,AFR,
+309,rs2228570,T/C,Riesgo intermedio de osteoporosis (VDR),biometrica,C,T,12,47879112,2024,GWAS Catalog,1.25,Intermedio,GWAS,Àfrica,0.5234,gnomAD_v4,AFR,Nigeria,0.5234,gnomAD_v4,AFR,
+310,rs2228570,C/C,Riesgo elevado de osteoporosis (VDR),biometrica,C,T,12,47879112,2024,GWAS Catalog,1.6,Alto,GWAS,Àfrica,0.5234,gnomAD_v4,AFR,Nigeria,0.5234,gnomAD_v4,AFR,
+311,rs2228570,T/T,Riesgo estándar de osteoporosis (VDR),biometrica,C,T,12,47879112,2024,GWAS Catalog,1.0,Bajo,GWAS,Àfrica,0.5234,gnomAD_v4,AFR,Nigeria,0.5234,gnomAD_v4,AFR,
+312,rs1800012,G/T,Riesgo intermedio de osteoporosis (COL1A1),biometrica,T,G,17,48267363,2024,ClinVar,1.35,Intermedio,Clínico,Américas,0.0456,gnomAD_v4,AMR,México,0.0456,gnomAD_v4,AMR,
+313,rs1800012,T/T,Riesgo elevado de osteoporosis (COL1A1),biometrica,T,G,17,48267363,2024,ClinVar,1.8,Alto,Clínico,Américas,0.0456,gnomAD_v4,AMR,México,0.0456,gnomAD_v4,AMR,
+314,rs1800012,G/G,Riesgo estándar de osteoporosis (COL1A1),biometrica,T,G,17,48267363,2024,ClinVar,1.0,Bajo,Clínico,Américas,0.0456,gnomAD_v4,AMR,México,0.0456,gnomAD_v4,AMR,
+315,rs9340799,A/G,Riesgo intermedio de fractura ósea (ESR1),biometrica,G,A,6,152098960,2024,GWAS Catalog,1.22,Intermedio,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,
+316,rs9340799,G/G,Riesgo elevado de fractura ósea (ESR1),biometrica,G,A,6,152098960,2024,GWAS Catalog,1.5,Alto,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,
+317,rs9340799,A/A,Riesgo estándar de fractura ósea (ESR1),biometrica,G,A,6,152098960,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,
+318,rs1048943,C/A,Metabolismo intermedio de carcinógenos (CYP1A1),farmacogenetica,A,C,15,74720644,2024,PharmGKB,1.5,Intermedio,Clínico,Europa,0.06,gnomAD_v4,NFE,España,0.05,gnomAD_v4,IBS,
+319,rs1048943,A/A,Metabolismo lento de carcinógenos (CYP1A1),farmacogenetica,A,C,15,74720644,2024,PharmGKB,2.2,Alto,Clínico,Europa,0.06,gnomAD_v4,NFE,España,0.05,gnomAD_v4,IBS,
+320,rs1048943,C/C,Metabolismo normal de carcinógenos (CYP1A1),farmacogenetica,A,C,15,74720644,2024,PharmGKB,1.0,Bajo,Clínico,Europa,0.06,gnomAD_v4,NFE,España,0.05,gnomAD_v4,IBS,
+321,rs762551,A/C,Actividad enzimática intermedia (CYP1A2),farmacogenetica,C,A,15,74749576,2024,PharmGKB,1.4,Intermedio,Clínico,Europa,0.32,gnomAD_v4,NFE,España,0.35,gnomAD_v4,IBS,
+322,rs762551,C/C,Mayor actividad metabolismo cafeína (CYP1A2),farmacogenetica,C,A,15,74749576,2024,PharmGKB,2.0,Neutral,Clínico,Europa,0.32,gnomAD_v4,NFE,España,0.35,gnomAD_v4,IBS,
+323,rs762551,A/A,Actividad estándar metabolismo cafeína (CYP1A2),farmacogenetica,C,A,15,74749576,2024,PharmGKB,1.0,Neutral,Clínico,Europa,0.32,gnomAD_v4,NFE,España,0.35,gnomAD_v4,IBS,
+324,rs1051266,C/T,Respuesta intermedia a metotrexato (TYMS),farmacogenetica,T,C,18,657604,2024,PharmGKB,1.35,Intermedio,Clínico,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,
+325,rs1051266,T/T,Respuesta reducida a metotrexato (TYMS),farmacogenetica,T,C,18,657604,2024,PharmGKB,1.7,Alto,Clínico,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,
+326,rs1051266,C/C,Respuesta normal a metotrexato (TYMS),farmacogenetica,T,C,18,657604,2024,PharmGKB,1.0,Bajo,Clínico,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,
+327,rs2297595,G/A,Toxicidad intermedia a fluorouracilo (DPYD),farmacogenetica,A,G,1,97740431,2024,PharmGKB,2.0,Alto,Clínico,Europa,0.45,gnomAD_v4,NFE,España,0.47,gnomAD_v4,IBS,
+328,rs2297595,A/A,Toxicidad severa a fluorouracilo (DPYD),farmacogenetica,A,G,1,97740431,2024,PharmGKB,3.5,Alto,Clínico,Europa,0.45,gnomAD_v4,NFE,España,0.47,gnomAD_v4,IBS,
+329,rs2297595,G/G,Tolerancia normal a fluorouracilo (DPYD),farmacogenetica,A,G,1,97740431,2024,PharmGKB,1.0,Bajo,Clínico,Europa,0.45,gnomAD_v4,NFE,España,0.47,gnomAD_v4,IBS,
+330,rs3918290,T/C,Deficiencia intermedia de DPD (DPYD),farmacogenetica,C,T,1,97450058,2024,PharmGKB,2.5,Alto,Clínico,Europa,0.012,gnomAD_v4,NFE,España,0.01,gnomAD_v4,IBS,
+331,rs3918290,C/C,Deficiencia severa de DPD (DPYD),farmacogenetica,C,T,1,97450058,2024,PharmGKB,4.0,Alto,Clínico,Europa,0.012,gnomAD_v4,NFE,España,0.01,gnomAD_v4,IBS,
+332,rs3918290,T/T,Actividad normal de DPD (DPYD),farmacogenetica,C,T,1,97450058,2024,PharmGKB,1.0,Bajo,Clínico,Europa,0.012,gnomAD_v4,NFE,España,0.01,gnomAD_v4,IBS,
+333,rs9923231,C/T,Sensibilidad intermedia a warfarina (VKORC1),farmacogenetica,T,C,16,31107689,2024,PharmGKB,2.0,Alto,Clínico,Europa,0.42,gnomAD_v4,NFE,España,0.45,gnomAD_v4,IBS,
+334,rs9923231,T/T,Alta sensibilidad a warfarina (VKORC1),farmacogenetica,T,C,16,31107689,2024,PharmGKB,3.5,Alto,Clínico,Europa,0.42,gnomAD_v4,NFE,España,0.45,gnomAD_v4,IBS,
+335,rs9923231,C/C,Sensibilidad estándar a warfarina (VKORC1),farmacogenetica,T,C,16,31107689,2024,PharmGKB,1.0,Bajo,Clínico,Europa,0.42,gnomAD_v4,NFE,España,0.45,gnomAD_v4,IBS,
+336,rs2359612,C/T,Respuesta intermedia a interferón (IFNL3),farmacogenetica,T,C,19,39738787,2024,PharmGKB,1.6,Intermedio,Clínico,Europa,0.45,gnomAD_v4,NFE,España,0.43,gnomAD_v4,IBS,
+337,rs2359612,T/T,Mejor respuesta a interferón (IFNL3),farmacogenetica,T,C,19,39738787,2024,PharmGKB,2.5,Bajo,Clínico,Europa,0.45,gnomAD_v4,NFE,España,0.43,gnomAD_v4,IBS,
+338,rs2359612,C/C,Respuesta reducida a interferón (IFNL3),farmacogenetica,T,C,19,39738787,2024,PharmGKB,1.0,Alto,Clínico,Europa,0.45,gnomAD_v4,NFE,España,0.43,gnomAD_v4,IBS,
+339,rs12979860,C/T,Respuesta intermedia a antivirales (IL28B),farmacogenetica,T,C,19,39248147,2024,PharmGKB,1.7,Intermedio,Clínico,Europa,0.38,gnomAD_v4,NFE,España,0.42,gnomAD_v4,IBS,
+340,rs12979860,T/T,Respuesta reducida a antivirales (IL28B),farmacogenetica,T,C,19,39248147,2024,PharmGKB,2.3,Alto,Clínico,Europa,0.38,gnomAD_v4,NFE,España,0.42,gnomAD_v4,IBS,
+341,rs12979860,C/C,Respuesta óptima a antivirales (IL28B),farmacogenetica,T,C,19,39248147,2024,PharmGKB,1.0,Bajo,Clínico,Europa,0.38,gnomAD_v4,NFE,España,0.42,gnomAD_v4,IBS,
+342,rs1051730,C/T,Mayor consumo de cigarrillos por día (CHRNA3),rasgos,T,C,15,78882925,2024,GWAS Catalog,1.35,Intermedio,GWAS,Europa,0.238,gnomAD_v4,FIN,Finlandia,0.238,gnomAD_v4,FIN,Bienestar y Salud
+343,rs1051730,T/T,Consumo muy elevado de cigarrillos (CHRNA3),rasgos,T,C,15,78882925,2024,GWAS Catalog,1.85,Alto,GWAS,Europa,0.238,gnomAD_v4,FIN,Finlandia,0.238,gnomAD_v4,FIN,Bienestar y Salud
+344,rs16969968,A/G,Dependencia intermedia a nicotina (CHRNA5),rasgos,G,A,15,78882925,2024,GWAS Catalog,1.4,Intermedio,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.32,gnomAD_v4,IBS,Bienestar y Salud
+345,rs16969968,G/G,Alta dependencia a nicotina (CHRNA5),rasgos,G,A,15,78882925,2024,GWAS Catalog,1.9,Alto,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.32,gnomAD_v4,IBS,Bienestar y Salud
+346,rs16969968,A/A,Dependencia estándar a nicotina (CHRNA5),rasgos,G,A,15,78882925,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.32,gnomAD_v4,IBS,Bienestar y Salud
+347,rs279858,A/G,Riesgo intermedio de dependencia a alcohol (GABRA2),rasgos,G,A,4,46252658,2024,GWAS Catalog,1.25,Intermedio,GWAS,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,Bienestar y Salud
+348,rs279858,G/G,Mayor riesgo de dependencia a alcohol (GABRA2),rasgos,G,A,4,46252658,2024,GWAS Catalog,1.55,Alto,GWAS,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,Bienestar y Salud
+349,rs279858,A/A,Riesgo estándar de dependencia a alcohol (GABRA2),rasgos,G,A,4,46252658,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,Bienestar y Salud
+350,rs1799971,A/G,Mayor umbral del dolor (OPRM1),rasgos,G,A,6,154039662,2024,SNPedia,1.45,Intermedio,Metaanálisis,Américas,0.0867,gnomAD_v4,AMR,México,0.0867,gnomAD_v4,AMR,Rendimiento Físico y Sensorial
+351,rs1799971,G/G,Umbral de dolor muy elevado (OPRM1),rasgos,G,A,6,154039662,2024,SNPedia,2.0,Neutral,Metaanálisis,Américas,0.0867,gnomAD_v4,AMR,México,0.0867,gnomAD_v4,AMR,Rendimiento Físico y Sensorial
+352,rs324420,A/C,Niveles intermedios de anandamida (FAAH),rasgos,C,A,1,46402823,2024,SNPedia,1.4,Intermedio,GWAS,Europa,0.22,gnomAD_v4,NFE,España,0.25,gnomAD_v4,IBS,Bienestar y Salud
+353,rs324420,C/C,Niveles elevados de anandamida (FAAH),rasgos,C,A,1,46402823,2024,SNPedia,2.0,Neutral,GWAS,Europa,0.22,gnomAD_v4,NFE,España,0.25,gnomAD_v4,IBS,Bienestar y Salud
+354,rs324420,A/A,Niveles normales de anandamida (FAAH),rasgos,C,A,1,46402823,2024,SNPedia,1.0,Neutral,GWAS,Europa,0.22,gnomAD_v4,NFE,España,0.25,gnomAD_v4,IBS,Bienestar y Salud
+355,rs6295,C/G,Susceptibilidad intermedia a depresión (HTR1A),rasgos,G,C,5,63962738,2024,GWAS Catalog,1.3,Intermedio,GWAS,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,Bienestar y Salud
+356,rs6295,G/G,Mayor susceptibilidad a depresión (HTR1A),rasgos,G,C,5,63962738,2024,GWAS Catalog,1.7,Alto,GWAS,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,Bienestar y Salud
+357,rs6295,C/C,Susceptibilidad estándar a depresión (HTR1A),rasgos,G,C,5,63962738,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,Bienestar y Salud
+358,rs6313,T/C,Respuesta intermedia a antidepresivos (HTR2A),farmacogenetica,C,T,13,46897343,2024,PharmGKB,1.35,Intermedio,Clínico,Europa,0.45,gnomAD_v4,NFE,España,0.47,gnomAD_v4,IBS,
+359,rs6313,C/C,Mayor respuesta a antidepresivos (HTR2A),farmacogenetica,C,T,13,46897343,2024,PharmGKB,1.75,Alto,Clínico,Europa,0.45,gnomAD_v4,NFE,España,0.47,gnomAD_v4,IBS,
+360,rs6313,T/T,Respuesta estándar a antidepresivos (HTR2A),farmacogenetica,C,T,13,46897343,2024,PharmGKB,1.0,Bajo,Clínico,Europa,0.45,gnomAD_v4,NFE,España,0.47,gnomAD_v4,IBS,
+361,rs1800497,A/G,Mayor impulsividad (DRD2),rasgos,G,A,11,113270828,2024,SNPedia,1.4,Intermedio,GWAS,Àfrica,0.321,gnomAD_v4,AFR,Nigeria,0.321,gnomAD_v4,AFR,Cognición
+362,rs6277,C/T,Función intermedia de dopamina (DRD2),rasgos,T,C,11,113283178,2024,SNPedia,1.3,Intermedio,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.38,gnomAD_v4,IBS,Bienestar y Salud
+363,rs6277,T/T,Función alterada de dopamina (DRD2),rasgos,T,C,11,113283178,2024,SNPedia,1.65,Alto,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.38,gnomAD_v4,IBS,Bienestar y Salud
+364,rs6277,C/C,Función normal de dopamina (DRD2),rasgos,T,C,11,113283178,2024,SNPedia,1.0,Bajo,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.38,gnomAD_v4,IBS,Bienestar y Salud
+365,rs4680,A/G,Rendimiento cognitivo intermedio (COMT),rasgos,G,A,22,19963748,2024,SNPedia,1.5,Intermedio,GWAS,Europa,0.495,gnomAD_v4,FIN,Finlandia,0.495,gnomAD_v4,FIN,Cognición
+366,rs165599,A/G,Susceptibilidad intermedia a trastornos del ánimo (COMT),rasgos,G,A,22,19963695,2024,GWAS Catalog,1.25,Intermedio,GWAS,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,Bienestar y Salud
+367,rs165599,G/G,Mayor susceptibilidad a trastornos del ánimo (COMT),rasgos,G,A,22,19963695,2024,GWAS Catalog,1.55,Alto,GWAS,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,Bienestar y Salud
+368,rs165599,A/A,Susceptibilidad estándar a trastornos del ánimo (COMT),rasgos,G,A,22,19963695,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.48,gnomAD_v4,NFE,España,0.5,gnomAD_v4,IBS,Bienestar y Salud
+369,rs2075650,A/G,Variación intermedia en memoria (TOMM40),rasgos,G,A,19,45394476,2024,GWAS Catalog,1.3,Intermedio,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.32,gnomAD_v4,IBS,Cognición
+370,rs2075650,G/G,Mayor declive cognitivo (TOMM40),rasgos,G,A,19,45394476,2024,GWAS Catalog,1.7,Alto,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.32,gnomAD_v4,IBS,Cognición
+371,rs2075650,A/A,Función cognitiva estándar (TOMM40),rasgos,G,A,19,45394476,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.32,gnomAD_v4,IBS,Cognición
+372,rs17070145,T/G,Riesgo intermedio de Parkinson (MAPT),enfermedades,G,T,17,44051548,2024,GWAS Catalog,1.25,Intermedio,GWAS,Europa,0.42,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,
+373,rs17070145,G/G,Riesgo elevado de Parkinson (MAPT),enfermedades,G,T,17,44051548,2024,GWAS Catalog,1.6,Alto,GWAS,Europa,0.42,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,
+374,rs17070145,T/T,Riesgo estándar de Parkinson (MAPT),enfermedades,G,T,17,44051548,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.42,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,
+375,rs356219,A/G,Riesgo intermedio de Parkinson (SNCA),enfermedades,G,A,4,89724560,2024,GWAS Catalog,1.3,Intermedio,GWAS,Europa,0.32,gnomAD_v4,NFE,España,0.35,gnomAD_v4,IBS,
+376,rs356219,G/G,Riesgo elevado de Parkinson (SNCA),enfermedades,G,A,4,89724560,2024,GWAS Catalog,1.75,Alto,GWAS,Europa,0.32,gnomAD_v4,NFE,España,0.35,gnomAD_v4,IBS,
+377,rs356219,A/A,Riesgo estándar de Parkinson (SNCA),enfermedades,G,A,4,89724560,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.32,gnomAD_v4,NFE,España,0.35,gnomAD_v4,IBS,
+378,rs34637584,G/A,Riesgo intermedio de Parkinson (LRRK2),enfermedades,A,G,12,40734202,2024,ClinVar,1.5,Intermedio,Clínico,Europa,0.015,gnomAD_v4,NFE,España,0.012,gnomAD_v4,IBS,
+379,rs34637584,A/A,Riesgo elevado de Parkinson (LRRK2),enfermedades,A,G,12,40734202,2024,ClinVar,2.5,Alto,Clínico,Europa,0.015,gnomAD_v4,NFE,España,0.012,gnomAD_v4,IBS,
+380,rs34637584,G/G,Riesgo estándar de Parkinson (LRRK2),enfermedades,A,G,12,40734202,2024,ClinVar,1.0,Bajo,Clínico,Europa,0.015,gnomAD_v4,NFE,España,0.012,gnomAD_v4,IBS,
+381,rs3818361,C/T,Riesgo intermedio de atrofia cerebral (TREM2),enfermedades,T,C,6,41129252,2024,GWAS Catalog,1.4,Intermedio,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,
+382,rs3818361,T/T,Riesgo elevado de atrofia cerebral (TREM2),enfermedades,T,C,6,41129252,2024,GWAS Catalog,2.0,Alto,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,
+383,rs3818361,C/C,Riesgo estándar de atrofia cerebral (TREM2),enfermedades,T,C,6,41129252,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,
+384,rs744373,A/G,Susceptibilidad intermedia a esquizofrenia (NOTCH4),enfermedades,G,A,6,32169807,2024,GWAS Catalog,1.2,Intermedio,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.35,gnomAD_v4,IBS,
+385,rs744373,G/G,Mayor susceptibilidad a esquizofrenia (NOTCH4),enfermedades,G,A,6,32169807,2024,GWAS Catalog,1.5,Alto,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.35,gnomAD_v4,IBS,
+386,rs744373,A/A,Susceptibilidad estándar a esquizofrenia (NOTCH4),enfermedades,G,A,6,32169807,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.35,gnomAD_v4,IBS,
+387,rs1344706,C/T,Riesgo intermedio de esquizofrenia (ZNF804A),enfermedades,T,C,2,185858148,2024,GWAS Catalog,1.15,Intermedio,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.38,gnomAD_v4,IBS,
+388,rs1344706,T/T,Riesgo elevado de esquizofrenia (ZNF804A),enfermedades,T,C,2,185858148,2024,GWAS Catalog,1.35,Alto,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.38,gnomAD_v4,IBS,
+389,rs1344706,C/C,Riesgo estándar de esquizofrenia (ZNF804A),enfermedades,T,C,2,185858148,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.35,gnomAD_v4,NFE,España,0.38,gnomAD_v4,IBS,
+390,rs1006737,A/G,Riesgo intermedio de trastorno bipolar (CACNA1C),enfermedades,G,A,12,2302596,2024,GWAS Catalog,1.2,Intermedio,GWAS,Europa,0.32,gnomAD_v4,NFE,España,0.3,gnomAD_v4,IBS,
+391,rs1006737,G/G,Riesgo elevado de trastorno bipolar (CACNA1C),enfermedades,G,A,12,2302596,2024,GWAS Catalog,1.45,Alto,GWAS,Europa,0.32,gnomAD_v4,NFE,España,0.3,gnomAD_v4,IBS,
+392,rs1006737,A/A,Riesgo estándar de trastorno bipolar (CACNA1C),enfermedades,G,A,12,2302596,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.32,gnomAD_v4,NFE,España,0.3,gnomAD_v4,IBS,
+393,rs2535629,A/G,Susceptibilidad intermedia a ansiedad (PSAP),rasgos,G,A,10,79717008,2024,GWAS Catalog,1.25,Intermedio,GWAS,Europa,0.42,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,Bienestar y Salud
+394,rs2535629,G/G,Mayor susceptibilidad a ansiedad (PSAP),rasgos,G,A,10,79717008,2024,GWAS Catalog,1.6,Alto,GWAS,Europa,0.42,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,Bienestar y Salud
+395,rs2535629,A/A,Susceptibilidad estándar a ansiedad (PSAP),rasgos,G,A,10,79717008,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.42,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,Bienestar y Salud
+396,rs4570625,G/T,Riesgo intermedio de TDAH (TPH2),rasgos,T,G,12,72384554,2024,GWAS Catalog,1.2,Intermedio,GWAS,Europa,0.28,gnomAD_v4,NFE,España,0.3,gnomAD_v4,IBS,Cognición
+397,rs4570625,T/T,Riesgo elevado de TDAH (TPH2),rasgos,T,G,12,72384554,2024,GWAS Catalog,1.5,Alto,GWAS,Europa,0.28,gnomAD_v4,NFE,España,0.3,gnomAD_v4,IBS,Cognición
+398,rs4570625,G/G,Riesgo estándar de TDAH (TPH2),rasgos,T,G,12,72384554,2024,GWAS Catalog,1.0,Bajo,GWAS,Europa,0.28,gnomAD_v4,NFE,España,0.3,gnomAD_v4,IBS,Cognición
+399,rs1800955,C/T,Calidad del sueño intermedia (DRD4),rasgos,T,C,11,637296,2024,SNPedia,1.3,Intermedio,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,Bienestar y Salud
+400,rs1800955,T/T,Menor calidad del sueño (DRD4),rasgos,T,C,11,637296,2024,SNPedia,1.65,Alto,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,Bienestar y Salud
+401,rs1800955,C/C,Calidad del sueño normal (DRD4),rasgos,T,C,11,637296,2024,SNPedia,1.0,Bajo,GWAS,Europa,0.38,gnomAD_v4,NFE,España,0.4,gnomAD_v4,IBS,Bienestar y Salud
+402,rs1426654,A/G,Pigmentación de piel intermedia (SLC24A5),rasgos,G,A,15,48426484,2024,GWAS Catalog,2.5,Neutral,Poblacional,Américas,0.4521,gnomAD_v4,AMR,Chile,0.5234,Adhikari_2016,Mapuche,Apariencia Física
+403,rs1426654,G/G,Pigmentación clara de piel (SLC24A5),rasgos,G,A,15,48426484,2024,GWAS Catalog,4.0,Neutral,Poblacional,Américas,0.4521,gnomAD_v4,AMR,Chile,0.5234,Adhikari_2016,Chileno_general,Apariencia Física
+404,rs1426654,A/A,Pigmentación oscura de piel (SLC24A5),rasgos,G,A,15,48426484,2024,GWAS Catalog,1.0,Neutral,Poblacional,Américas,0.4521,gnomAD_v4,AMR,Chile,0.5234,Adhikari_2016,Mapuche,Apariencia Física
+405,rs12913832,A/G,Color de ojos intermedio verde-avellana (HERC2),rasgos,G,A,15,28365618,2024,SNPedia,2.0,Neutral,Poblacional,Américas,0.2145,gnomAD_v4,AMR,Chile,0.3567,Adhikari_2016,Chileno_general,Apariencia Física
+406,rs12913832,G/G,Ojos claros azul-verde (HERC2),rasgos,G,A,15,28365618,2024,SNPedia,3.5,Neutral,Poblacional,Américas,0.2145,gnomAD_v4,AMR,Chile,0.3567,Adhikari_2016,Chileno_general,Apariencia Física
+407,rs12913832,A/A,Ojos oscuros marrones (HERC2),rasgos,G,A,15,28365618,2024,SNPedia,1.0,Neutral,Poblacional,Américas,0.2145,gnomAD_v4,AMR,Chile,0.3567,Adhikari_2016,Mapuche,Apariencia Física
+408,rs1800407,C/T,Pigmentación intermedia de ojos (OCA2),rasgos,T,C,15,28197037,2024,SNPedia,1.4,Neutral,Poblacional,Américas,0.2145,gnomAD_v4,AMR,Chile,0.3012,Adhikari_2016,Chileno_general,Apariencia Física
+409,rs1800407,T/T,Ojos y piel más claros (OCA2),rasgos,T,C,15,28197037,2024,SNPedia,2.0,Neutral,Poblacional,Américas,0.2145,gnomAD_v4,AMR,Chile,0.3012,Adhikari_2016,Chileno_general,Apariencia Física
+410,rs1800407,C/C,Pigmentación estándar (OCA2),rasgos,T,C,15,28197037,2024,SNPedia,1.0,Neutral,Poblacional,Américas,0.2145,gnomAD_v4,AMR,Chile,0.3012,Adhikari_2016,Aymara,Apariencia Física
+411,rs4988235,C/T,Tolerancia intermedia a lactosa (LCT),rasgos,T,C,2,135851076,2024,SNPedia,1.8,Neutral,Poblacional,Américas,0.1234,gnomAD_v4,AMR,Chile,0.2145,Itan_2010,Chileno_general,Metabolismo
+412,rs4988235,T/T,Persistencia de lactasa (LCT),rasgos,T,C,2,135851076,2024,SNPedia,3.0,Neutral,Poblacional,Américas,0.1234,gnomAD_v4,AMR,Chile,0.2145,Itan_2010,Chileno_general,Metabolismo
+413,rs4988235,C/C,Intolerancia a lactosa (LCT),rasgos,T,C,2,135851076,2024,SNPedia,1.0,Alto,Poblacional,Américas,0.1234,gnomAD_v4,AMR,Chile,0.2145,Itan_2010,Mapuche,Metabolismo
+414,rs17822931,C/T,Tipo de cerumen intermedio (ABCC11),rasgos,T,C,16,48258198,2024,SNPedia,1.5,Neutral,Poblacional,Américas,0.3456,gnomAD_v4,AMR,Chile,0.2145,Yoshiura_2006,Chileno_general,Apariencia Física
+415,rs17822931,T/T,Cerumen seco y menor olor corporal (ABCC11),rasgos,T,C,16,48258198,2024,SNPedia,2.5,Neutral,Poblacional,Américas,0.3456,gnomAD_v4,AMR,Chile,0.2145,Yoshiura_2006,Aymara,Apariencia Física
+416,rs17822931,C/C,Cerumen hÀºmedo (ABCC11),rasgos,T,C,16,48258198,2024,SNPedia,1.0,Neutral,Poblacional,Américas,0.3456,gnomAD_v4,AMR,Chile,0.2145,Yoshiura_2006,Chileno_general,Apariencia Física
+417,rs713598,C/G,Sensibilidad intermedia al sabor amargo (TAS2R38),rasgos,G,C,7,141972604,2024,SNPedia,1.6,Neutral,Poblacional,Américas,0.3012,gnomAD_v4,AMR,Chile,0.3456,Kim_2003,Mapuche,Rendimiento Físico y Sensorial
+418,rs713598,G/G,Alta sensibilidad al sabor amargo (TAS2R38),rasgos,G,C,7,141972604,2024,SNPedia,2.5,Neutral,Poblacional,Américas,0.3012,gnomAD_v4,AMR,Chile,0.3456,Kim_2003,Chileno_general,Rendimiento Físico y Sensorial
+419,rs713598,C/C,Baja sensibilidad al sabor amargo (TAS2R38),rasgos,G,C,7,141972604,2024,SNPedia,1.0,Neutral,Poblacional,Américas,0.3012,gnomAD_v4,AMR,Chile,0.3456,Kim_2003,Chileno_general,Rendimiento Físico y Sensorial
+420,rs1805007,C/T,Tendencia a piel clara y pecas (MC1R),rasgos,T,C,16,89986091,2024,SNPedia,1.8,Intermedio,Poblacional,Américas,0.0156,gnomAD_v4,AMR,Chile,0.0234,Adhikari_2016,Chileno_general,Apariencia Física
+421,rs1805007,T/T,Piel muy clara con tendencia a pecas (MC1R),rasgos,T,C,16,89986091,2024,SNPedia,3.0,Alto,Poblacional,Américas,0.0156,gnomAD_v4,AMR,Chile,0.0234,Adhikari_2016,Chileno_general,Apariencia Física
+422,rs1805007,C/C,Pigmentación estándar (MC1R),rasgos,T,C,16,89986091,2024,SNPedia,1.0,Bajo,Poblacional,Américas,0.0156,gnomAD_v4,AMR,Chile,0.0234,Adhikari_2016,Mapuche,Apariencia Física
+423,rs1042602,A/C,Pigmentación intermedia (TYR),rasgos,C,A,11,88911696,2024,dbSNP,1.5,Neutral,Poblacional,Américas,0.3456,gnomAD_v4,AMR,Chile,0.3821,Adhikari_2016,Chileno_general,Apariencia Física
+424,rs1042602,C/C,Pigmentación más clara (TYR),rasgos,C,A,11,88911696,2024,dbSNP,2.2,Neutral,Poblacional,Américas,0.3456,gnomAD_v4,AMR,Chile,0.3821,Adhikari_2016,Chileno_general,Apariencia Física
+425,rs1042602,A/A,Pigmentación más oscura (TYR),rasgos,C,A,11,88911696,2024,dbSNP,1.0,Neutral,Poblacional,Américas,0.3456,gnomAD_v4,AMR,Chile,0.3821,Adhikari_2016,Aymara,Apariencia Física
+426,rs1801133,C/T,Metabolismo intermedio de folato (MTHFR),biometrica,T,C,1,11856378,2024,ClinVar,1.4,Intermedio,Clínico,Américas,0.3234,gnomAD_v4,AMR,Chile,0.3821,Quiroz_2012,Chileno_general,
+427,rs1801133,T/T,Metabolismo reducido de folato (MTHFR),biometrica,T,C,1,11856378,2024,ClinVar,2.2,Alto,Clínico,Américas,0.3234,gnomAD_v4,AMR,Chile,0.3821,Quiroz_2012,Mapuche,
+428,rs1801133,C/C,Metabolismo normal de folato (MTHFR),biometrica,T,C,1,11856378,2024,ClinVar,1.0,Bajo,Clínico,Américas,0.3234,gnomAD_v4,AMR,Chile,0.3821,Quiroz_2012,Chileno_general,
+429,rs1801131,A/C,Niveles intermedios de homocisteína (MTHFR),biomarcadores,C,A,1,11854476,2024,ClinVar,1.2,Intermedio,Clínico,Américas,0.2834,gnomAD_v4,AMR,Chile,0.3123,Quiroz_2012,Chileno_general,
+430,rs1801131,C/C,Niveles elevados de homocisteína (MTHFR),biomarcadores,C,A,1,11854476,2024,ClinVar,1.45,Alto,Clínico,Américas,0.2834,gnomAD_v4,AMR,Chile,0.3123,Quiroz_2012,Aymara,
+431,rs1801131,A/A,Niveles normales de homocisteína (MTHFR),biomarcadores,C,A,1,11854476,2024,ClinVar,1.0,Bajo,Clínico,Américas,0.2834,gnomAD_v4,AMR,Chile,0.3123,Quiroz_2012,Chileno_general,
+432,rs174570,C/T,Metabolismo de ácidos grasos intermedio (FADS1),biometrica,T,C,11,61597212,2024,dbSNP,1.3,Intermedio,GWAS,Américas,0.3821,1000G_Phase3,PEL,Chile,0.4123,Fumagalli_2015,Aymara,
+433,rs174570,T/T,Metabolismo adaptado a altura (FADS1),biometrica,T,C,11,61597212,2024,dbSNP,1.8,Neutral,GWAS,Américas,0.3821,1000G_Phase3,PEL,Chile,0.4123,Fumagalli_2015,Aymara,
+434,rs174570,C/C,Metabolismo estándar de ácidos grasos (FADS1),biometrica,T,C,11,61597212,2024,dbSNP,1.0,Neutral,GWAS,Américas,0.3821,1000G_Phase3,PEL,Chile,0.4123,Fumagalli_2015,Chileno_general,
+435,rs731236,A/G,Metabolismo intermedio de vitamina D (VDR),biometrica,G,A,12,47845054,2024,dbSNP,1.3,Intermedio,Poblacional,Américas,0.3456,gnomAD_v4,AMR,Chile,0.4123,Suazo_2013,Chileno_general,
+436,rs731236,G/G,Variante en metabolismo vitamina D (VDR),biometrica,G,A,12,47845054,2024,dbSNP,1.7,Intermedio,Poblacional,Américas,0.3456,gnomAD_v4,AMR,Chile,0.4123,Suazo_2013,Chileno_general,
+437,rs731236,A/A,Metabolismo estándar vitamina D (VDR),biometrica,G,A,12,47845054,2024,dbSNP,1.0,Bajo,Poblacional,Américas,0.3456,gnomAD_v4,AMR,Chile,0.4123,Suazo_2013,Mapuche,
+438,rs2228570,T/C,Niveles intermedios de vitamina D (VDR),biomarcadores,C,T,12,47879112,2024,dbSNP,1.2,Intermedio,GWAS,Américas,0.5234,gnomAD_v4,AMR,Chile,0.5634,Orchard_2017,Chileno_general,
+439,rs2228570,C/C,Niveles reducidos de vitamina D (VDR),biomarcadores,C,T,12,47879112,2024,dbSNP,1.5,Alto,GWAS,Américas,0.5234,gnomAD_v4,AMR,Chile,0.5634,Orchard_2017,Atacameño,
+440,rs2228570,T/T,Niveles óptimos de vitamina D (VDR),biomarcadores,C,T,12,47879112,2024,dbSNP,1.0,Bajo,GWAS,Américas,0.5234,gnomAD_v4,AMR,Chile,0.5634,Orchard_2017,Chileno_general,
+441,rs1544410,C/T,Densidad ósea intermedia (VDR),biometrica,T,C,12,47846052,2024,GWAS Catalog,1.2,Intermedio,GWAS,Américas,0.4567,gnomAD_v4,AMR,Chile,0.4821,Santos_2013,Chileno_general,
+442,rs1544410,T/T,Menor densidad ósea (VDR),biometrica,T,C,12,47846052,2024,GWAS Catalog,1.5,Alto,GWAS,Américas,0.4567,gnomAD_v4,AMR,Chile,0.4821,Santos_2013,Chileno_general,
+443,rs1544410,C/C,Densidad ósea normal (VDR),biometrica,T,C,12,47846052,2024,GWAS Catalog,1.0,Bajo,GWAS,Américas,0.4567,gnomAD_v4,AMR,Chile,0.4821,Santos_2013,Mapuche,
+444,rs7903146,C/T,Riesgo intermedio de diabetes tipo 2 (TCF7L2),enfermedades,T,C,10,114758349,2024,ClinVar,1.4,Intermedio,Clínico,Américas,0.3421,gnomAD_v4,AMR,Chile,0.3821,Santos_2010,Chileno_general,
+445,rs7903146,T/T,Riesgo elevado de diabetes tipo 2 (TCF7L2),enfermedades,T,C,10,114758349,2024,ClinVar,1.9,Alto,Clínico,Américas,0.3421,gnomAD_v4,AMR,Chile,0.3821,Santos_2010,Chileno_general,
+446,rs7903146,C/C,Riesgo estándar de diabetes tipo 2 (TCF7L2),enfermedades,T,C,10,114758349,2024,ClinVar,1.0,Bajo,Clínico,Américas,0.3421,gnomAD_v4,AMR,Chile,0.3821,Santos_2010,Mapuche,
+447,rs9939609,A/T,Riesgo intermedio de obesidad (FTO),biometrica,T,A,16,53820527,2024,GWAS Catalog,1.3,Intermedio,GWAS,Américas,0.3234,gnomAD_v4,AMR,Chile,0.3567,Villalobos_2016,Chileno_general,
+448,rs9939609,T/T,Riesgo elevado de obesidad (FTO),biometrica,T,A,16,53820527,2024,GWAS Catalog,1.67,Alto,GWAS,Américas,0.3234,gnomAD_v4,AMR,Chile,0.3567,Villalobos_2016,Chileno_general,
+449,rs9939609,A/A,Riesgo estándar de obesidad (FTO),biometrica,T,A,16,53820527,2024,GWAS Catalog,1.0,Bajo,GWAS,Américas,0.3234,gnomAD_v4,AMR,Chile,0.3567,Villalobos_2016,Mapuche,
+450,rs1801282,C/G,Sensibilidad intermedia a insulina (PPARG),biometrica,G,C,3,12351626,2024,ClinVar,1.25,Intermedio,GWAS,Américas,0.0892,gnomAD_v4,AMR,Chile,0.1023,Gonzalez_2014,Chileno_general,
+451,rs1801282,G/G,Mayor sensibilidad a insulina (PPARG),biometrica,G,C,3,12351626,2024,ClinVar,0.8,Bajo,GWAS,Américas,0.0892,gnomAD_v4,AMR,Chile,0.1023,Gonzalez_2014,Chileno_general,
+452,rs1801282,C/C,Sensibilidad estándar a insulina (PPARG),biometrica,G,C,3,12351626,2024,ClinVar,1.0,Neutral,GWAS,Américas,0.0892,gnomAD_v4,AMR,Chile,0.1023,Gonzalez_2014,Aymara,
+453,rs1333049,C/G,Riesgo intermedio de enfermedad coronaria,enfermedades,G,C,9,22125504,2024,GWAS Catalog,1.3,Intermedio,GWAS,Américas,0.4821,gnomAD_v4,AMR,Chile,0.5123,Pereira_2016,Chileno_general,
+454,rs1333049,G/G,Riesgo elevado de enfermedad coronaria,enfermedades,G,C,9,22125504,2024,GWAS Catalog,1.7,Alto,GWAS,Américas,0.4821,gnomAD_v4,AMR,Chile,0.5123,Pereira_2016,Chileno_general,
+455,rs1333049,C/C,Riesgo reducido de enfermedad coronaria,enfermedades,G,C,9,22125504,2024,GWAS Catalog,1.0,Bajo,GWAS,Américas,0.4821,gnomAD_v4,AMR,Chile,0.5123,Pereira_2016,Mapuche,
+456,rs5219,C/T,Riesgo intermedio de diabetes tipo 2 (KCNJ11),enfermedades,T,C,11,17409572,2024,GWAS Catalog,1.15,Intermedio,GWAS,Américas,0.3156,gnomAD_v4,AMR,Chile,0.3421,Cruz_2010,Chileno_general,
+457,rs5219,T/T,Riesgo elevado de diabetes tipo 2 (KCNJ11),enfermedades,T,C,11,17409572,2024,GWAS Catalog,1.35,Alto,GWAS,Américas,0.3156,gnomAD_v4,AMR,Chile,0.3421,Cruz_2010,Chileno_general,
+458,rs5219,C/C,Riesgo estándar de diabetes tipo 2 (KCNJ11),enfermedades,T,C,11,17409572,2024,GWAS Catalog,1.0,Bajo,GWAS,Américas,0.3156,gnomAD_v4,AMR,Chile,0.3421,Cruz_2010,Aymara,
+459,rs671,G/A,Intolerancia moderada al alcohol (ALDH2),rasgos,A,G,12,111803962,2024,SNPedia,2.5,Alto,Clínico,Américas,0.0123,gnomAD_v4,AMR,Chile,0.0089,Eng_2007,Chileno_general,Metabolismo
+460,rs671,A/A,Intolerancia severa al alcohol (ALDH2),rasgos,A,G,12,111803962,2024,SNPedia,4.0,Alto,Clínico,Américas,0.0123,gnomAD_v4,AMR,Chile,0.0089,Eng_2007,Chileno_general,Metabolismo
+461,rs671,G/G,Tolerancia normal al alcohol (ALDH2),rasgos,A,G,12,111803962,2024,SNPedia,1.0,Bajo,Clínico,Américas,0.0123,gnomAD_v4,AMR,Chile,0.0089,Eng_2007,Rapa_Nui,Metabolismo

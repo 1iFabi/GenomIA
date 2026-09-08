@@ -1,0 +1,280 @@
+/* ============================================================================
+   Add Variant Modal Styles
+   ============================================================================ */
+
+.add-variant-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.add-variant-modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(15, 35, 65, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.add-variant-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #0b7ad0 0%, #0a5fa3 100%);
+  color: white;
+  border-radius: 12px 12px 0 0;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+}
+
+.add-variant-modal__header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.add-variant-modal__close {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.add-variant-modal__close:hover {
+  transform: scale(1.1);
+}
+
+.add-variant-modal__form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.add-variant-modal__error {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-left: 4px solid #ef4444;
+  color: #991b1b;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.add-variant-modal__section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e7f1;
+}
+
+.add-variant-modal__section:last-of-type {
+  border-bottom: none;
+}
+
+.add-variant-modal__section h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0b7ad0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.add-variant-modal__grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.add-variant-modal__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.add-variant-modal__group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.add-variant-modal__group input,
+.add-variant-modal__group select,
+.add-variant-modal__group textarea {
+  padding: 10px 12px;
+  border: 1px solid #e0e7f1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  color: #1a202c;
+}
+
+.add-variant-modal__group input:focus,
+.add-variant-modal__group select:focus,
+.add-variant-modal__group textarea:focus {
+  outline: none;
+  border-color: #0b7ad0;
+  box-shadow: 0 0 0 3px rgba(11, 122, 208, 0.1);
+}
+
+.add-variant-modal__group input::placeholder {
+  color: #9ca3af;
+}
+
+.add-variant-modal__group textarea {
+  resize: vertical;
+  min-height: 70px;
+}
+
+.add-variant-modal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #e0e7f1;
+  flex-shrink: 0;
+}
+
+.add-variant-modal__btn-cancel,
+.add-variant-modal__btn-submit {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-variant-modal__btn-cancel {
+  background: #f3f6fb;
+  color: #0b7ad0;
+  border: 1px solid #e0e7f1;
+}
+
+.add-variant-modal__btn-cancel:hover:not(:disabled) {
+  background: #e0ebf7;
+  border-color: #0b7ad0;
+}
+
+.add-variant-modal__btn-submit {
+  background: linear-gradient(135deg, #0b7ad0 0%, #0a5fa3 100%);
+  color: white;
+}
+
+.add-variant-modal__btn-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(11, 122, 208, 0.3);
+}
+
+.add-variant-modal__btn-cancel:disabled,
+.add-variant-modal__btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Input for "Otra" option (conditional fields)
+   ============================================================================ */
+
+.add-variant-modal__input-other {
+  margin-top: 8px !important;
+  padding: 10px 12px;
+  border: 2px solid #0b7ad0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a202c;
+  background: #f9fbfd;
+  transition: all 0.2s ease;
+}
+
+.add-variant-modal__input-other:focus {
+  outline: none;
+  border-color: #0a5fa3;
+  box-shadow: 0 0 0 3px rgba(11, 122, 208, 0.15);
+  background: white;
+}
+
+.add-variant-modal__input-other::placeholder {
+  color: #9ca3af;
+}
+
+/* ============================================================================
+   Info Message (when continent not selected)
+   ============================================================================ */
+
+.add-variant-modal__info-message {
+  padding: 16px;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-left: 4px solid #0b7ad0;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.add-variant-modal__info-message p {
+  margin: 0;
+  font-size: 14px;
+  color: #1e40af;
+  font-weight: 500;
+}
+
+/* ============================================================================
+   Responsive Design
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .add-variant-modal {
+    max-height: 100vh;
+  }
+
+  .add-variant-modal__grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .add-variant-modal__header {
+    padding: 16px;
+  }
+
+  .add-variant-modal__header h2 {
+    font-size: 18px;
+  }
+
+  .add-variant-modal__form {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .add-variant-modal__actions {
+    flex-direction: column-reverse;
+  }
+
+  .add-variant-modal__btn-cancel,
+  .add-variant-modal__btn-submit {
+    width: 100%;
+  }
+}

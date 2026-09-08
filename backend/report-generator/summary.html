@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --page-padding-x: 15mm;
+      --page-padding-y: 8mm;
+      --hero-height: 30mm;
+      --page-bg: #f8fafc;
+    }
+
+    @page {
+      size: A4;
+      margin: 0;
+      background-color: #f8fafc;
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-print-color-adjust: exact; }
+    html, body { margin: 0; padding: 0; width: var(--page-width); height: var(--page-height); }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--page-bg);
+      color: #334155;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* === HERO BRUTALIST === */
+    .hero-header {
+      position: relative;
+      width: 100%;
+      height: var(--hero-height);
+      overflow: hidden;
+      background: #0c4a6e;
+      display: flex;
+      align-items: center;
+      padding: 0 var(--page-padding-x);
+    }
+
+    .hero-number {
+      position: absolute;
+      font-size: 280px;
+      font-weight: 900;
+      color: rgba(6, 182, 212, 0.1);
+      right: -20px;
+      top: -80px;
+      font-family: 'Montserrat', sans-serif;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 160mm;
+    }
+
+    .hero-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin: 0 0 4px 0;
+      color: #e0f2fe;
+      letter-spacing: -1px;
+      text-transform: uppercase;
+    }
+
+    .hero-subtitle {
+      font-size: 11px;
+      line-height: 1.4;
+      color: #bae6fd;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    /* === CONTENT === */
+    .content-wrapper {
+      padding: var(--page-padding-y) var(--page-padding-x);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .disease-layout {
+      margin-top: -4mm;
+      display: flex;
+      flex-direction: column;
+      gap: 4mm;
+    }
+
+    .intro-panel {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      box-shadow: 0 4px 6px rgba(15, 23, 42, 0.03);
+    }
+
+    .intro-flex {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .intro-left {
+      flex: 1;
+    }
+
+    .intro-right {
+      width: 170px;
+      flex-shrink: 0;
+    }
+
+    .intro-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #0f172a;
+      margin: 0 0 6px 0;
+    }
+
+    .intro-text {
+      font-size: 8.5px;
+      line-height: 1.5;
+      color: #64748b;
+      margin: 0 0 8px 0;
+      text-align: justify;
+    }
+
+    .inline-warning {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-top: 4px;
+    }
+
+    .warning-icon {
+      color: #d97706;
+      display: flex;
+      align-items: center;
+    }
+
+    .warning-text {
+      font-size: 8.5px;
+      color: #b45309;
+      font-weight: 500;
+      line-height: 1.3;
+    }
+
+    .metric-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .metric-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 0 10px;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      height: 28px;
+    }
+
+    .metric-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #64748b;
+      font-weight: 700;
+    }
+
+    .metric-value {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .sheet-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .sheet-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #0f172a;
+      margin: 0 0 4px 0;
+    }
+
+    .sheet-subtitle {
+      font-size: 9px;
+      color: #64748b;
+      max-width: 120mm;
+      line-height: 1.4;
+    }
+
+    .legend-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .legend-pill {
+      font-size: 8px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid;
+    }
+
+    .legend-high { background: #fef2f2; color: #ef4444; border-color: #fee2e2; }
+    .legend-mid { background: #fff7ed; color: #f97316; border-color: #fed7aa; }
+    .legend-low { background: #ecfdf5; color: #10b981; border-color: #d1fae5; }
+
+    .disease-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .disease-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+
+    .disease-card.risk-high { border-left: 4px solid #ef4444; }
+    .disease-card.risk-mid { border-left: 4px solid #f97316; }
+    .disease-card.risk-low { border-left: 4px solid #10b981; }
+
+    .disease-badge {
+      font-size: 8px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      min-width: 50px;
+      text-align: center;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      color: #475569;
+      flex-shrink: 0;
+    }
+
+    .badge-high { background: #fef2f2; color: #ef4444; border-color: #fee2e2; }
+    .badge-mid { background: #fff7ed; color: #f97316; border-color: #fed7aa; }
+    .badge-low { background: #ecfdf5; color: #10b981; border-color: #d1fae5; }
+
+    .disease-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .disease-name {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      color: #1e293b;
+      line-height: 1.3;
+    }
+
+    .disease-meta {
+      font-size: 7.5px;
+      color: #94a3b8;
+      font-family: 'Inter', monospace;
+    }
+
+    .disease-empty {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      font-size: 9px;
+      color: #64748b;
+    }
+
+    .footer {
+      padding: 8mm 0 0 0;
+      text-align: right;
+      font-size: 8px;
+      color: #cbd5e1;
+      margin-top: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="hero-header">
+    <div class="hero-number">{{sectionNumber}}</div>
+    <div class="hero-content">
+      <h1 class="hero-title">{{sectionTitle}}</h1>
+      <p class="hero-subtitle">
+        {{sectionSubtitle}}
+      </p>
+    </div>
+  </header>
+
+  <div class="content-wrapper">
+    <section class="disease-layout">
+      
+      <!-- Merged Intro + Warning Panel -->
+      <div class="intro-panel">
+        <div class="intro-flex">
+          
+          <div class="intro-left">
+            <div class="intro-title">Que significa esta seccion</div>
+            <p class="intro-text">
+              Este apartado lista variantes geneticas detectadas en la muestra para esta seccion.
+              El nivel de riesgo indica una tendencia relativa, no una certeza diagnostica.
+              Use esta informacion como guia preventiva y siempre con evaluacion clinica profesional.
+            </p>
+            
+            <div class="inline-warning">
+              <div class="warning-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              </div>
+              <div class="warning-text">
+                Este reporte es informativo y no constituye diagnostico clinico ni sustituye la
+                evaluacion medica. Los resultados deben interpretarse junto a un profesional de salud.
+              </div>
+            </div>
+          </div>
+
+          <div class="intro-right">
+            <div class="metric-grid">
+              <div class="metric-card">
+                <div class="metric-label">Alto</div>
+                <div class="metric-value" style="color:#ef4444">{{sectionHigh}}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Medio</div>
+                <div class="metric-value" style="color:#f97316">{{sectionMid}}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Bajo</div>
+                <div class="metric-value" style="color:#10b981">{{sectionLow}}</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="sheet-header">
+        <div>
+          <div class="sheet-title">Mapa de riesgos</div>
+          <div class="sheet-subtitle">
+            Se muestran las variantes detectadas y el nivel de riesgo asociado segun el analisis genetico.
+          </div>
+        </div>
+        <div class="legend-row">
+          <span class="legend-pill legend-high">Alto</span>
+          <span class="legend-pill legend-mid">Medio</span>
+          <span class="legend-pill legend-low">Bajo</span>
+        </div>
+      </div>
+
+      <div class="disease-grid">
+        {{summaryContent}}
+      </div>
+
+    </section>
+
+    <footer class="footer">
+      Pag {{pageNumber}} de {{pageTotal}}
+    </footer>
+  </div>
+</body>
+</html>

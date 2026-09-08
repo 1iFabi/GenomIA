@@ -1,0 +1,353 @@
+/* IndigenousRadarChart.css */
+.indigenous-radar-chart {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.chart-header {
+  padding: 2rem 2rem 1.5rem 2rem;
+  text-align: center;
+  background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+  border-bottom: 1px solid #e0e7ff;
+}
+
+.chart-header h3 {
+  margin: 0 0 0.5rem 0;
+  color: #0b7ad0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.chart-subtitle {
+  margin: 0;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.chart-main-content {
+  display: grid;
+  grid-template-columns: 45% 55%;
+  gap: 2rem;
+  padding: 2rem;
+  background: #fafafa;
+  align-items: center;
+}
+
+.chart-container-donut {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 1.5rem;
+}
+
+/* Estilos de leyenda tipo Enfermedades */
+.legend-pro {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.legend-pro__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.legend-pro__item:hover {
+  background: #f8f9ff;
+}
+
+.legend-pro__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legend-pro__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legend-pro__label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.legend-pro__value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0b7ad0;
+}
+
+.loading-container,
+.error-container {
+  padding: 3rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.loading-container p {
+  color: #666;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.error-message {
+  color: #d32f2f;
+  font-size: 1rem;
+  margin: 0;
+  padding: 1rem 2rem;
+  background: #ffebee;
+  border-radius: 8px;
+  border-left: 4px solid #d32f2f;
+}
+
+/* Chart info section */
+.chart-info {
+  padding: 1.5rem;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+
+.chart-info h4 {
+  margin: 0 0 1.5rem 0;
+  color: #0b7ad0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.peoples-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.people-item {
+  padding: 1rem;
+  background: #f8f9ff;
+  border-radius: 8px;
+  border: 1px solid #e0e7ff;
+  transition: all 0.3s ease;
+}
+
+.people-item:hover {
+  background: #f0f4ff;
+  border-color: #c5d7ff;
+  box-shadow: 0 2px 8px rgba(11, 122, 208, 0.12);
+  transform: translateY(-2px);
+}
+
+.people-item.no-data {
+  background: #f5f5f5;
+  border-color: #e0e0e0;
+  opacity: 0.7;
+}
+
+.people-item.no-data:hover {
+  background: #eeeeee;
+  border-color: #d0d0d0;
+  transform: none;
+  box-shadow: none;
+}
+
+.people-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.people-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.people-percentage {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0b7ad0;
+}
+
+.people-item.no-data .people-percentage {
+  color: #999;
+  font-weight: 600;
+}
+
+.people-details {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.75rem;
+}
+
+.detail-item {
+  font-size: 0.85rem;
+}
+
+.detail-separator {
+  color: #bbb;
+}
+
+.people-bar {
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.people-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+/* Tooltip del radar */
+.radar-tooltip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.98);
+  border: 2px solid #0b7ad0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: 10;
+  min-width: 180px;
+}
+
+.tooltip-title {
+  font-weight: bold;
+  font-size: 15px;
+  color: #0b7ad0;
+  margin-bottom: 6px;
+}
+
+.tooltip-content {
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.tooltip-detail {
+  font-size: 13px;
+  color: #666;
+  margin-top: 2px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .chart-main-content {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .chart-header {
+    padding: 1.5rem 1rem 1rem 1rem;
+  }
+
+  .chart-header h3 {
+    font-size: 1.4rem;
+  }
+
+  .chart-subtitle {
+    font-size: 0.85rem;
+  }
+
+  .chart-main-content {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .chart-container {
+    padding: 1rem;
+  }
+
+  .chart-info {
+    padding: 1rem;
+  }
+
+  .chart-info h4 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+  }
+
+  .people-item {
+    padding: 0.75rem;
+  }
+
+  .people-name {
+    font-size: 0.9rem;
+  }
+
+  .people-percentage {
+    font-size: 1rem;
+  }
+
+  .people-details {
+    font-size: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .loading-container,
+  .error-container {
+    padding: 2rem 1rem;
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  .chart-header {
+    padding: 1rem 0.75rem 0.75rem 0.75rem;
+  }
+
+  .chart-header h3 {
+    font-size: 1.2rem;
+  }
+
+  .chart-main-content {
+    padding: 0.75rem;
+  }
+
+  .chart-container {
+    padding: 0.75rem;
+  }
+
+  .chart-info {
+    padding: 0.75rem;
+  }
+
+  .peoples-list {
+    gap: 1rem;
+  }
+
+  .people-item {
+    padding: 0.625rem;
+  }
+}

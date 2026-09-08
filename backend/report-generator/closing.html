@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+  <style>
+    @page { size: A4; margin: 0; }
+    html, body { width: 210mm; height: 297mm; margin: 0; }
+
+    :root{
+      --white: #ffffff;
+      --soft: rgba(255,255,255,.95);
+      --muted: rgba(255,255,255,.72);
+      --accent: rgba(100, 200, 255, 0.85);
+    }
+
+    .page{
+      position: relative;
+      width: 210mm;
+      height: 297mm;
+      overflow: hidden;
+      font-family: "Montserrat", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--white);
+      background: #050b16;
+    }
+
+    .bgimg{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      transform: scale(1.02);
+      filter: saturate(1.08) contrast(1.05);
+    }
+
+    .overlay{
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(circle at 80% 10%, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 45%),
+        linear-gradient(180deg, rgba(2,10,25,0.72) 0%, rgba(2,10,25,0.35) 55%, rgba(2,10,25,0.18) 100%);
+    }
+
+    .brand{
+      position:absolute;
+      left: 18mm;
+      top: 18mm;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      opacity: .95;
+    }
+    .brand img{
+      height: 10mm;
+      width: auto;
+      display:block;
+      filter: drop-shadow(0 10px 18px rgba(0,0,0,.35));
+    }
+    .brand .name{
+      font-size: 17pt;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      text-shadow: 0 10px 18px rgba(0,0,0,.22);
+      line-height: 1;
+    }
+
+    .title{
+      position:absolute;
+      left: 18mm;
+      top: 86mm;
+      width: 160mm;
+      font-size: 38pt;
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.4px;
+      text-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+
+    .subtitle{
+      position:absolute;
+      left: 18mm;
+      top: 142mm;
+      max-width: 150mm;
+      color: var(--soft);
+      font-size: 12pt;
+      font-weight: 400;
+      line-height: 1.6;
+      letter-spacing: 0.2px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+    }
+
+    .highlight{
+      color: #60a5fa;
+      font-weight: 700;
+    }
+
+    .meta{
+      position:absolute;
+      left: 18mm;
+      bottom: 28mm;
+      width: 120mm;
+    }
+    .label{
+      margin-top: 10px;
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .value{
+      margin-top: 4px;
+      font-size: 12pt;
+      font-weight: 700;
+      color: var(--white);
+      text-shadow: 0 10px 24px rgba(0,0,0,.18);
+      word-break: break-word;
+    }
+
+    .qrBox{
+      position:absolute;
+      right: 18mm;
+      bottom: 26mm;
+      width: 46mm;
+      text-align: center;
+    }
+    .qrBox img{
+      width: 46mm;
+      height: 46mm;
+      background: white;
+      border-radius: 8mm;
+      padding: 3mm;
+      box-sizing: border-box;
+      box-shadow: 0 18px 40px rgba(0,0,0,.35);
+    }
+    .qrHint{
+      margin-top: 6mm;
+      font-size: 9pt;
+      font-weight: 400;
+      color: var(--muted);
+      line-height: 1.25;
+      text-shadow: 0 10px 24px rgba(0,0,0,.18);
+    }
+
+    .footer{
+      position: absolute;
+      right: 18mm;
+      bottom: 10mm;
+      font-size: 9pt;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      text-shadow: 0 8px 20px rgba(0,0,0,.25);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <img class="bgimg" src="{{bgDataUrl}}" alt="">
+    <div class="overlay"></div>
+
+    <div class="brand">
+      <img src="{{logoDataUrl}}" alt="GenomIA">
+      <div class="name">GenomIA</div>
+    </div>
+
+    <div class="title">
+      Gracias por confiar en GenomIA
+    </div>
+
+    <div class="subtitle">
+      Tu informaci&oacute;n gen&eacute;tica es &uacute;nica. Este reporte es una gu&iacute;a para
+      comprender tus hallazgos y conversar con profesionales de salud.
+    </div>
+
+    <div class="meta">
+      <div class="label">Paciente</div>
+      <div class="value">{{displayName}}</div>
+
+      <div class="label">ID de reporte</div>
+      <div class="value">{{reportId}}</div>
+
+      <div class="label">Fecha</div>
+      <div class="value">{{date}}</div>
+    </div>
+
+    <div class="qrBox">
+      <img src="{{qrDataUrl}}" alt="QR">
+      <div class="qrHint">Escanea el QR para<br>volver a tu reporte</div>
+    </div>
+
+    <div class="footer">Pag {{pageNumber}} de {{pageTotal}}</div>
+  </div>
+</body>
+</html>

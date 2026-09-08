@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --page-bg: #f8fafc;
+      --page-padding-x: 18mm;
+
+      --hero-height: 30mm;
+      --hero-bg: #0c4a6e;
+      --hero-title: #e0f2fe;
+      --hero-subtitle: #bae6fd;
+
+      --toc-top: 60mm;
+      --toc-row-height: 10mm;
+      --toc-row-gap: 2mm;
+    }
+
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    html, body {
+      width: var(--page-width);
+      height: var(--page-height);
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      position: relative;
+      background: var(--page-bg);
+      font-family: "Inter", sans-serif;
+      color: #334155;
+    }
+
+    .hero-header {
+      height: var(--hero-height);
+      background: var(--hero-bg);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--page-padding-x);
+    }
+
+    .hero-title {
+      font-family: "Montserrat", sans-serif;
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      margin: 0 0 4px 0;
+      color: var(--hero-title);
+      text-transform: uppercase;
+    }
+
+    .hero-subtitle {
+      font-size: 11px;
+      margin: 0;
+      color: var(--hero-subtitle);
+      font-weight: 500;
+    }
+
+    .toc {
+      position: absolute;
+      top: var(--toc-top);
+      left: var(--page-padding-x);
+      right: var(--page-padding-x);
+      display: flex;
+      flex-direction: column;
+      gap: var(--toc-row-gap);
+    }
+
+    .toc-row {
+      height: var(--toc-row-height);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 3px;
+    }
+
+    .toc-number {
+      width: 16mm;
+      font-family: "Montserrat", sans-serif;
+      font-weight: 800;
+      font-size: 12px;
+      color: #0f172a;
+      text-align: left;
+    }
+
+    .toc-title {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 600;
+      color: #1e293b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .toc-page {
+      width: 16mm;
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      text-align: right;
+    }
+  </style>
+</head>
+
+<body>
+  <header class="hero-header">
+    <div>
+      <h1 class="hero-title">&Iacute;ndice</h1>
+      <p class="hero-subtitle">Navega cada seccion del reporte con un clic.</p>
+    </div>
+  </header>
+
+  <div class="toc">
+    {{indexRowsHtml}}
+  </div>
+</body>
+</html>

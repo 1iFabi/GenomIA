@@ -1,0 +1,354 @@
+/* SobreNosotros.css - layout como captura */
+
+
+/* ========== CONTENEDOR GENERAL ========== */
+.sn {
+  --c-brand: #108AC2;
+  --c-brand-strong: #1189c2;
+  --c-text: #5a6b80;
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  font-family: 'DM Sans','Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  padding: 120px 24px 80px;
+  background: linear-gradient(180deg, #F7FBFF 0%, #E6F2FE 55%, #D6E8FD 100%);
+}
+
+/* ========== BREADCRUMB ========== */
+.sn-crumb {
+  display: flex;
+  justify-content: center;
+}
+
+/* ========== TÍTULO PRINCIPAL ========== */
+.sn-title {
+  margin: 0px auto 30px;
+  text-align: center;
+  color: var(--c-brand-strong);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.06;
+  font-size: clamp(30px, 5vw, 46px);
+  max-width: 1200px;
+}
+
+/* ========== CARACTERÍSTICAS/FEATURES ========== */
+.sn-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto 24px;
+}
+
+.sn-feature {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e7eef6;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 12px 32px rgba(4, 41, 84, 0.06);
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
+}
+
+.sn-feature::after {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto -10%;
+  height: 120px;
+  background: radial-gradient(220px 60px at 10% 40%, rgba(16, 138, 194, .12), rgba(16, 138, 194, 0));
+  opacity: 0;
+  transition: opacity .25s ease;
+}
+
+.sn-feature:hover {
+  box-shadow: 0 14px 30px rgba(4, 41, 84, 0.10);
+  border-color: #dfe8f3;
+}
+
+.sn-feature:hover::after {
+  opacity: 1;
+}
+
+.sn-feature.is-accent {
+  background: var(--c-brand);
+  color: #fff;
+  border-color: rgba(255, 255, 255, .35);
+}
+
+.sn-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #E6F4FE;
+  margin-bottom: 10px;
+  transition: filter .18s ease;
+}
+
+.sn-icon svg {
+  color: var(--c-brand);
+}
+
+.sn-feature.is-accent .sn-icon {
+  background: rgba(255, 255, 255, .15);
+}
+
+.sn-feature.is-accent .sn-icon svg {
+  color: #fff;
+}
+
+.sn-feature-title {
+  margin: 0 0 8px;
+  font-weight: 800;
+  color: var(--c-brand-strong);
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.sn-feature.is-accent .sn-feature-title {
+  color: #fff;
+}
+
+.sn-feature-desc {
+  margin: 0;
+  color: var(--c-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.sn-feature.is-accent .sn-feature-desc {
+  color: #f4fbff;
+}
+
+/* ========== TÍTULO DEL EQUIPO ========== */
+.sn-team-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--c-brand-strong);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.06;
+  font-size: clamp(26px, 4vw, 30px);
+  margin: 6px auto 18px;
+  max-width: 1200px;
+}
+
+.sn-team-title::before,
+.sn-team-title::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: #1189c2;
+  opacity: .5;
+}
+
+/* ========== GRID DEL EQUIPO ========== */
+.equipo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.miembro-card {
+  background: #fff;
+  border: 1px solid #e7eef6;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(4, 41, 84, 0.06);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.miembro-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 36px rgba(4, 41, 84, 0.10);
+}
+
+.miembro-imagen {
+  width: 100%;
+  height: 180px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding-top: 40px;
+  transform: scale(1.4);
+  transform-origin: center 65%;
+}
+
+.miembro-img {
+  width: 280px;
+  max-width: 95%;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+  margin: 0 auto;
+}
+
+.miembro-info {
+  padding: 8px 16px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.miembro-nombre {
+  margin: 0;
+  color: #108AC2;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-size: 16px;
+}
+
+.miembro-cargo {
+  margin: 0;
+  color: #6b7a90;
+  font-size: 12.5px;
+}
+
+/* ========== BOTÓN LINKEDIN ========== */
+.linkedin-btn {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #108AC2;
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 13px;
+  border: 1px solid #dbe7f4;
+  box-shadow: 0 4px 12px rgba(16, 138, 194, .08);
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, color .18s ease;
+}
+
+.linkedin-btn:hover {
+  background: #E6F4FE;
+  border-color: #beddff;
+  box-shadow: 0 8px 18px rgba(16, 138, 194, .12);
+}
+
+.linkedin-icon {
+  width: 16px;
+  height: 16px;
+  color: #108AC2;
+}
+
+/* ========== MEDIA QUERIES RESPONSIVAS ========== */
+
+/* Pantallas extra grandes (1280px+) */
+@media (min-width: 1280px) {
+  .equipo-grid {
+    grid-template-columns: repeat(5, 1fr);
+    max-width: 1200px;
+  }
+  
+  .miembro-img {
+    width: 300px;
+  }
+}
+
+/* Tabletas (1024px y menor) */
+@media (max-width: 1024px) {
+  .sn-features {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  
+  .sn-team-title {
+    margin-top: 10px;
+  }
+  
+  /* Equipo: uno por fila en tablet */
+  .equipo-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    justify-items: center;
+  }
+  
+  .miembro-card {
+    width: 100%;
+    max-width: 560px;
+  }
+}
+
+/* Móviles (768px y menor) */
+@media (max-width: 768px) {
+  .sn {
+    padding: 100px 16px 60px;
+  }
+  
+  /* Ajustar imágenes del equipo para móviles */
+  .miembro-imagen {
+    height: 160px;
+    padding-top: 20px;
+    padding-bottom: 15px;
+    transform: scale(1.2);
+    transform-origin: center 60%;
+  }
+  
+  .miembro-info {
+    padding: 12px 16px 16px;
+    gap: 10px;
+  }
+  
+  .miembro-card {
+    max-width: 100%;
+  }
+}
+
+/* Móviles pequeños (480px y menor) */
+@media (max-width: 480px) {
+  .equipo-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .miembro-card {
+    max-width: 100%;
+    width: 100%;
+    margin: 0 auto;
+  }
+  
+  /* Reducir más la escala en móviles pequeños */
+  .miembro-imagen {
+    height: 150px;
+    padding-top: 10px;
+    padding-bottom: 20px;
+    transform: scale(1.0);
+    transform-origin: center 50%;
+  }
+  
+  .miembro-img {
+    width: 220px;
+    max-width: 90%;
+  }
+  
+  .miembro-info {
+    padding: 10px 12px 12px;
+    gap: 12px;
+  }
+  
+  .miembro-nombre {
+    font-size: 15px;
+  }
+  
+  .miembro-cargo {
+    font-size: 12px;
+  }
+  
+  .linkedin-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
