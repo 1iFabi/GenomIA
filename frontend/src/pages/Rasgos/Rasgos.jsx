@@ -30,11 +30,11 @@ const groupDescriptions = {
 
 const DISCLAIMER = 'La predisposición indica una tendencia genética, no es un diagnóstico ni una certeza. El estilo de vida y el ambiente también influyen.';
 const CATEGORY_COLORS = {
-  'Metabolismo': '#0f766e',
-  'Rendimiento Físico y Sensorial': '#145f9f',
-  'Cognición': '#7c3aed',
-  'Bienestar y Salud': '#b7791f',
-  'Apariencia Física': '#b5473a',
+  'Metabolismo': '#00a896',
+  'Rendimiento Físico y Sensorial': '#f15a24',
+  'Cognición': '#6c5ce7',
+  'Bienestar y Salud': '#e9b949',
+  'Apariencia Física': '#e8488a',
 };
 const CATEGORY_ORDER = [
   'Metabolismo',
@@ -43,6 +43,65 @@ const CATEGORY_ORDER = [
   'Bienestar y Salud',
   'Apariencia Física',
 ];
+const CATEGORY_PATTERN_IDS = {
+  'Metabolismo': 'rasgos-pattern-dots',
+  'Rendimiento Físico y Sensorial': 'rasgos-pattern-rings',
+  'Cognición': 'rasgos-pattern-cross',
+  'Bienestar y Salud': 'rasgos-pattern-diagonal',
+  'Apariencia Física': 'rasgos-pattern-diamond',
+};
+
+function DotsPattern({ id, color }) {
+  return (
+    <pattern id={id} width="16" height="16" patternUnits="userSpaceOnUse">
+      <rect width="16" height="16" fill={color} />
+      <circle cx="4" cy="4" r="1.8" fill="#ffffff" fillOpacity="0.25" />
+      <circle cx="12" cy="12" r="1.8" fill="#ffffff" fillOpacity="0.25" />
+    </pattern>
+  );
+}
+DotsPattern.displayName = 'DotsPattern';
+
+function RingsPattern({ id, color }) {
+  return (
+    <pattern id={id} width="18" height="18" patternUnits="userSpaceOnUse">
+      <rect width="18" height="18" fill={color} />
+      <circle cx="9" cy="9" r="4" fill="none" stroke="#ffffff" strokeOpacity="0.27" strokeWidth="1.5" />
+      <circle cx="0" cy="0" r="4" fill="none" stroke="#ffffff" strokeOpacity="0.2" strokeWidth="1.5" />
+    </pattern>
+  );
+}
+RingsPattern.displayName = 'RingsPattern';
+
+function CrossPattern({ id, color }) {
+  return (
+    <pattern id={id} width="16" height="16" patternUnits="userSpaceOnUse">
+      <rect width="16" height="16" fill={color} />
+      <path d="M8 2v12M2 8h12" fill="none" stroke="#ffffff" strokeOpacity="0.24" strokeWidth="1.5" />
+    </pattern>
+  );
+}
+CrossPattern.displayName = 'CrossPattern';
+
+function DiagonalPattern({ id, color }) {
+  return (
+    <pattern id={id} width="14" height="14" patternUnits="userSpaceOnUse">
+      <rect width="14" height="14" fill={color} />
+      <path d="M-3 3 3-3M0 14 14 0M11 17 17 11" fill="none" stroke="#ffffff" strokeOpacity="0.2" strokeWidth="2" />
+    </pattern>
+  );
+}
+DiagonalPattern.displayName = 'DiagonalPattern';
+
+function DiamondPattern({ id, color }) {
+  return (
+    <pattern id={id} width="18" height="18" patternUnits="userSpaceOnUse">
+      <rect width="18" height="18" fill={color} />
+      <path d="m9 3 6 6-6 6-6-6 6-6Z" fill="none" stroke="#ffffff" strokeOpacity="0.22" strokeWidth="1.5" />
+    </pattern>
+  );
+}
+DiamondPattern.displayName = 'DiamondPattern';
 
 /* ------------------------------------------------------------------ */
 /* Level system (no numeric percentages)                               */
@@ -118,6 +177,7 @@ function Overview({ groupedData, onOpenCategory }) {
     label: group.name,
     value: group.traits.length,
     color: CATEGORY_COLORS[group.name],
+    fill: `url(#${CATEGORY_PATTERN_IDS[group.name]})`,
   }));
   const chartTotal = chartData.reduce((total, item) => total + item.value, 0);
 
@@ -159,6 +219,11 @@ function Overview({ groupedData, onOpenCategory }) {
               hoverOffset={8}
               className="rasgos-overview__pie"
             >
+              <DotsPattern id={CATEGORY_PATTERN_IDS.Metabolismo} color={CATEGORY_COLORS.Metabolismo} />
+              <RingsPattern id={CATEGORY_PATTERN_IDS['Rendimiento Físico y Sensorial']} color={CATEGORY_COLORS['Rendimiento Físico y Sensorial']} />
+              <CrossPattern id={CATEGORY_PATTERN_IDS.Cognición} color={CATEGORY_COLORS.Cognición} />
+              <DiagonalPattern id={CATEGORY_PATTERN_IDS['Bienestar y Salud']} color={CATEGORY_COLORS['Bienestar y Salud']} />
+              <DiamondPattern id={CATEGORY_PATTERN_IDS['Apariencia Física']} color={CATEGORY_COLORS['Apariencia Física']} />
               {chartData.map((item, index) => (
                 <PieSlice
                   key={item.label}
@@ -231,13 +296,6 @@ function CategoryDetail({ group, onBack, onOpenTrait }) {
                     <span className="rasgos-cat-header__count">{group.traits.length} rasgos</span>
         </div>
       </header>
-
-      <details className="rasgos-glossary">
-        <summary>Consultar glosario</summary>
-        <div className="rasgos-glossary__content">
-          <GlossaryCarousel terms={glossaryData} />
-        </div>
-      </details>
 
       <section className="rasgos-category-guide" aria-label="Guía de lectura">
         <div className="rasgos-category-guide__intro">
@@ -328,6 +386,13 @@ function TraitDetail({ trait, group, onBackToCategory, onBackToOverview }) {
               </span>
             </div>
           </header>
+
+        <details className="rasgos-glossary">
+          <summary>Consultar glosario</summary>
+          <div className="rasgos-glossary__content">
+            <GlossaryCarousel terms={glossaryData} />
+          </div>
+        </details>
 
         <div className="rasgos-trait-detail__intro">
           <span className="rasgos-trait-detail__section-label">Qué significa</span>

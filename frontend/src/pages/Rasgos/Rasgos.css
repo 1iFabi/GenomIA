@@ -1616,3 +1616,21 @@ button.rasgos-breadcrumb__crumb:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Trait detail glossary */
+.rasgos-trait-detail > .rasgos-glossary {
+  margin-left: 1.75rem;
+  margin-right: 1.75rem;
+}
+
+.rasgos-trait-detail > .rasgos-glossary .rasgos-glossary__content {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+@media (max-width: 768px) {
+  .rasgos-trait-detail > .rasgos-glossary {
+    margin-left: 1.25rem;
+    margin-right: 1.25rem;
+  }
+}
