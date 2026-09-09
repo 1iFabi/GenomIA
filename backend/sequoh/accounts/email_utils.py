@@ -10,6 +10,7 @@ Incluye:
 """
 
 import base64
+from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
@@ -100,13 +101,15 @@ def email_button(url: str, label: str, *, kind: str = "primary") -> str:
         # ojo: :hover no siempre aplica en clientes de correo, lo dejamos informativo
     else:
         bg = c["primary"]
+    safe_url = escape(url or "", quote=True)
+    safe_label = escape(label or "")
     return (
-        f'<a href="{url}" '
+        f'<a href="{safe_url}" '
         f'style="background:{bg}; color:#FFFFFF; text-decoration:none; '
         f'display:inline-block; line-height:1; font-weight:700; '
         f'padding:12px 22px; border-radius:{BRAND["radius"]}px; '
         f'box-shadow: {BRAND["shadow"]};">'
-        f'{label}</a>'
+        f'{safe_label}</a>'
     )
 
 
@@ -123,12 +126,13 @@ def build_branded_html(inner_html: str,
     """
     c = BRAND["colors"]
     _default_logo = _asset_url('cNormal.png')
-    _logo_src = logo_src or 'cid:logo_cid'
-    _pre = (preheader or "").replace('"', "'")
+    _logo_src = escape(logo_src or 'cid:logo_cid', quote=True)
+    _pre = escape(preheader or "")
+    _safe_title = escape(title_text or "")
 
     title_html = (
         f'<h2 style="color:{c["ink"]}; margin:0 0 16px 0; '
-        f'font-size:24px; font-weight:800; line-height:1.25;">{title_text}</h2>'
+        f'font-size:24px; font-weight:800; line-height:1.25;">{_safe_title}</h2>'
         if title_text else ""
     )
 
@@ -138,7 +142,7 @@ def build_branded_html(inner_html: str,
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>{(title_text or BRAND["name"])}</title>
+    <title>{(_safe_title or escape(BRAND["name"]))}</title>
     <!-- Preheader: mostrado en la bandeja, oculto en el cuerpo -->
     <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;
       height:0;width:0;overflow:hidden;mso-hide:all;">
@@ -403,6 +407,7 @@ def send_verification_email(user_email: str, user_name: str, verification_url: s
     """
     try:
         subject = 'Verifica tu correo'
+        safe_user_name = escape(user_name or '')
 
         # Preparar logo inline (CID) si hay archivo disponible
         inline_images = {}
@@ -416,7 +421,7 @@ def send_verification_email(user_email: str, user_name: str, verification_url: s
 
         btn_html = email_button(verification_url, "Verificar mi cuenta", kind="primary")
         inner = f"""
-          <p>Hola {user_name},</p>
+          <p>Hola {safe_user_name},</p>
           <p>Gracias por registrarte en {BRAND["name"]}. Para activar tu cuenta, haz clic en el botón:</p>
           <div style="text-align:center; margin: 22px 0;">
             {btn_html}
@@ -485,9 +490,10 @@ def send_welcome_email(user) -> bool:
         else:
             logo_src = _asset_url('cNormal.png')
 
+        safe_first_name = escape(user.first_name or '')
         btn_html = email_button(login_url, "Acceder a mi cuenta", kind="primary")
         inner = f"""
-          <p>Hola {user.first_name},</p>
+          <p>Hola {safe_first_name},</p>
           <p>¡Bienvenido a GenomIA! Tu registro ha sido exitoso y tu cuenta ha sido verificada.</p>
           
           <div style="background:#F0F9FF; border-left:4px solid #0EA5E9; padding:20px; border-radius:12px; margin:24px 0;">
@@ -539,6 +545,7 @@ def send_welcome_email(user) -> bool:
 def send_password_reset_email(user_email: str, user_name: str, reset_url: str) -> bool:
     try:
         subject = 'Restablece tu contraseña'
+        safe_user_name = escape(user_name or '')
         inline_images = {}
         logo_bytes = load_logo_bytes()
         logo_src = None
@@ -553,7 +560,7 @@ def send_password_reset_email(user_email: str, user_name: str, reset_url: str) -
 
         btn_html = email_button(reset_url, "Restablecer contraseña", kind="neutral")
         inner = f"""
-          <p>Hola {user_name or ''},</p>
+          <p>Hola {safe_user_name},</p>
           <p>Recibimos una solicitud para restablecer tu contraseña. Continúa aquí:</p>
           <div style="text-align:center; margin: 22px 0;">
             {btn_html}
@@ -598,6 +605,7 @@ def send_results_ready_email(user_email: str, user_name: str) -> bool:
     """
     try:
         subject = '¡Tus resultados están listos!'
+        safe_user_name = escape(user_name or '')
         dashboard_url = getattr(
             settings,
             'FRONTEND_DASHBOARD_URL',
@@ -615,7 +623,7 @@ def send_results_ready_email(user_email: str, user_name: str) -> bool:
 
         btn_html = email_button(dashboard_url, "Ver mis resultados", kind="primary")
         inner = f"""
-          <p>Hola {user_name},</p>
+          <p>Hola {safe_user_name},</p>
           <p>¡Tenemos excelentes noticias! Tu análisis genético ha sido completado y tus resultados ya están disponibles.</p>
           <p>Ahora puedes explorar:</p>
           <ul style="color:#374151; line-height:1.8; margin:16px 0;">
@@ -676,6 +684,9 @@ def send_contact_form_email(nombre: str, email: str, mensaje: str) -> bool:
     try:
         contact_email = getattr(settings, 'CONTACT_EMAIL', 'seqgenomia@gmail.com')
         subject = f'Nuevo mensaje de contacto de {nombre}'
+        safe_nombre = escape(nombre or '')
+        safe_email = escape(email or '', quote=True)
+        safe_mensaje = escape(mensaje or '')
 
         inline_images = {}
         logo_bytes = load_logo_bytes()
@@ -691,21 +702,21 @@ def send_contact_form_email(nombre: str, email: str, mensaje: str) -> bool:
             inner_html=f"""
               <div style="background:#F3F4F6;border-left:4px solid {BRAND_PRIMARY};padding:16px;border-radius:8px;margin-bottom:20px;">
                 <p style="margin:0 0 8px 0;color:#6B7280;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase">Nuevo Mensaje de Contacto</p>
-                <h2 style="margin:0;color:{BRAND_DARK};font-size:18px">De: {nombre}</h2>
+                <h2 style="margin:0;color:{BRAND_DARK};font-size:18px">De: {safe_nombre}</h2>
               </div>
 
               <div style="display:inline-block;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;margin-bottom:16px;">
                 <span style="color:#6B7280;font-size:12px;font-weight:700;letter-spacing:0.5px">Email:</span>
-                <a href="mailto:{email}" style="color:{BRAND_PRIMARY};font-weight:700;margin-left:8px">{email}</a>
+                <a href="mailto:{safe_email}" style="color:{BRAND_PRIMARY};font-weight:700;margin-left:8px">{safe_email}</a>
               </div>
 
               <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:18px 16px;">
                 <p style="margin:0 0 10px 0;color:#6B7280;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase">Mensaje</p>
-                <div style="color:#111827;font-size:15px;line-height:1.7;white-space:pre-wrap">{mensaje}</div>
+                <div style="color:#111827;font-size:15px;line-height:1.7;white-space:pre-wrap">{safe_mensaje}</div>
               </div>
 
               <p class="muted" style="color:#6B7280;font-size:12px;line-height:1.6;margin-top:18px">
-                Puedes responder directamente a <a href="mailto:{email}" style="color:{BRAND_PRIMARY};font-weight:700">{email}</a>.
+                Puedes responder directamente a <a href="mailto:{safe_email}" style="color:{BRAND_PRIMARY};font-weight:700">{safe_email}</a>.
               </p>
             """,
         )

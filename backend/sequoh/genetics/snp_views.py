@@ -7,13 +7,14 @@ from rest_framework.status import HTTP_200_OK, HTTP_401_UNAUTHORIZED, HTTP_403_F
 from rest_framework.views import APIView
 
 from accounts.authentication import JWTAuthentication
+from accounts.csrf import CSRFDoubleSubmitMixin
 from .models import SNP
 from accounts.roles import is_admin_or_analyst
 
 logger = logging.getLogger(__name__)
 
 
-class VariantesAPIView(APIView):
+class VariantesAPIView(CSRFDoubleSubmitMixin, APIView):
     """
     Vista API para obtener/crear variantes SNP de la base de datos (referencia).
 

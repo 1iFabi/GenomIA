@@ -1,17 +1,16 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { HelpCircle } from 'lucide-react';
 import { getImpactLevel, getImpactColor } from '../../constants/geneticRisk';
 import './SunburstChart.css';
 
 const SunburstChart = ({ data = [] }) => {
   const [hoveredSegment, setHoveredSegment] = useState(null);
-  const [activeTooltipContent, setActiveTooltipContent] = useState(null);
+  const [activeTooltipItem, setActiveTooltipItem] = useState(null);
   const [activeTooltipPosition, setActiveTooltipPosition] = useState({ x: 0, y: 0 });
   const [tooltipStyle, setTooltipStyle] = useState({});
   const tooltipRef = useRef(null);
 
   useEffect(() => {
-    if (activeTooltipContent && tooltipRef.current) {
+    if (activeTooltipItem && tooltipRef.current) {
       const tooltipRect = tooltipRef.current.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
@@ -36,7 +35,7 @@ const SunburstChart = ({ data = [] }) => {
     } else {
       setTooltipStyle({ visibility: 'hidden' });
     }
-  }, [activeTooltipContent, activeTooltipPosition]);
+  }, [activeTooltipItem, activeTooltipPosition]);
   
   const sistemasConFarmacos = useMemo(() => data.filter(item => item.drugs && item.drugs.length > 0), [data]);
   const cantidadSistemas = sistemasConFarmacos.length;
@@ -56,15 +55,6 @@ const SunburstChart = ({ data = [] }) => {
       };
     });
   }, [sistemasConFarmacos, cantidadSistemas]);
-
-  const generateSegmentTooltipContent = (item) => {
-    const { name, impactCounts } = item;
-    let content = `<div style="margin-bottom:4px"><strong>${name}</strong></div>`;
-    if (impactCounts.alto > 0) content += `<div style="color:#ef4444">● ${impactCounts.alto} de Impacto Alto</div>`;
-    if (impactCounts.medio > 0) content += `<div style="color:#f59e0b">● ${impactCounts.medio} de Impacto Medio</div>`;
-    if (impactCounts.bajo > 0) content += `<div style="color:#10b981">● ${impactCounts.bajo} de Impacto Bajo</div>`;
-    return content;
-  };
 
   const getSegmentPath = (startAngle, endAngle, innerRadius, outerRadius) => {
     const startRad = (startAngle - 90) * Math.PI / 180;
@@ -103,11 +93,11 @@ const SunburstChart = ({ data = [] }) => {
                   className={`sunburst-segment ${hoveredSegment !== null && !isHovered ? 'dimmed' : ''}`}
                   onMouseEnter={(e) => {
                     setHoveredSegment(index);
-                    setActiveTooltipContent(generateSegmentTooltipContent(item));
+                    setActiveTooltipItem(item);
                     setActiveTooltipPosition({ x: e.clientX, y: e.clientY });
                   }}
                   onMouseMove={(e) => setActiveTooltipPosition({ x: e.clientX, y: e.clientY })}
-                  onMouseLeave={() => { setHoveredSegment(null); setActiveTooltipContent(null); }}
+                  onMouseLeave={() => { setHoveredSegment(null); setActiveTooltipItem(null); }}
                   style={{ fillOpacity: isHovered ? 1 : 0.8, transition: 'all 0.3s ease' }}
                 />
               );
@@ -155,8 +145,21 @@ const SunburstChart = ({ data = [] }) => {
           </div>
         </div>
 
-        {activeTooltipContent && (
-          <div ref={tooltipRef} className="sunburst-tooltip-new" style={tooltipStyle} dangerouslySetInnerHTML={{ __html: activeTooltipContent }} />
+        {activeTooltipItem && (
+          <div ref={tooltipRef} className="sunburst-tooltip-new" style={tooltipStyle}>
+            <div style={{ marginBottom: '4px' }}>
+              <strong>{activeTooltipItem.name}</strong>
+            </div>
+            {activeTooltipItem.impactCounts.alto > 0 && (
+              <div style={{ color: '#ef4444' }}>● {activeTooltipItem.impactCounts.alto} de Impacto Alto</div>
+            )}
+            {activeTooltipItem.impactCounts.medio > 0 && (
+              <div style={{ color: '#f59e0b' }}>● {activeTooltipItem.impactCounts.medio} de Impacto Medio</div>
+            )}
+            {activeTooltipItem.impactCounts.bajo > 0 && (
+              <div style={{ color: '#10b981' }}>● {activeTooltipItem.impactCounts.bajo} de Impacto Bajo</div>
+            )}
+          </div>
         )}
     </div>
   );

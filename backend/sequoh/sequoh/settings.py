@@ -335,7 +335,7 @@ CORS_ALLOW_HEADERS = [
 # Cookies de sesión/CSRF. En producción con dominios distintos (Vercel/Render)
 # puede requerirse SameSite=None + Secure=True para que el navegador acepte cookies cross-site.
 SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 
 LOGIN_URL = '/login'
 LOGIN_REDIRECT_URL = '/dashboard'

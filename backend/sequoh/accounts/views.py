@@ -20,6 +20,7 @@ from .authentication import JWTAuthentication
 from profiles.models import Profile, ServiceStatus
 from genetics.models import SNP
 from .models import RevokedToken
+from .csrf import CSRFDoubleSubmitMixin
 from .roles import (
     ensure_default_groups,
     is_admin,
@@ -33,36 +34,14 @@ from .roles import (
     revoke_reception_role,
 )
 import json
-import secrets
-
-class CSRFDoubleSubmitMixin:
-    """Valida el patrón double-submit de Django (cookie `csrftoken` == header `X-CSRFToken`).
-
-    DRF's `APIView.as_view()` marca la vista como csrf_exempt frente a la middleware
-    de Django, así que la protección CSRF se evalúa aquí para métodos mutables.
-    """
-    SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS', 'TRACE')
-
-    def initial(self, request, *args, **kwargs):
-        # `initial` corre dentro del try/except de DRF.dispatch, así que un
-        # PermissionDenied aquí se traduce en 403 (no en un error sin manejar).
-        if request.method not in self.SAFE_METHODS:
-            cookie = request.COOKIES.get('csrftoken')
-            header = request.headers.get('X-CSRFToken')
-            if not cookie or not header or not secrets.compare_digest(cookie, header):
-                from rest_framework.exceptions import PermissionDenied
-                raise PermissionDenied("CSRF check failed")
-        return super().initial(request, *args, **kwargs)
-
-
 import re
 import logging
+from html import escape
 
 logger = logging.getLogger(__name__)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class UserServiceStatusAPIView(APIView):
+class UserServiceStatusAPIView(CSRFDoubleSubmitMixin, APIView):
     """Permite consultar tu estado y a admin/staff actualizar el estado de otro usuario."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -399,8 +378,7 @@ class DeleteAccountAPIView(CSRFDoubleSubmitMixin, APIView):
         )
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class LogoutAPIView(APIView):
+class LogoutAPIView(CSRFDoubleSubmitMixin, APIView):
     """Logout con revocación real: marca el jti del token en la blacklist y limpia la cookie."""
     authentication_classes = []
     permission_classes = []
@@ -501,12 +479,15 @@ class ContactAPIView(APIView):
             f"Mensaje:\n{mensaje}\n"
         )
 
+        safe_nombre = escape(nombre)
+        safe_email = escape(email, quote=True)
+        safe_mensaje = escape(mensaje)
         inner_html = f"""
-          <p><strong>Nombre:</strong> {nombre}</p>
-          <p><strong>Email:</strong> {email}</p>
+          <p><strong>Nombre:</strong> {safe_nombre}</p>
+          <p><strong>Email:</strong> {safe_email}</p>
           <div style=\"margin-top:16px; padding:12px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px;\">
             <div style=\"font-weight:600; color:#374151; margin-bottom:8px;\">Mensaje</div>
-            <div style=\"white-space:pre-wrap; color:#111827;\">{mensaje}</div>
+            <div style=\"white-space:pre-wrap; color:#111827;\">{safe_mensaje}</div>
           </div>
         """
         html_body = build_branded_html(inner_html=inner_html, title_text="Nuevo mensaje de contacto")
@@ -771,7 +752,7 @@ class PasswordResetConfirmAPIView(APIView):
             return Response({"error": "Error interno del servidor"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class ManageAnalystRoleAPIView(APIView):
+class ManageAnalystRoleAPIView(CSRFDoubleSubmitMixin, APIView):
     """
     Permite a un ADMIN otorgar o revocar roles privilegiados (ANALISTA o RECEPCION).
     """

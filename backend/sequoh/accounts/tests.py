@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -77,7 +78,13 @@ class AuthHttpOnlyCookieTests(TestCase):
         jti = decode_jwt(token)['jti']
 
         self.client.cookies[self.cookie_name] = token
-        logout = self.client.post("/api/auth/logout/")
+        self.client.get("/api/auth/csrf/")
+        csrf_cookie = self.client.cookies.get('csrftoken')
+        self.assertIsNotNone(csrf_cookie)
+        logout = self.client.post(
+            "/api/auth/logout/",
+            HTTP_X_CSRFTOKEN=csrf_cookie.value,
+        )
         self.assertEqual(logout.status_code, 200)
         self.assertTrue(RevokedToken.objects.filter(jti=jti).exists(), "el jti debe quedar en la blacklist")
 
@@ -130,3 +137,85 @@ class AuthHttpOnlyCookieTests(TestCase):
             HTTP_X_CSRFTOKEN=csrf_cookie.value,
         )
         self.assertEqual(ok.status_code, 200)
+
+    def test_protected_mutations_require_csrf(self):
+        admin = User.objects.create_user(
+            username="admin@example.com",
+            email="admin@example.com",
+            password="AdminSecret123!",
+            is_staff=True,
+        )
+        self.client.cookies[self.cookie_name] = encode_jwt({
+            "sub": str(admin.id),
+            "email": admin.email,
+        })
+
+        mutations = (
+            ("POST", "/api/auth/service/status/", {"userId": self.user.id, "status": "PENDING"}),
+            ("POST", "/api/auth/logout/", {}),
+            ("POST", "/api/admin/analysts/", {"userId": self.user.id, "grant": True}),
+            ("POST", "/api/genetics/variantes/", {}),
+            ("POST", "/api/ingest/upload-genetic-file/", {}),
+            ("POST", "/api/ingest/delete-genetic-file/", {}),
+            ("POST", "/api/reception/arrival/", {}),
+            ("POST", "/api/reception/sample-code/", {}),
+            ("POST", "/api/reception/sample-status/", {}),
+            ("POST", "/api/auth/me/change-password/", {}),
+            ("DELETE", "/api/auth/me/delete-account/", {}),
+        )
+
+        for method, path, payload in mutations:
+            with self.subTest(path=path):
+                if method == "DELETE":
+                    response = self.client.delete(
+                        path,
+                        data=json.dumps(payload),
+                        content_type="application/json",
+                    )
+                else:
+                    response = self.client.post(
+                        path,
+                        data=json.dumps(payload),
+                        content_type="application/json",
+                    )
+                self.assertEqual(response.status_code, 403)
+
+    def test_csrf_rejects_mismatched_cookie_and_header(self):
+        admin = User.objects.create_user(
+            username="admin@example.com",
+            email="admin@example.com",
+            password="AdminSecret123!",
+            is_staff=True,
+        )
+        self.client.cookies[self.cookie_name] = encode_jwt({
+            "sub": str(admin.id),
+            "email": admin.email,
+        })
+        self.client.cookies["csrftoken"] = "expected-token"
+
+        response = self.client.post(
+            "/api/auth/service/status/",
+            data=json.dumps({"userId": self.user.id, "status": "PENDING"}),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN="different-token",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    @patch("accounts.views.send_email", return_value=True)
+    def test_contact_email_escapes_untrusted_html(self, send_email):
+        response = self.client.post(
+            "/api/contact/",
+            data=json.dumps({
+                "nombre": "<script>alert(1)</script>",
+                "email": "visitor@example.com",
+                "mensaje": "</div><img src=x onerror=alert(1)>",
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        html_body = send_email.call_args.kwargs["html_body"]
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html_body)
+        self.assertIn("&lt;/div&gt;&lt;img src=x onerror=alert(1)&gt;", html_body)
+        self.assertNotIn("<script>alert(1)</script>", html_body)

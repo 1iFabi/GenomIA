@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest, API_ENDPOINTS, clearToken } from '../../config/api';
 import AdminSidebar from '../../components/AdminSidebar/AdminSidebar';
@@ -78,29 +78,50 @@ const PostloginReception = ({ user }) => {
   const handlePrint = (userPayload = selectedUser) => {
     if (!userPayload?.sample_code) return;
     const win = window.open('', 'PRINT', 'height=480,width=320');
-    const name = `${userPayload.first_name || ''} ${userPayload.last_name || ''}`.trim();
-    win.document.write(`
-      <html>
-        <head>
-          <title>Etiqueta SampleCode</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 16px; }
-            .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; text-align: center; }
-            .code { font-size: 22px; font-weight: 800; letter-spacing: 1px; margin: 8px 0; }
-            .meta { font-size: 13px; color: #4b5563; }
-          </style>
-        </head>
-        <body onload="window.print(); window.close();">
-          <div class="card">
-            <div>SampleCode</div>
-            <div class="code">${userPayload.sample_code}</div>
-            <div class="meta">${name || 'Usuario'}</div>
-            <div class="meta">${userPayload.rut || ''}</div>
-          </div>
-        </body>
-      </html>
-    `);
-    win.document.close();
+    if (!win) return;
+
+    const printDocument = win.document;
+    const name = [userPayload.first_name || '', userPayload.last_name || '']
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    const style = printDocument.createElement('style');
+    style.textContent = `
+      body { font-family: Arial, sans-serif; padding: 16px; }
+      .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; text-align: center; }
+      .code { font-size: 22px; font-weight: 800; letter-spacing: 1px; margin: 8px 0; }
+      .meta { font-size: 13px; color: #4b5563; }
+    `;
+    printDocument.head.appendChild(style);
+    printDocument.title = 'Etiqueta SampleCode';
+
+    const createTextElement = (tagName, className, text) => {
+      const element = printDocument.createElement(tagName);
+      if (className) element.className = className;
+      element.textContent = text;
+      return element;
+    };
+
+    const card = printDocument.createElement('div');
+    card.className = 'card';
+    card.append(
+      createTextElement('div', '', 'SampleCode'),
+      createTextElement('div', 'code', userPayload.sample_code),
+      createTextElement('div', 'meta', name || 'Usuario'),
+      createTextElement('div', 'meta', userPayload.rut || ''),
+    );
+    printDocument.body.appendChild(card);
+
+    const printAndClose = () => {
+      win.print();
+      win.close();
+    };
+    if (printDocument.readyState === 'complete') {
+      setTimeout(printAndClose, 0);
+    } else {
+      win.addEventListener('load', printAndClose, { once: true });
+    }
+    printDocument.close();
   };
 
   const checklistComplete = Object.values(checklist).every(Boolean);

@@ -3,10 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth.models import User
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from django.db.models import Case, When, IntegerField
 from accounts.authentication import JWTAuthentication
+from accounts.csrf import CSRFDoubleSubmitMixin
 from .models import SNP, UserSNP
 from profiles.models import Profile, ServiceStatus
 from accounts.email_utils import send_results_ready_email
@@ -17,8 +16,7 @@ import json
 logger = logging.getLogger(__name__)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class UploadGeneticFileAPIView(APIView):
+class UploadGeneticFileAPIView(CSRFDoubleSubmitMixin, APIView):
     """Vista para procesar archivos genéticos y crear asociaciones user-snp"""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -307,8 +305,7 @@ class UploadGeneticFileAPIView(APIView):
 
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class DeleteGeneticFileAPIView(APIView):
+class DeleteGeneticFileAPIView(CSRFDoubleSubmitMixin, APIView):
     """Vista para eliminar reportes genéticos de un usuario"""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -373,7 +370,6 @@ class DeleteGeneticFileAPIView(APIView):
             )
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class GetUserReportStatusAPIView(APIView):
     """Vista para obtener el estado de reportes de un usuario"""
     authentication_classes = [JWTAuthentication]

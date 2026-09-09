@@ -1,5 +1,6 @@
 import json
 import uuid
+from html import escape
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -7,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from accounts.authentication import JWTAuthentication
+from accounts.csrf import CSRFDoubleSubmitMixin
 from profiles.models import Profile, SampleStatus, ServiceStatus
 from accounts.roles import is_admin, is_reception
 from profiles.utils import ensure_sample_code
@@ -71,7 +73,7 @@ class ReceptionSearchAPIView(APIView):
         return Response({"results": results})
 
 
-class ReceptionArrivalAPIView(APIView):
+class ReceptionArrivalAPIView(CSRFDoubleSubmitMixin, APIView):
     """Marca llegada presencial del usuario."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -105,7 +107,7 @@ class ReceptionArrivalAPIView(APIView):
         return Response({"user": serialize_reception_profile(profile)})
 
 
-class ReceptionSampleCodeAPIView(APIView):
+class ReceptionSampleCodeAPIView(CSRFDoubleSubmitMixin, APIView):
     """Devuelve/genera SampleCode y permite reenviarlo al correo."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -138,6 +140,7 @@ class ReceptionSampleCodeAPIView(APIView):
 
         if resend:
             try:
+                safe_first_name = escape(profile.user.first_name or '')
                 subject = "Tu SampleCode para etiquetar la muestra"
                 text_body = (
                     f"Hola {profile.user.first_name},\n\n"
@@ -147,7 +150,7 @@ class ReceptionSampleCodeAPIView(APIView):
                 )
                 html_body = build_branded_html(
                     f"""
-                    <p>Hola {profile.user.first_name},</p>
+                    <p>Hola {safe_first_name},</p>
                     <p>Este es tu <strong>SampleCode</strong> para la toma de muestra:</p>
                     <p style="font-size: 20px; font-weight: 700; letter-spacing: 0.8px;">{code}</p>
                     <p>Se usa únicamente para etiquetar la muestra en recepción. No contiene resultados genéticos.</p>
@@ -168,7 +171,7 @@ class ReceptionSampleCodeAPIView(APIView):
         return Response({"user": payload})
 
 
-class ReceptionSampleStatusAPIView(APIView):
+class ReceptionSampleStatusAPIView(CSRFDoubleSubmitMixin, APIView):
     """Actualiza el estado de la muestra (ej. tomada/pediente de análisis)."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]

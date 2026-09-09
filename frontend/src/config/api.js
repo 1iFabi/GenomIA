@@ -6,6 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 export const API_ENDPOINTS = {
   // Origen (sin /api) para construir URLs absolutas en llamadas puntuales.
   BASE_URL: API_BASE.replace(/\/api\/?$/, ''),
+  CSRF: `${API_BASE}/auth/csrf/`,
   LOGIN: `${API_BASE}/auth/login/`,
   REGISTER: `${API_BASE}/auth/register/`,
   PASSWORD_RESET: `${API_BASE}/auth/password-reset/`,
@@ -47,8 +48,35 @@ export const clearToken = async () => {
 // El token vive en una cookie HttpOnly (ilegible por JS). No se usa localStorage.
 // Helper para el patrón CSRF double-submit.
 export const getCsrfToken = () => {
-  const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]*)/);
-  return m ? decodeURIComponent(m[1]) : '';
+  if (typeof document === 'undefined') return '';
+
+  const cookie = document.cookie
+    .split(';')
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith('csrftoken='));
+  if (!cookie) return '';
+
+  const rawValue = cookie.slice('csrftoken='.length);
+  try {
+    return decodeURIComponent(rawValue);
+  } catch {
+    // Un valor de cookie malformado no debe impedir las peticiones futuras.
+    return '';
+  }
+};
+
+const isUnsafeMethod = (method) => !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method);
+
+const ensureCsrfCookie = async () => {
+  try {
+    await fetch(API_ENDPOINTS.CSRF, {
+      method: 'GET',
+      credentials: 'include',
+    });
+  } catch {
+    // La petición principal conserva su manejo habitual de errores.
+  }
+  return getCsrfToken();
 };
 
 // Función helper para hacer peticiones a la API
@@ -61,9 +89,10 @@ export const apiRequest = async (endpoint, options = {}) => {
   if (headers['Content-Type'] === undefined && options.body && !(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
-  // CSRF double-submit: enviar X-CSRFToken en métodos mutables.
-  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && method !== 'TRACE') {
-    const csrf = getCsrfToken();
+  // CSRF double-submit: bootstrap y enviar X-CSRFToken en métodos mutables.
+  if (isUnsafeMethod(method)) {
+    let csrf = getCsrfToken();
+    if (!csrf) csrf = await ensureCsrfCookie();
     if (csrf) headers['X-CSRFToken'] = csrf;
   }
   // La autenticación viaja en cookie HttpOnly.
