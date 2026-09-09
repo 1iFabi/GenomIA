@@ -34,4 +34,45 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    // Keep the existing import paths working while the implementations live
+    // in refresh-safe sibling modules.
+    files: ['src/components/charts/chart-stat-flow.jsx'],
+    rules: {
+      'react-refresh/only-export-components': [
+        'error',
+        { allowExportNames: ['defaultChartStatFlowFormat'] },
+      ],
+    },
+  },
+  {
+    // Keep the existing chart imports working while constants and hooks are
+    // implemented in refresh-safe sibling modules.
+    files: ['src/components/charts/pie-context.jsx'],
+    rules: {
+      'react-refresh/only-export-components': [
+        'error',
+        {
+          allowExportNames: [
+            'pieCssVars',
+            'defaultPieColors',
+            'usePieStable',
+            'usePieHover',
+            'usePie',
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Keep existing consumers working while the hook implementation lives
+    // in a refresh-safe sibling module.
+    files: ['src/context/NalaContext.jsx'],
+    rules: {
+      'react-refresh/only-export-components': [
+        'error',
+        { allowExportNames: ['useNala'] },
+      ],
+    },
+  },
 ])
