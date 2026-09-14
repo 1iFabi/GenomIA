@@ -24,8 +24,8 @@ def validate_rut_format(value):
     - X son números (7-8 dígitos)
     - R puede ser un dígito (0-9) o la letra K
     """
-    if not value:
-        raise ValidationError('El RUT es obligatorio.')
+    if value is None or value == '':
+        return value
 
     # Formato: 7-8 dígitos, guión, y luego 0-9 o K
     pattern = r'^\d{7,8}-[0-9Kk]$'
@@ -42,7 +42,7 @@ class Profile(models.Model):
         max_length=12,
         unique=True,
         null=True,
-        blank=False,
+        blank=True,
         validators=[validate_rut_format],
         help_text='RUT en formato XXXXXXX-R (ejemplo: 12345678-9 o 1234567-K)',
         verbose_name='RUT'

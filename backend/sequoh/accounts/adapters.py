@@ -2,7 +2,12 @@ import logging
 
 from allauth.account.adapter import DefaultAccountAdapter
 from django.utils.translation import gettext_lazy as _
-from .email_utils import send_email
+from .email_utils import (
+    EmailDeliveryError,
+    build_branded_html,
+    send_email,
+    send_verification_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,42 +22,70 @@ class GmailAPIAccountAdapter(DefaultAccountAdapter):
     """
 
     def send_mail(self, template_prefix, email, context):
-        # Caso especial: confirmación de correo
-        try:
-            if template_prefix.endswith('account/email/email_confirmation') and 'activate_url' in context:
-                from .email_utils import send_verification_email
-                user_name = (getattr(getattr(context, 'get', lambda k, d=None: None)('user'), 'first_name', None)
-                             or getattr(context.get('user'), 'username', '') if isinstance(context, dict) else '')
-                # Fallback robusto si context no es dict
-                if not user_name and isinstance(context, dict):
-                    u = context.get('user')
-                    if u is not None:
-                        user_name = getattr(u, 'first_name', '') or getattr(u, 'username', '')
-                activate_url = context['activate_url'] if isinstance(context, dict) else ''
-                send_verification_email(email, user_name, activate_url)
-                return
-        except Exception as e:
-            # Si algo sale mal, caemos al flujo genérico
-            logger.warning("GmailAPIAccountAdapter.send_verification_email failed: %s", repr(e))
+        # Caso especial: confirmación de correo, incluido el flujo de registro.
+        is_verification_template = template_prefix.endswith(
+            (
+                'account/email/email_confirmation',
+                'account/email/email_confirmation_signup',
+            )
+        )
+        if is_verification_template and isinstance(context, dict) and 'activate_url' in context:
+            user = context.get('user')
+            user_name = (
+                getattr(user, 'first_name', '')
+                or getattr(user, 'username', '')
+            )
+            try:
+                sent = send_verification_email(email, user_name, context['activate_url'])
+            except Exception as exc:
+                logger.exception(
+                    "GmailAPIAccountAdapter verification delivery failed (domain=%s)",
+                    str(email).rsplit('@', 1)[-1],
+                )
+                raise EmailDeliveryError("Verification email delivery failed") from exc
+            if not sent:
+                logger.error(
+                    "GmailAPIAccountAdapter verification delivery returned false (domain=%s)",
+                    str(email).rsplit('@', 1)[-1],
+                )
+                raise EmailDeliveryError("Verification email delivery failed")
+            return
 
-        # Flujo genérico: render de allauth, luego envolvemos con branding
+        # Flujo genérico: render de allauth, luego envolvemos con branding.
         message = self.render_mail(template_prefix, email, context)
         subject = message.subject
         text_body = message.body or ""
 
-        # Busca versión HTML si existe y aplica el branding
+        # Busca versión HTML si existe y aplica el branding.
         html_body = None
         if hasattr(message, "alternatives") and message.alternatives:
             for content, content_type in message.alternatives:
                 if content_type == "text/html":
                     html_body = content
                     break
-        
-        from .email_utils import build_branded_html, send_email
+
         if html_body:
             html_body = build_branded_html(html_body, title_text=None)
         else:
             html_body = build_branded_html(f"<pre style=\"white-space:pre-wrap\">{text_body}</pre>")
 
-        send_email(to_email=email, subject=subject, html_body=html_body, text_body=text_body)
-        # No llamamos a message.send() para evitar SMTP
+        try:
+            sent = send_email(
+                to_email=email,
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+            )
+        except Exception as exc:
+            logger.exception(
+                "GmailAPIAccountAdapter generic delivery failed (domain=%s)",
+                str(email).rsplit('@', 1)[-1],
+            )
+            raise EmailDeliveryError("Email delivery failed") from exc
+        if not sent:
+            logger.error(
+                "GmailAPIAccountAdapter generic delivery returned false (domain=%s)",
+                str(email).rsplit('@', 1)[-1],
+            )
+            raise EmailDeliveryError("Email delivery failed")
+        # No llamamos a message.send() para evitar SMTP.

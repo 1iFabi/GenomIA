@@ -27,6 +27,28 @@ import tempfile
 
 logger = logging.getLogger(__name__)
 
+
+class EmailDeliveryError(RuntimeError):
+    """Raised when a requested email could not be handed to the provider."""
+
+
+
+def _recipient_domain(email: str) -> str:
+    """Return a low-sensitivity recipient context for operational logs."""
+    return str(email).rsplit('@', 1)[-1] or 'unknown'
+
+
+SAFE_DEFAULT_FROM_EMAIL = 'GenomIA <seqgenomia@gmail.com>'
+
+
+def _safe_sender(from_email: str | None = None) -> str:
+    """Return the configured sender, never an empty value."""
+    configured_sender = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+    candidate = from_email or configured_sender
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
+    return SAFE_DEFAULT_FROM_EMAIL
+
 # =========================
 #   Configuración Gmail
 # =========================
@@ -375,12 +397,13 @@ def send_email(to_email: str,
             msg = MIMEText(text_body or "", 'plain', 'utf-8')
 
         # Construir encabezados usando parseaddr/formataddr para evitar duplicados
-        default_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
-        raw_from = (from_email or default_from or '').strip()
+        raw_from = _safe_sender(from_email)
         name_in_default, email_in_default = parseaddr(raw_from)
+        if not email_in_default or '@' not in email_in_default:
+            raise ValueError('Configured sender is not a valid email address')
         # Si se pasó from_name, tiene prioridad para el nombre visible
         display_name = (from_name or name_in_default or '')
-        from_header = formataddr((display_name, email_in_default)) if email_in_default else raw_from
+        from_header = formataddr((display_name, email_in_default))
 
         msg['Subject'] = subject
         msg['From'] = from_header
@@ -394,7 +417,11 @@ def send_email(to_email: str,
         logger.debug("Email enviado (asunto=%s, id=%s)", subject, result.get('id'))
         return True
     except Exception as e:
-        logger.error(f"Error enviando email a {to_email}: {e}")
+        logger.error(
+            "Error enviando email (dominio=%s; error=%s)",
+            _recipient_domain(to_email),
+            type(e).__name__,
+        )
         return False
 
 
@@ -455,13 +482,20 @@ def send_verification_email(user_email: str, user_name: str, verification_url: s
             text_body=text_content,
             inline_images=inline_images or None,
             from_name="Genomia",
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'seqgenomia@gmail.com'),
+            from_email=_safe_sender(),
         )
         if ok:
-            logger.info(f"Email de verificación enviado a {user_email}")
+            logger.info(
+                "Email de verificación enviado (dominio=%s)",
+                _recipient_domain(user_email),
+            )
         return ok
     except Exception as e:
-        logger.error(f"Error enviando email de verificación a {user_email}: {str(e)}")
+        logger.error(
+            "Error enviando email de verificación (dominio=%s; error=%s)",
+            _recipient_domain(user_email),
+            type(e).__name__,
+        )
         return False
 
 
@@ -536,10 +570,17 @@ def send_welcome_email(user) -> bool:
             from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'seqgenomia@gmail.com'),
         )
         if ok:
-            logger.info(f"Email de bienvenida enviado a {user.email}")
+            logger.info(
+                "Email de bienvenida enviado (dominio=%s)",
+                _recipient_domain(user.email),
+            )
         return ok
     except Exception as e:
-        logger.error(f"Error enviando email de bienvenida a {user.email}: {str(e)}")
+        logger.error(
+            "Error enviando email de bienvenida (dominio=%s; error=%s)",
+            _recipient_domain(user.email),
+            type(e).__name__,
+        )
         return False
 
 def send_password_reset_email(user_email: str, user_name: str, reset_url: str) -> bool:
@@ -593,10 +634,17 @@ def send_password_reset_email(user_email: str, user_name: str, reset_url: str) -
             inline_images=inline_images or None
         )
         if ok:
-            logger.info(f"Email de reset enviado a {user_email}")
+            logger.info(
+                "Email de reset enviado (dominio=%s)",
+                _recipient_domain(user_email),
+            )
         return ok
     except Exception as e:
-        logger.error(f"Error enviando email de reset a {user_email}: {str(e)}")
+        logger.error(
+            "Error enviando email de reset (dominio=%s; error=%s)",
+            _recipient_domain(user_email),
+            type(e).__name__,
+        )
         return False
 
 def send_results_ready_email(user_email: str, user_name: str) -> bool:
@@ -668,10 +716,17 @@ def send_results_ready_email(user_email: str, user_name: str) -> bool:
             from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'seqgenomia@gmail.com'),
         )
         if ok:
-            logger.info(f"Email de resultados listos enviado a {user_email}")
+            logger.info(
+                "Email de resultados listos enviado (dominio=%s)",
+                _recipient_domain(user_email),
+            )
         return ok
     except Exception as e:
-        logger.error(f"Error enviando email de resultados listos a {user_email}: {str(e)}")
+        logger.error(
+            "Error enviando email de resultados listos (dominio=%s; error=%s)",
+            _recipient_domain(user_email),
+            type(e).__name__,
+        )
         return False
 
 

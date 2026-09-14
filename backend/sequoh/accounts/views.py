@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 from django.contrib.auth.tokens import default_token_generator
@@ -14,12 +14,20 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta, timezone as dt_timezone
 from allauth.account.models import EmailAddress
-from .email_utils import send_welcome_email, send_password_reset_email, send_email, build_branded_html
+from .email_utils import (
+    EmailDeliveryError,
+    send_welcome_email,
+    send_password_reset_email,
+    send_email,
+    build_branded_html,
+)
 from .jwt_utils import encode_jwt, decode_jwt
 from .authentication import JWTAuthentication
 from profiles.models import Profile, ServiceStatus
 from genetics.models import SNP
-from .models import RevokedToken
+from .models import RevokedToken, WelcomeStatus
+from .email_validation import is_valid_registration_name, validate_registration_email
+from .username_validation import normalize_registration_username
 from .csrf import CSRFDoubleSubmitMixin
 from .roles import (
     ensure_default_groups,
@@ -132,6 +140,8 @@ class CsrfCookieAPIView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class LoginAPIView(APIView):
+    authentication_classes = []
+    permission_classes = []
     throttle_scope = 'login'
 
     def post(self, request):
@@ -140,9 +150,19 @@ class LoginAPIView(APIView):
             data = json.loads(request.body)
             username = data.get('username')
             password = data.get('password')
+            identifier = username.strip() if isinstance(username, str) else username
+
+            # Resolve both public usernames and legacy email identifiers before
+            # authenticating so the backend receives the stored username.
+            resolved_user = None
+            if isinstance(identifier, str) and identifier:
+                resolved_user = User.objects.filter(username__iexact=identifier).first()
+                if not resolved_user:
+                    resolved_user = User.objects.filter(email__iexact=identifier).first()
+            auth_username = resolved_user.username if resolved_user else identifier
 
             # Autentica al usuario usando las credenciales
-            user = authenticate(request, username=username, password=password)
+            user = authenticate(request, username=auth_username, password=password)
 
             if user is not None:
                 # Verificar email confirmado con allauth
@@ -176,13 +196,7 @@ class LoginAPIView(APIView):
             else:
                 # Detectar caso de usuario pendiente de verificación (is_active=False)
                 try:
-                    possible_user = None
-                    if username:
-                        # Buscar por username (en tu registro, usas el correo como username)
-                        possible_user = User.objects.filter(username=username).first()
-                        if not possible_user:
-                            # Intentar por email en caso de que envíen username distinto
-                            possible_user = User.objects.filter(email=username).first()
+                    possible_user = resolved_user
                     if possible_user and getattr(settings, 'REQUIRE_EMAIL_VERIFICATION', False):
                         if not EmailAddress.objects.filter(user=possible_user, email=possible_user.email, verified=True).exists():
                             return Response({
@@ -239,6 +253,7 @@ class MeAPIView(APIView):
             user_type = "user"
         data = {
             "id": u.id,
+            "username": u.username,
             "email": u.email,
             "first_name": u.first_name,
             "last_name": u.last_name,
@@ -506,6 +521,37 @@ class ContactAPIView(APIView):
         return Response({"ok": True, "message": "Mensaje enviado correctamente."}, status=status.HTTP_200_OK)
 
 
+def _email_validation_response(result):
+    return Response(result.as_api_error(), status=status.HTTP_400_BAD_REQUEST)
+
+
+class RegistrationEmailValidationAPIView(APIView):
+    """Validate a registration email without exposing server-side blocklist details."""
+
+    authentication_classes = []
+    permission_classes = []
+    throttle_scope = 'register_email_validation'
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body or '{}')
+        except (TypeError, json.JSONDecodeError):
+            return Response({"error": "El correo no es válido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_email = (data.get('email') or data.get('correo')) if isinstance(data, dict) else None
+        validation = validate_registration_email(raw_email)
+        if not validation.valid:
+            return _email_validation_response(validation)
+
+        return Response(
+            {
+                "valid": True,
+                "normalized_email": validation.normalized_email,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterAPIView(APIView):
     throttle_scope = 'register'
@@ -513,18 +559,45 @@ class RegisterAPIView(APIView):
     def post(self, request):
         try:
             data = json.loads(request.body)
-            nombre = data.get('nombre', '').strip()
-            apellido = data.get('apellido', '').strip()
-            correo = data.get('correo', '').strip().lower()
-            telefono = data.get('telefono', '').strip()
-            rut = data.get('rut', '').strip().upper()  # Normalizar a mayúsculas para la K
+            if not isinstance(data, dict):
+                return Response({"error": "Formato de solicitud inválido"}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                normalized_username = normalize_registration_username(data.get('username'))
+            except ValueError as exc:
+                return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+            nombre = data.get('nombre') if isinstance(data.get('nombre'), str) else ''
+            apellido = data.get('apellido') if isinstance(data.get('apellido'), str) else ''
+            correo = data.get('correo') if isinstance(data.get('correo'), str) else ''
+            telefono = data.get('telefono') if isinstance(data.get('telefono'), str) else ''
+            rut = data.get('rut') if isinstance(data.get('rut'), str) else ''
             contraseña = data.get('contraseña', '')
             repetir_contraseña = data.get('repetirContraseña', '')
             terminos = data.get('terminos', False)
+
+            nombre = nombre.strip()
+            apellido = apellido.strip()
+            correo = correo.strip().lower()
+            telefono = telefono.strip()
+            rut = rut.strip().upper()  # Normalizar a mayúsculas para la K
             
             # Validaciones básicas
-            if not all([nombre, apellido, correo, telefono, rut, contraseña, repetir_contraseña]):
+            if not correo:
+                return Response({"error": "El correo no es válido."}, status=status.HTTP_400_BAD_REQUEST)
+            if (
+                not telefono
+                or not isinstance(contraseña, str)
+                or not contraseña
+                or not isinstance(repetir_contraseña, str)
+                or not repetir_contraseña
+            ):
                 return Response({"error": "Todos los campos son obligatorios"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if nombre and not is_valid_registration_name(nombre):
+                return Response({"error": "El nombre no es válido"}, status=status.HTTP_400_BAD_REQUEST)
+            if apellido and not is_valid_registration_name(apellido):
+                return Response({"error": "El apellido no es válido"}, status=status.HTTP_400_BAD_REQUEST)
             
             if not terminos:
                 return Response({"error": "Debes aceptar los términos y condiciones"}, status=status.HTTP_400_BAD_REQUEST)
@@ -542,64 +615,110 @@ class RegisterAPIView(APIView):
             if not telefono_norm:
                 return Response({"error": "El teléfono debe tener formato +569XXXXXXXX"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Validación de email
-            if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', correo):
-                return Response({"error": "El formato del correo electrónico no es válido"}, status=status.HTTP_400_BAD_REQUEST)
+            # Validate email syntax and MX records again before creating a user.
+            email_validation = validate_registration_email(correo)
+            if not email_validation.valid:
+                return _email_validation_response(email_validation)
+            correo = email_validation.normalized_email
+
+            require_email_verification = bool(getattr(settings, 'REQUIRE_EMAIL_VERIFICATION', False))
             
-            # Validación de RUT
+            # Validación de RUT legacy, only when supplied.
             rut_pattern = r'^\d{7,8}-[0-9K]$'
-            if not re.match(rut_pattern, rut):
+            if rut and not re.fullmatch(rut_pattern, rut):
                 return Response({"error": "El RUT debe tener el formato XXXXXXX-R (ejemplo: 12345678-9 o 1234567-K)"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Verificar si el RUT ya existe
+            # Verificar si el RUT ya existe, only when a legacy RUT was supplied.
             from profiles.models import Profile
-            if Profile.objects.filter(rut=rut).exists():
+            if rut and Profile.objects.filter(rut=rut).exists():
                 return Response({
                     "error": "Este RUT ya está registrado",
                     "rut_exists": True
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verificar si el usuario ya existe
-            if User.objects.filter(username=correo).exists() or User.objects.filter(email=correo).exists():
+
+            # Verificar identificadores existentes con comparación insensible a mayúsculas.
+            if User.objects.filter(username__iexact=normalized_username).exists():
+                return Response({
+                    "error": "Este nombre de usuario ya está registrado",
+                    "username_exists": True
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if User.objects.filter(email__iexact=correo).exists():
                 return Response({
                     "error": "Este correo ya está registrado",
                     "email_exists": True
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Crear el usuario
-            user = User.objects.create_user(
-                username=correo,  # Usamos el correo como username
-                email=correo,
-                password=contraseña,
-                first_name=nombre,
-                last_name=apellido,
-            )
-            
-            # Guardamos el teléfono y RUT en Profile
-            from profiles.models import Profile
-            profile, _ = Profile.objects.get_or_create(user=user)
-            profile.phone = telefono_norm
-            profile.rut = rut
-            # El estado por defecto queda en NO_PURCHASED
-            profile.save()
 
-            # Enviar confirmación de email via allauth (usa nuestro adapter Gmail API)
-            if getattr(settings, 'REQUIRE_EMAIL_VERIFICATION', False):
-                # Crea EmailAddress (si no existe) y envía email de confirmación
-                EmailAddress.objects.add_email(
-                    request,
-                    user,
-                    user.email,
-                    confirm=True,
-                    signup=True,
+            # Crear el usuario y su perfil como una sola operación.
+            try:
+                with transaction.atomic():
+                    user = User.objects.create_user(
+                        username=normalized_username,
+                        email=correo,
+                        password=contraseña,
+                        first_name=nombre,
+                        last_name=apellido,
+                    )
+                    Profile.objects.create(
+                        user=user,
+                        phone=telefono_norm,
+                        rut=rut or None,
+                    )
+                    if require_email_verification:
+                        # Keep the allauth confirmation record in the same transaction
+                        # as the user/profile so delivery failures roll everything back.
+                        email_address = EmailAddress.objects.add_email(
+                            request,
+                            user,
+                            correo,
+                            confirm=True,
+                            signup=True,
+                        )
+                        # The direct manager API does not mark a new address primary.
+                        if not email_address.primary:
+                            EmailAddress.objects.filter(user=user, primary=True).exclude(
+                                pk=email_address.pk
+                            ).update(primary=False)
+                            email_address.primary = True
+                            email_address.save(update_fields=['primary'])
+            except IntegrityError:
+                if User.objects.filter(username__iexact=normalized_username).exists():
+                    return Response({
+                        "error": "Este nombre de usuario ya está registrado",
+                        "username_exists": True
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                if User.objects.filter(email__iexact=correo).exists():
+                    return Response({
+                        "error": "Este correo ya está registrado",
+                        "email_exists": True
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                if rut and Profile.objects.filter(rut=rut).exists():
+                    return Response({
+                        "error": "Este RUT ya está registrado",
+                        "rut_exists": True
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "No se pudo completar el registro. Inténtalo nuevamente."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            else:
-                try:
-                    send_welcome_email(user)
-                except Exception as e:
-                    print(f"Error enviando email de bienvenida: {e}")
 
-            requires_verif = bool(getattr(settings, 'REQUIRE_EMAIL_VERIFICATION', False))
+
+            if not require_email_verification:
+                try:
+                    welcome_sent = bool(send_welcome_email(user))
+                except Exception as e:
+                    welcome_sent = False
+                    print(f"Error enviando email de bienvenida: {e}")
+                if welcome_sent:
+                    try:
+                        WelcomeStatus.objects.update_or_create(
+                            user=user,
+                            defaults={"welcome_sent": True, "sent_at": timezone.now()},
+                        )
+                    except Exception as e:
+                        logger.warning("RegisterAPIView.mark_welcome_sent failed: %s", repr(e))
+
+            requires_verif = require_email_verification
             mensaje = "Usuario registrado exitosamente"
             if requires_verif:
                 mensaje = "Usuario registrado exitosamente. Debes verificar tu cuenta desde tu correo para poder continuar."
@@ -608,16 +727,27 @@ class RegisterAPIView(APIView):
                 "mensaje": mensaje, 
                 "success": True,
                 "user_id": user.id,
+                "username": user.username,
                 "requires_verification": requires_verif
             }, status=status.HTTP_201_CREATED)
             
+        except EmailDeliveryError:
+            logger.exception("RegisterAPIView verification email delivery failed")
+            return Response(
+                {
+                    "error": "No pudimos enviar el correo de verificación. Inténtalo nuevamente.",
+                    "email_delivery_failed": True,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         except json.JSONDecodeError:
             return Response({"error": "Formato de solicitud inválido"}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError:
-            return Response({
-                "error": "Este correo ya está registrado",
-                "email_exists": True
-            }, status=status.HTTP_400_BAD_REQUEST)
+            # Do not attribute an unrelated race or storage failure to the email.
+            return Response(
+                {"error": "No se pudo completar el registro. Inténtalo nuevamente."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception as e:
             return Response({"error": "Error interno del servidor"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -674,7 +804,12 @@ class ResendVerificationAPIView(APIView):
                 signup=False,
             )
             return Response({"success": True})
+        except EmailDeliveryError:
+            logger.exception("ResendVerificationAPIView email delivery failed")
+            # Preserve anti-enumeration behavior for known users as well.
+            return Response({"success": True})
         except Exception:
+            logger.exception("ResendVerificationAPIView failed")
             # Por seguridad, responder éxito igualmente
             return Response({"success": True})
 

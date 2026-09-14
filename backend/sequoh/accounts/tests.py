@@ -23,12 +23,27 @@ class AuthHttpOnlyCookieTests(TestCase):
         )
         self.cookie_name = getattr(settings, 'AUTH_COOKIE_NAME', 'access_token')
 
-    def _login(self, remember=False):
+    def _login(self, username=None, password=None, remember=False):
         return self.client.post(
             "/api/auth/login/",
-            data=json.dumps({"username": self.username, "password": self.password, "remember": remember}),
+            data=json.dumps({
+                "username": self.username if username is None else username,
+                "password": self.password if password is None else password,
+                "remember": remember,
+            }),
             content_type="application/json",
         )
+
+    def test_login_replaces_expired_auth_cookie(self):
+        expired_token = encode_jwt({"sub": str(self.user.id), "email": self.username}, ttl_seconds=-1)
+        self.client.cookies[self.cookie_name] = expired_token
+
+        resp = self._login()
+
+        self.assertEqual(resp.status_code, 200)
+        replacement_cookie = resp.cookies.get(self.cookie_name)
+        self.assertIsNotNone(replacement_cookie)
+        self.assertNotEqual(replacement_cookie.value, expired_token)
 
     def test_login_sets_httponly_cookie_and_no_token_body(self):
         resp = self._login()
@@ -219,3 +234,47 @@ class AuthHttpOnlyCookieTests(TestCase):
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html_body)
         self.assertIn("&lt;/div&gt;&lt;img src=x onerror=alert(1)&gt;", html_body)
         self.assertNotIn("<script>alert(1)</script>", html_body)
+
+    def test_handle_based_user_can_login_by_email(self):
+        handle_user = User.objects.create_user(
+            username="ana_handle",
+            email="ana@example.com",
+            password="HandleSecret123!",
+            is_active=True,
+        )
+
+        response = self._login(username="ANA@EXAMPLE.COM", password="HandleSecret123!")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertIsNotNone(response.cookies.get(self.cookie_name))
+        self.assertEqual(handle_user.username, "ana_handle")
+
+    def test_handle_based_user_can_login_by_username_case_insensitively(self):
+        User.objects.create_user(
+            username="ana_handle",
+            email="ana@example.com",
+            password="HandleSecret123!",
+            is_active=True,
+        )
+
+        response = self._login(username=" ANA_HANDLE ", password="HandleSecret123!")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+
+    def test_me_includes_username(self):
+        User.objects.create_user(
+            username="ana_handle",
+            email="ana@example.com",
+            password="HandleSecret123!",
+            is_active=True,
+        )
+
+        response = self._login(username="ana_handle", password="HandleSecret123!")
+        self.assertEqual(response.status_code, 200)
+
+        me = self.client.get("/api/auth/me/")
+
+        self.assertEqual(me.status_code, 200)
+        self.assertEqual(me.data["user"]["username"], "ana_handle")
