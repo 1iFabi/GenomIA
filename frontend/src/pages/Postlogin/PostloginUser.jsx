@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Routes, Route } from 'react-router-dom';
 import Dashboard from './Dashboard';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
@@ -10,7 +10,7 @@ import Biomarcadores from '../Biomarcadores/Biomarcadores';
 import Farmacogenetica from '../Farmacogenetica/Farmacogenetica';
 
 const PostloginUser = ({ user: initialUser }) => {
-  const [user, setUser] = useState(initialUser);
+  const [user] = useState(initialUser);
   const navigate = useNavigate();
 
   const handleLogout = async () => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { API_ENDPOINTS, apiRequest } from '../../config/api';
 import './PatientVariantsModal.css';
@@ -17,13 +17,7 @@ export default function PatientVariantsModal({ isOpen, onClose, patient }) {
     return str.charAt(0).toUpperCase() + str.slice(1);
   };
 
-  useEffect(() => {
-    if (isOpen && patient) {
-      fetchVariants();
-    }
-  }, [isOpen, patient]);
-
-  const fetchVariants = async () => {
+  const fetchVariants = useCallback(async () => {
     setLoading(true);
     try {
       console.log('Fetching variants for patient:', patient);
@@ -49,7 +43,13 @@ export default function PatientVariantsModal({ isOpen, onClose, patient }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [patient]);
+
+  useEffect(() => {
+    if (isOpen && patient) {
+      fetchVariants();
+    }
+  }, [isOpen, patient, fetchVariants]);
 
   // Filtrado
   const filteredVariants = useMemo(() => {

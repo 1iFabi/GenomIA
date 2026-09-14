@@ -64,7 +64,7 @@ export default function ProtectedRoute({ children, requireService = true, requir
       setLoading(false);
     })();
     return () => { mounted = false; };
-  }, [navigate, location.pathname, requireService]);
+  }, [navigate, location.pathname, requireService, requireAdmin]);
 
   if (loading) return null;
   return ok ? children : null;

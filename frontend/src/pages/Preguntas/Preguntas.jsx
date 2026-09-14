@@ -66,18 +66,24 @@ const Preguntas = () => {
       <div className="preguntas-grid">
         {faqData.map((item, index) => {
           const isOpen = openIndices.includes(index);
+          const toggleId = `pregunta-toggle-${index}`;
+          const contentId = `pregunta-content-${index}`;
 
           return (
             <div 
               key={index} 
               className={`pregunta-card ${isOpen ? 'open' : ''}`}
             >
-              <div 
-                className="pregunta-header" 
+              <button
+                type="button"
+                id={toggleId}
+                className="pregunta-header"
                 onClick={() => handleToggle(index)}
+                aria-expanded={isOpen}
+                aria-controls={contentId}
               >
                 <span className="pregunta-text">{item.pregunta}</span>
-                <div className="expand-btn">
+                <span className="expand-btn" aria-hidden="true">
                   <svg 
                     width="24" 
                     height="24" 
@@ -104,14 +110,19 @@ const Preguntas = () => {
                       className={isOpen ? 'collapsed-path' : ''} 
                     />
                   </svg>
-                </div>
-              </div>
+                </span>
+              </button>
               
-              {isOpen && (
-                <div className="pregunta-content">
-                  <p>{item.respuesta}</p>
-                </div>
-              )}
+              <div
+                id={contentId}
+                className="pregunta-content"
+                role="region"
+                aria-labelledby={toggleId}
+                hidden={!isOpen}
+                aria-hidden={!isOpen}
+              >
+                <p>{item.respuesta}</p>
+              </div>
             </div>
           );
         })}

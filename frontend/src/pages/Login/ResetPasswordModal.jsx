@@ -10,8 +10,7 @@ const ResetPasswordModal = ({ isOpen, onClose, token }) => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showPasswordValidation, setShowPasswordValidation] = useState(false);
-  const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
@@ -77,8 +76,7 @@ const ResetPasswordModal = ({ isOpen, onClose, token }) => {
     setSuccess(false);
     setShowPassword(false);
     setShowConfirmPassword(false);
-    setShowPasswordValidation(false);
-    onClose();
+        onClose();
   };
 
   if (!isOpen) return null;
@@ -131,8 +129,7 @@ const ResetPasswordModal = ({ isOpen, onClose, token }) => {
                 name="password"
                 value={formData.password}
                 onChange={handleInputChange}
-                onFocus={() => setShowPasswordValidation(true)}
-                placeholder=" "
+                                placeholder=" "
                 required
                 disabled={loading}
               />

@@ -111,7 +111,9 @@ export default function Login() {
               (errorMsg.startsWith("'") && errorMsg.endsWith("'"))) {
             errorMsg = errorMsg.slice(1, -1);
           }
-        } catch (e) {}
+        } catch {
+          // Keep the default verification error when the message is malformed.
+        }
       }
       setVerificationMessage(errorMsg);
       setShowVerificationModal(true);
@@ -230,7 +232,7 @@ export default function Login() {
             {/* Email */}
                 <div className="field-with-error-wrapper">
                   <div className={`uv-field ${errors.email ? 'has-error' : ''}`}>
-                    <label className="uv-label">Correo</label>
+                    <label htmlFor="login-email" className="uv-label">Correo</label>
                     <div className="uv-input-wrap">
                       <span className="uv-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" width="20" height="20">
@@ -243,20 +245,21 @@ export default function Login() {
                       <input
                         className={`uv-input ${errors.email ? 'error' : ''}`}
                         type="email"
+                        id="login-email"
                         name="email"
                         value={form.email}
                         onChange={onChange}
                         autoComplete="username"
                         required
                         aria-invalid={!!errors.email}
-                        aria-describedby={errors.email ? 'email-error' : undefined}
+                        aria-describedby={errors.email && errors.email !== 'error' ? 'email-error' : undefined}
                       />
                       <span className="uv-focus-bg" />
                     </div>
                   </div>
                   {errors.email && errors.email !== 'error' && (
                     <div className="error-message-right">
-                      <ErrorMessage message={errors.email} small={true} />
+                      <ErrorMessage id="email-error" message={errors.email} small={true} />
                     </div>
                   )}
                 </div>
@@ -264,7 +267,7 @@ export default function Login() {
                 {/* Password */}
                 <div className="field-with-error-wrapper">
                   <div className={`uv-field ${errors.password ? 'has-error' : ''}`}>
-                    <label className="uv-label">Contraseña</label>
+                    <label htmlFor="login-password" className="uv-label">Contraseña</label>
                     <div className="uv-input-wrap">
                       <span className="uv-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" width="20" height="20">
@@ -277,13 +280,14 @@ export default function Login() {
                       <input
                         className={`uv-input ${errors.password ? 'error' : ''}`}
                         type={showPwd ? "text" : "password"}
+                        id="login-password"
                         name="password"
                         value={form.password}
                         onChange={onChange}
                         autoComplete="current-password"
                         required
                         aria-invalid={!!errors.password}
-                        aria-describedby={errors.password ? 'password-error' : undefined}
+                        aria-describedby={errors.password && errors.password !== 'error' ? 'password-error' : undefined}
                       />
                       <span className="uv-focus-bg" />
                       <button
@@ -291,7 +295,6 @@ export default function Login() {
                         className="pwd-toggle"
                         onClick={() => setShowPwd((s) => !s)}
                         aria-label={showPwd ? "Ocultar contraseña" : "Mostrar contraseña"}
-                        tabIndex="-1"
                       >
                         {showPwd ? (
                           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -309,7 +312,7 @@ export default function Login() {
                   </div>
                   {errors.password && errors.password !== 'error' && (
                     <div className="error-message-right">
-                      <ErrorMessage message={errors.password} small={true} />
+                      <ErrorMessage id="password-error" message={errors.password} small={true} />
                     </div>
                   )}
                 </div>
@@ -354,8 +357,13 @@ export default function Login() {
       </section>
 
       {/* Modal de éxito */}
-      {showSuccessModal && (
-        <div className="success-modal-overlay">
+      {showSuccessModal && loginSuccess && (
+        <div
+          className="success-modal-overlay"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <div className="success-modal">
             <div className="success-icon">
               <svg viewBox="0 0 24 24" width="64" height="64" fill="none">

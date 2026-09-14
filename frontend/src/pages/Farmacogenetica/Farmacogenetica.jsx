@@ -24,6 +24,33 @@ const farmacoPriorityConfig = {
   bajo: { icon: Info, accentColor: "#10b981", label: "Uso Estándar", sub: "Respuesta típica esperada" },
 };
 
+const systemColors = {
+  cardiologia: '#3b82f6',
+  'salud mental y neurologia': '#8b5cf6',
+  gastroenterologia: '#10b981',
+  'salud osea y reumatologia': '#f59e0b',
+  oncologia: '#ef4444',
+  otros: '#607d8b',
+  // Claves con tilde por si el backend las envía acentuadas
+  'cardiología': '#3b82f6',
+  'salud mental y neurología': '#8b5cf6',
+  'gastroenterología': '#10b981',
+  'salud ósea y reumatología': '#f59e0b',
+  'oncología': '#ef4444',
+  'otros (sin sistema asignado)': '#607d8b',
+};
+
+const fallbackPalette = ['#0ea5e9', '#f97316', '#22c55e', '#a855f7', '#6366f1', '#14b8a6', '#f43f5e', '#f59e0b'];
+
+const normalizeName = (str = '') => (
+  str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+);
+
 const ImpactSummaryCard = ({ level, count, onClick, isActive }) => {
   const config = farmacoPriorityConfig[level];
   const Icon = config.icon;
@@ -57,33 +84,6 @@ const Farmacogenetica = () => {
   const [pharmaData, setPharmaData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedRiskFilter, setSelectedRiskFilter] = useState('all');
-
-  const systemColors = {
-    cardiologia: '#3b82f6',
-    'salud mental y neurologia': '#8b5cf6',
-    gastroenterologia: '#10b981',
-    'salud osea y reumatologia': '#f59e0b',
-    oncologia: '#ef4444',
-    otros: '#607d8b',
-    // Claves con tilde por si el backend las envía acentuadas
-    'cardiología': '#3b82f6',
-    'salud mental y neurología': '#8b5cf6',
-    'gastroenterología': '#10b981',
-    'salud ósea y reumatología': '#f59e0b',
-    'oncología': '#ef4444',
-    'otros (sin sistema asignado)': '#607d8b',
-  };
-
-  const fallbackPalette = ['#0ea5e9', '#f97316', '#22c55e', '#a855f7', '#6366f1', '#14b8a6', '#f43f5e', '#f59e0b'];
-
-  const normalizeName = (str = '') => (
-    str
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
 
   const toggleGroup = (groupName) => {
     setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));

@@ -300,39 +300,6 @@ export default function AdminReports({ user }) {
     }
   };
 
-  const handleServiceStatusChange = async (patient, newStatus) => {
-    try {
-      const response = await apiRequest(
-        API_ENDPOINTS.UPDATE_SERVICE_STATUS,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: patient.userId,
-            status: newStatus
-          })
-        }
-      );
-      
-      if (response.ok) {
-        // Actualizar estado localmente
-        setPatients(
-          patients.map((p) =>
-            p.id === patient.id
-              ? { ...p, serviceStatus: newStatus }
-              : p
-          )
-        );
-        alert('Estado actualizado correctamente');
-      } else {
-        alert('Error al actualizar el estado: ' + (response.data?.error || 'Error desconocido'));
-      }
-    } catch (error) {
-      console.error('Error actualizando estado:', error);
-      alert('Error al actualizar el estado');
-    }
-  };
-
   const withReportCount = patients.filter((p) => p.serviceStatus === 'COMPLETED' || p.hasReport).length;
   const withoutReportCount = patients.filter((p) => p.serviceStatus === 'PENDING').length;
 

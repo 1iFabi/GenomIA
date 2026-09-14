@@ -1,8 +1,6 @@
 // src/components/Hero/Hero.jsx
 import { useEffect, useRef } from "react";
 import "./Hero.css";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faDna, faGlobe, faNotesMedical } from "@fortawesome/free-solid-svg-icons";
 
 export default function Hero() {
   const videoRef = useRef(null);

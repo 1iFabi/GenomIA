@@ -218,7 +218,7 @@
   border-radius: 10px;
   font-size: 15px;
   background: #ffffff;
-  transition: all 0.2s ease;
+  transition: border-color var(--genomia-motion-duration-fast) ease, background-color var(--genomia-motion-duration-fast) ease, box-shadow var(--genomia-motion-duration-fast) ease;
   box-sizing: border-box;
   outline: none;
 }
@@ -264,7 +264,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: color var(--genomia-motion-duration-fast) ease, background-color var(--genomia-motion-duration-fast) ease, transform var(--genomia-motion-duration-fast) ease, outline var(--genomia-motion-duration-fast) ease;
   z-index: 2;
   outline: none;
   /* Mejor compatibilidad con navegadores */
@@ -301,7 +301,7 @@
   fill: none;
   stroke: currentColor;
   pointer-events: none;
-  transition: all 0.2s ease;
+  transition: stroke var(--genomia-motion-duration-fast) ease;
 }
 
 /* Específicamente para IE y navegadores más antiguos */
@@ -332,7 +332,7 @@
   font-weight: 600;
   font-size: 16px;
   margin-top: 4px;
-  transition: all 0.2s ease;
+  transition: background var(--genomia-motion-duration-fast) ease, transform var(--genomia-motion-duration-fast) ease, opacity var(--genomia-motion-duration-fast) ease;
 }
 
 .login-button:hover:not(:disabled) {
@@ -582,7 +582,7 @@
 
 /* Transición específica para el link de registro */
 .login-link {
-  transition: all 0.2s ease;
+  transition: color var(--genomia-motion-duration-fast) ease, transform var(--genomia-motion-duration-fast) ease, text-decoration var(--genomia-motion-duration-fast) ease;
   position: relative;
   overflow: hidden;
 }
@@ -733,7 +733,7 @@
   display: flex;
   align-items: center;
   margin-bottom: 6px;
-  transition: all 0.3s ease;
+  transition: color var(--genomia-motion-duration-standard) ease;
 }
 
 .validator-item:last-child {
@@ -750,7 +750,7 @@
   border-radius: 50%;
   font-size: 12px;
   font-weight: bold;
-  transition: all 0.3s ease;
+  transition: background-color var(--genomia-motion-duration-standard) ease, color var(--genomia-motion-duration-standard) ease;
 }
 
 .validator-item.valid .validator-icon {
@@ -779,7 +779,7 @@
   margin: 8px 0;
   padding: 8px 12px;
   border-radius: 6px;
-  transition: all 0.3s ease;
+  transition: background-color var(--genomia-motion-duration-standard) ease, border-color var(--genomia-motion-duration-standard) ease, color var(--genomia-motion-duration-standard) ease;
 }
 
 .password-match.valid {
@@ -861,7 +861,7 @@
   font-size: 15px;
   background: #ffffff;
   color: #111827;
-  transition: all 0.2s ease;
+  transition: border-color var(--genomia-motion-duration-fast) ease, background-color var(--genomia-motion-duration-fast) ease, box-shadow var(--genomia-motion-duration-fast) ease;
   box-sizing: border-box;
   outline: none;
 }

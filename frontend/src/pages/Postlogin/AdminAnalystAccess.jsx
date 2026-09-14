@@ -59,16 +59,6 @@ const AdminAnalystAccess = ({ user }) => {
     navigate('/');
   };
 
-  const analystCount = useMemo(
-    () => users.filter((u) => u.is_analyst || u.roles?.includes('ANALISTA')).length,
-    [users],
-  );
-
-  const receptionCount = useMemo(
-    () => users.filter((u) => u.is_reception || u.roles?.includes('RECEPCION')).length,
-    [users],
-  );
-
   const getDisplayName = (u) => {
     if (u.first_name && u.last_name) {
       return `${u.first_name} ${u.last_name}`;

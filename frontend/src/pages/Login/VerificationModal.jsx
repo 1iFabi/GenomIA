@@ -5,7 +5,11 @@ const VerificationModal = ({ isOpen, onClose, message, title = 'Verificación de
   const cleanMessage = useMemo(() => {
     if (!message) return 'Tu cuenta fue verificada correctamente.';
     let m = message;
-    try { m = decodeURIComponent(m); } catch {}
+    try {
+          m = decodeURIComponent(m);
+        } catch {
+          // Keep the original message when it is not URI-encoded.
+        }
     if ((m.startsWith('"') && m.endsWith('"')) || (m.startsWith("'") && m.endsWith("'"))) {
       m = m.slice(1, -1);
     }

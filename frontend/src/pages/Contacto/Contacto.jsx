@@ -7,67 +7,6 @@ export default function Contacto() {
   const handleTermsClick = (e) => { e.preventDefault(); setShowTermsModal(true); };
   const handleCloseTermsModal = () => setShowTermsModal(false);
   
-  // Estados para el formulario de contacto
-  const [formData, setFormData] = useState({
-    nombre: '',
-    email: '',
-    mensaje: ''
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState({ type: '', text: '' });
-  
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    // Limpiar mensaje de error/éxito al escribir
-    if (submitMessage.text) {
-      setSubmitMessage({ type: '', text: '' });
-    }
-  };
-  
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setSubmitMessage({ type: '', text: '' });
-    
-    try {
-      const API_URL = import.meta.env.VITE_API_URL || '';
-      const response = await fetch(`${API_URL}/api/contact/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        setSubmitMessage({ 
-          type: 'success', 
-          text: data.message || 'Tu mensaje ha sido enviado correctamente. Te responderemos pronto.' 
-        });
-        // Limpiar formulario
-        setFormData({ nombre: '', email: '', mensaje: '' });
-      } else {
-        setSubmitMessage({ 
-          type: 'error', 
-          text: data.error || 'Hubo un problema al enviar tu mensaje. Por favor, intenta nuevamente.' 
-        });
-      }
-    } catch (error) {
-      setSubmitMessage({ 
-        type: 'error', 
-        text: 'Error de conexión. Por favor, verifica tu conexión a internet e intenta nuevamente.' 
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const [form, setForm] = useState({ nombre: "", email: "", mensaje: "" });
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'ok' | 'error', msg: string }
@@ -97,7 +36,7 @@ export default function Contacto() {
         const err = resp.data?.error || 'No se pudo enviar el mensaje. Inténtalo nuevamente.';
         setFeedback({ type: 'error', msg: err });
       }
-    } catch (err) {
+    } catch {
       setFeedback({ type: 'error', msg: 'Error de conexión. Revisa tu red.' });
     } finally {
       setSending(false);

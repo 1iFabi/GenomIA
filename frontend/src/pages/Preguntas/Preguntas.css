@@ -73,10 +73,21 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
   padding: 10px 25px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
   min-height: 70px;
+}
+
+.pregunta-header:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: -3px;
 }
 
 .pregunta-text {
