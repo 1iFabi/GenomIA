@@ -1,8 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import ReactECharts from 'echarts-for-react';
 import { API_ENDPOINTS, apiRequest } from '../../config/api';
 import '../../styles/cards.css';
+import IndigenousBarChart from './IndigenousBarChart';
 import './IndigenousRadarChart.css';
+
+const colors = [
+  '#2563eb', // Blue
+  '#0f766e', // Teal
+  '#b45309', // Amber
+  '#be185d', // Rose
+  '#4d7c0f'  // Olive
+];
+
+const normalizeName = (name = '') => {
+  const cleaned = String(name ?? '').replace(/_/g, ' ').trim();
+  const fixes = {
+    Aimara: 'Aymara',
+    Aymara: 'Aymara',
+    Chileno_general: 'Chileno general'
+  };
+  return fixes[cleaned] || cleaned || 'Desconocido';
+};
+
+const formatPercentage = (value) => {
+  const number = Number(value) || 0;
+  return Number.isInteger(number) ? `${number}` : number.toFixed(2).replace(/\.0+$/, '');
+};
 
 const IndigenousRadarChart = () => {
   const [data, setData] = useState(null);
@@ -32,103 +55,25 @@ const IndigenousRadarChart = () => {
     }
   };
 
-  const colors = [
-    '#8b5cf6', // Purple
-    '#06b6d4', // Cyan
-    '#f59e0b', // Orange
-    '#ec4899', // Pink
-    '#22c55e'  // Green
-  ];
-
-  const normalizeName = (name = '') => {
-    const cleaned = name.replace(/_/g, ' ').trim();
-    const fixes = {
-      Aimara: 'Aymara',
-      Aymara: 'Aymara',
-      Chileno_general: 'Chileno general'
-    };
-    return fixes[cleaned] || cleaned || 'Desconocido';
-  };
-
   const chartData = useMemo(() => {
-    return (data?.indigenous_peoples || []).map((item, index) => ({
-      label: normalizeName(item.name),
-      value: Number(item.percentage) || 0,
-      color: colors[index % colors.length],
-      variant_count: item.variant_count || 0,
-      avg_allele_frequency: item.avg_allele_frequency || 0
-    })).filter(item => item.value > 0);
+    return (data?.indigenous_peoples || [])
+      .map((item, index) => ({
+        label: normalizeName(item.name),
+        value: Number(item.percentage) || 0,
+        sourceIndex: index,
+        variant_count: Number(item.variant_count) || 0,
+        avg_allele_frequency: Number(item.avg_allele_frequency) || 0
+      }))
+      .filter(item => item.value > 0)
+      .sort((first, second) => second.value - first.value || first.sourceIndex - second.sourceIndex)
+      .map((item, index) => ({
+        ...item,
+        color: colors[index % colors.length]
+      }));
   }, [data]);
 
-  const total = chartData.reduce((a, b) => a + b.value, 0) || 100;
-
-  // Determinar qué mostrar en el centro
-  const centerText = hoveredItem ? hoveredItem.label : '';
-  const centerValue = hoveredItem ? `${hoveredItem.value}%` : '';
-
-  const option = {
-    tooltip: { 
-      show: false
-    },
-    legend: { show: false },
-    series: [
-      {
-        name: 'Pueblos Indígenas',
-        type: 'pie',
-        radius: ['70%', '85%'],
-        padAngle: 3,
-        avoidLabelOverlap: false,
-        itemStyle: { 
-          borderRadius: 10, 
-          borderColor: '#fff', 
-          borderWidth: 2 
-        },
-        label: { show: false },
-        emphasis: {
-          label: { show: false },
-          itemStyle: { 
-            shadowBlur: 10, 
-            shadowOffsetX: 0, 
-            shadowColor: 'rgba(0,0,0,0.3)' 
-          }
-        },
-        labelLine: { show: false },
-        data: chartData.map(d => ({
-          value: d.value,
-          name: d.label,
-          itemStyle: { color: d.color }
-        }))
-      }
-    ],
-    graphic: [
-      {
-        type: 'text',
-        left: 'center',
-        top: '38%',
-        style: {
-          text: centerValue,
-          fontSize: 40,
-          fontWeight: 'bold',
-          fill: '#111827',
-          opacity: hoveredItem ? 1 : 0
-        },
-        transition: ['shape']
-      },
-      {
-        type: 'text',
-        left: 'center',
-        top: '56%',
-        style: {
-          text: centerText,
-          fontSize: 15,
-          fontWeight: '600',
-          fill: '#6B7280',
-          opacity: hoveredItem ? 1 : 0
-        },
-        transition: ['shape']
-      }
-    ]
-  };
+  const chartHeight = Math.max(260, chartData.length * 56 + 64);
+  const hoveredLabel = hoveredItem?.label;
 
   if (loading) {
     return (
@@ -154,29 +99,25 @@ const IndigenousRadarChart = () => {
   return (
     <div className="indigenous-radar-chart">
       <div className="chart-header">
-        <h3>Pueblos Indígenas de Chile</h3>
-        <p className="chart-subtitle">
-          Distribución por ancestría genética
-        </p>
+        <h3 className="chart-editorial-title">
+          <span className="chart-title-main">
+            <span className="chart-title-pueblos">PUEBLOS</span>{' '}
+            <span className="chart-title-indigenas">INDÍGENAS</span>
+          </span>
+          <span className="chart-title-separator" aria-hidden="true">|</span>
+          <span className="chart-title-supporting">
+            Distribución genética asociada a poblaciones indígenas de Chile.
+          </span>
+        </h3>
       </div>
 
       <div className="chart-main-content">
-        <div className="chart-container-donut">
-          <ReactECharts 
-            option={option} 
-            style={{ height: '320px', marginTop: '5px' }} 
-            opts={{ renderer: 'svg' }}
-            onEvents={{
-              mouseover: (params) => {
-                if (params.data) {
-                  const item = chartData.find(d => d.label === params.data.name);
-                  if (item) setHoveredItem(item);
-                }
-              },
-              mouseout: () => {
-                setHoveredItem(null);
-              }
-            }}
+        <div className="chart-container-bars">
+          <IndigenousBarChart
+            data={chartData}
+            height={chartHeight}
+            onItemHover={setHoveredItem}
+            onItemLeave={() => setHoveredItem(null)}
           />
         </div>
         
@@ -184,12 +125,17 @@ const IndigenousRadarChart = () => {
           <h4>Desglose</h4>
           <div className="peoples-list">
             {chartData.map((item, index) => (
-              <div key={index} className="people-item">
+              <div
+                key={index}
+                className={`people-item${hoveredLabel === item.label ? ' is-hovered' : ''}`}
+                onMouseEnter={() => setHoveredItem(item)}
+                onMouseLeave={() => setHoveredItem(null)}
+              >
                 <div className="people-header">
                   <span className="people-name" style={{ color: item.color }}>
                     - {item.label}
                   </span>
-                  <span className="people-percentage">{item.value}%</span>
+                  <span className="people-percentage">{formatPercentage(item.value)}%</span>
                 </div>
                 <div className="people-details">
                   <span className="detail-item">
