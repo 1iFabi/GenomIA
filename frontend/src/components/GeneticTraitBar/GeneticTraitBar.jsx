@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import NalaTipButton from "../Nala/NalaTipButton";
 import { formatFrequency } from "../../lib/utils";
@@ -19,6 +19,9 @@ const GeneticTraitBar = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [animate, setAnimate] = useState(false);
+  const instanceId = useId().replace(/:/g, "");
+  const toggleId = `genetic-trait-toggle-${instanceId}`;
+  const detailsId = `genetic-trait-details-${instanceId}`;
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimate(true), delay);
@@ -43,42 +46,56 @@ const GeneticTraitBar = ({
 
   return (
     <div className={`genetic-trait-bar ${isExpanded ? "open" : ""}`}>
-      <div className="genetic-trait-bar__header" onClick={toggleCard}>
-        <div className="genetic-trait-bar__title-row">
-          <h3 className="genetic-trait-bar__title">{title}</h3>
-          <div className="genetic-trait-bar__badges">
+      <button
+        type="button"
+        id={toggleId}
+        className="genetic-trait-bar__header"
+        onClick={toggleCard}
+        aria-expanded={isExpanded}
+        aria-controls={detailsId}
+      >
+        <span className="genetic-trait-bar__title-row">
+          <span className="genetic-trait-bar__title" role="heading" aria-level="3">{title}</span>
+          <span className="genetic-trait-bar__badges">
             <span className="genetic-trait-bar__badge-rsid">{rsid || "N/A"}</span>
             {genotype && genotype !== "N/A" && (
               <span className="genetic-trait-bar__badge-genotype">{genotype}</span>
             )}
-          </div>
+          </span>
           <span className="genetic-trait-bar__impact" style={{ color: impactColor }}>
             {Math.round(percentage)}% ({impactLabel})
           </span>
-        </div>
+        </span>
 
-        <div className="genetic-trait-bar__progress-bg">
-          <div
+        <span className="genetic-trait-bar__progress-bg">
+          <span
             className="genetic-trait-bar__progress-fill"
             style={{
               width: animate ? `${percentage}%` : "0%",
               backgroundColor: impactColor,
             }}
           />
-        </div>
+        </span>
 
-        <button className="genetic-trait-bar__toggle">
+        <span className="genetic-trait-bar__toggle">
           <span>Ver más información</span>
           <ChevronDown
             size={16}
+            aria-hidden="true"
             className="genetic-trait-bar__toggle-icon"
             style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
           />
-        </button>
-      </div>
+        </span>
+      </button>
 
-      {isExpanded && (
-        <div className="genetic-trait-bar__details">
+      <div
+        id={detailsId}
+        className="genetic-trait-bar__details"
+        role="region"
+        aria-labelledby={toggleId}
+        hidden={!isExpanded}
+        aria-hidden={!isExpanded}
+      >
           <div className="genetic-trait-bar__section">
             <h4 className="genetic-trait-bar__section-title">DETALLE</h4>
             <div className="genetic-trait-bar__grid">
@@ -172,7 +189,6 @@ const GeneticTraitBar = ({
             </div>
           )}
         </div>
-      )}
     </div>
   );
 };

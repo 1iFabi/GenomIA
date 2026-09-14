@@ -9,8 +9,9 @@ import UploadFileModal from '../UploadFileModal/UploadFileModal.jsx'
 import './Sidebar.css'
 
 const defaultIcons = [Dna, Activity, Heart, Globe, Pill, TestTube]
+const noop = () => {}
 
-const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMobileMenuOpen = () => {} }) => {
+const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMobileMenuOpen = noop }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const [isHovered, setIsHovered] = useState(false)
@@ -53,7 +54,7 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
     if (isMobileMenuOpen) {
       setIsMobileMenuOpen(false)
     }
-  }, [location.pathname])
+  }, [location.pathname, isMobileMenuOpen, setIsMobileMenuOpen])
 
   const navItems = useMemo(() => {
     return items.map((it, idx) => {

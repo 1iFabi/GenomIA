@@ -49,23 +49,30 @@ const Toast = ({ message, type = 'info', onClose, duration = 5000, action }) => 
   };
 
   return (
-    <div className={`toast toast--${type}`}>
+    <div
+      className={`toast toast--${type}${duration > 0 ? '' : ' toast--persistent'}`}
+      role={type === 'error' ? 'alert' : 'status'}
+      aria-atomic="true"
+      style={{ '--toast-duration': `${duration}ms` }}
+    >
       <div className="toast__icon">
         {getIcon()}
       </div>
       <div className="toast__content">
         <div className="toast__message">{message}</div>
         {action && (
-          <button 
-            onClick={action.onClick} 
+          <button
+            type="button"
+            onClick={action.onClick}
             className="toast__action"
           >
             {action.label}
           </button>
         )}
       </div>
-      <button 
-        className="toast__close" 
+      <button
+        type="button"
+        className="toast__close"
         onClick={onClose}
         aria-label="Cerrar notificación"
       >

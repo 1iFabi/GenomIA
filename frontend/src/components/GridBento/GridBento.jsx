@@ -7,6 +7,35 @@ const DEFAULT_PARTICLE_COUNT = 12;
 const DEFAULT_SPOTLIGHT_RADIUS = 300;
 const DEFAULT_GLOW_COLOR = '132, 0, 255';
 const MOBILE_BREAKPOINT = 768;
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+const getPrefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia(REDUCED_MOTION_QUERY).matches;
+
+const usePrefersReducedMotion = () => {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(getPrefersReducedMotion);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+
+    const mediaQuery = window.matchMedia(REDUCED_MOTION_QUERY);
+    const handleChange = event => setPrefersReducedMotion(event.matches);
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    if (typeof mediaQuery.addListener !== 'function') return undefined;
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  return prefersReducedMotion;
+};
 
 const cardData = [
   {
@@ -111,12 +140,18 @@ const ParticleCard = ({
     particlesInitialized.current = true;
   }, [particleCount, glowColor]);
 
-  const clearAllParticles = useCallback(() => {
+  const clearAllParticles = useCallback((immediate = false) => {
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
     magnetismAnimationRef.current?.kill();
 
     particlesRef.current.forEach(particle => {
+      if (immediate) {
+        gsap.killTweensOf(particle);
+        particle.parentNode?.removeChild(particle);
+        return;
+      }
+
       gsap.to(particle, {
         scale: 0,
         opacity: 0,
@@ -131,7 +166,7 @@ const ParticleCard = ({
   }, []);
 
   const animateParticles = useCallback(() => {
-    if (!cardRef.current || !isHoveredRef.current) return;
+    if (disableAnimations || !cardRef.current || !isHoveredRef.current) return;
 
     if (!particlesInitialized.current) {
       initializeParticles();
@@ -139,7 +174,7 @@ const ParticleCard = ({
 
     memoizedParticles.current.forEach((particle, index) => {
       const timeoutId = setTimeout(() => {
-        if (!isHoveredRef.current || !cardRef.current) return;
+        if (disableAnimations || !isHoveredRef.current || !cardRef.current) return;
 
         const clone = particle.cloneNode(true);
         cardRef.current.appendChild(clone);
@@ -168,7 +203,7 @@ const ParticleCard = ({
 
       timeoutsRef.current.push(timeoutId);
     });
-  }, [initializeParticles]);
+  }, [initializeParticles, disableAnimations]);
 
   useEffect(() => {
     if (disableAnimations || !cardRef.current) return;
@@ -263,6 +298,7 @@ const ParticleCard = ({
       );
 
       const ripple = document.createElement('div');
+      ripple.className = 'grid-bento-ripple';
       ripple.style.cssText = `
         position: absolute;
         width: ${maxDistance * 2}px;
@@ -308,6 +344,18 @@ const ParticleCard = ({
     };
   }, [animateParticles, clearAllParticles, disableAnimations, enableTilt, enableMagnetism, clickEffect, glowColor]);
 
+  useEffect(() => {
+    if (!disableAnimations || !cardRef.current) return;
+
+    clearAllParticles(true);
+    gsap.killTweensOf(cardRef.current);
+    gsap.set(cardRef.current, { clearProps: 'transform' });
+    cardRef.current.querySelectorAll('.grid-bento-ripple').forEach(ripple => {
+      gsap.killTweensOf(ripple);
+      ripple.remove();
+    });
+  }, [disableAnimations, clearAllParticles]);
+
   return (
     <div
       ref={cardRef}
@@ -333,6 +381,7 @@ const GlobalSpotlight = ({
   useEffect(() => {
     if (disableAnimations || !gridRef?.current || !enabled) return;
 
+    const gridElement = gridRef.current;
     const spotlight = document.createElement('div');
     spotlight.className = 'global-spotlight';
     spotlight.style.cssText = `
@@ -445,7 +494,14 @@ const GlobalSpotlight = ({
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseleave', handleMouseLeave);
-      spotlightRef.current?.parentNode?.removeChild(spotlightRef.current);
+      gridElement.querySelectorAll('.card').forEach(card => {
+        card.style.setProperty('--glow-intensity', '0');
+      });
+      if (spotlightRef.current) {
+        gsap.killTweensOf(spotlightRef.current);
+        spotlightRef.current.parentNode?.removeChild(spotlightRef.current);
+        spotlightRef.current = null;
+      }
     };
   }, [gridRef, disableAnimations, enabled, spotlightRadius, glowColor]);
 
@@ -490,7 +546,14 @@ const MagicBento = ({
   const gridRef = useRef(null);
   const navigate = useNavigate();
   const isMobile = useMobileDetection();
-  const shouldDisableAnimations = disableAnimations || isMobile;
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const noStarCardEffectsRef = useRef(new Map());
+  const shouldDisableAnimations = disableAnimations || isMobile || prefersReducedMotion;
+
+  useEffect(() => () => {
+    noStarCardEffectsRef.current.forEach(cleanup => cleanup());
+    noStarCardEffectsRef.current.clear();
+  }, []);
 
   const renderCta = useCallback((cta) => {
     if (!cta || !cta.label) {
@@ -669,8 +732,12 @@ const MagicBento = ({
                 key={key}
                 {...cardProps}
                 ref={el => {
-                  if (!el || el.dataset.gridBentoBound === 'true') return;
-                  el.dataset.gridBentoBound = 'true';
+                  if (!el) return;
+
+                  noStarCardEffectsRef.current.get(el)?.();
+                  noStarCardEffectsRef.current.delete(el);
+
+                  if (isCardAnimationsDisabled) return;
 
                   const handleMouseMove = e => {
                     if (isCardAnimationsDisabled) return;
@@ -742,6 +809,7 @@ const MagicBento = ({
                     );
 
                     const ripple = document.createElement('div');
+                    ripple.className = 'grid-bento-ripple';
                     ripple.style.cssText = `
                       position: absolute;
                       width: ${maxDistance * 2}px;
@@ -775,6 +843,19 @@ const MagicBento = ({
                   el.addEventListener('mousemove', handleMouseMove);
                   el.addEventListener('mouseleave', handleMouseLeave);
                   el.addEventListener('click', handleClick);
+
+                  noStarCardEffectsRef.current.set(el, () => {
+                    el.removeEventListener('mousemove', handleMouseMove);
+                    el.removeEventListener('mouseleave', handleMouseLeave);
+                    el.removeEventListener('click', handleClick);
+                    gsap.killTweensOf(el);
+                    gsap.set(el, { clearProps: 'transform' });
+                    el.querySelectorAll('.grid-bento-ripple').forEach(ripple => {
+                      gsap.killTweensOf(ripple);
+                      ripple.remove();
+                    });
+                    noStarCardEffectsRef.current.delete(el);
+                  });
                 }}
               >
                 {content}

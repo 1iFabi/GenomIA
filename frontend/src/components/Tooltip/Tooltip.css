@@ -5,6 +5,12 @@
     cursor: help;
 }
 
+.tooltip-wrapper > :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
 .tooltip-content {
     position: absolute;
     top: calc(100% + 8px);

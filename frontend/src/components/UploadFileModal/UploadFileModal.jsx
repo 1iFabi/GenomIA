@@ -1,6 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import './UploadFileModal.css';
 import { getCsrfToken } from '../../config/api';
+
+const focusableSelector = [
+  'a[href]',
+  'area[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
 
 const UploadFileModal = ({ isOpen, onClose }) => {
   const [formData, setFormData] = useState({
@@ -11,6 +21,11 @@ const UploadFileModal = ({ isOpen, onClose }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const modalRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const previousActiveElementRef = useRef(null);
+  const handleCloseRef = useRef(null);
+  const titleId = `upload-modal-title-${useId().replace(/:/g, '')}`;
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -123,18 +138,92 @@ const UploadFileModal = ({ isOpen, onClose }) => {
     onClose();
   };
 
+  handleCloseRef.current = handleClose;
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const previousActiveElement = document.activeElement;
+    previousActiveElementRef.current = previousActiveElement;
+
+    const modal = modalRef.current;
+    if (!modal) return undefined;
+
+    const getFocusableElements = () => Array.from(modal.querySelectorAll(focusableSelector));
+    const initialFocus = closeButtonRef.current || getFocusableElements()[0] || modal;
+
+    try {
+      initialFocus.focus({ preventScroll: true });
+    } catch {
+      initialFocus.focus();
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleCloseRef.current?.();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        modal.focus();
+        return;
+      }
+
+      const currentIndex = focusableElements.indexOf(document.activeElement);
+      const nextIndex = event.shiftKey ? currentIndex - 1 : currentIndex + 1;
+
+      if (currentIndex === -1 || nextIndex < 0 || nextIndex >= focusableElements.length) {
+        event.preventDefault();
+        const target = event.shiftKey
+          ? focusableElements[focusableElements.length - 1]
+          : focusableElements[0];
+        target.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      const elementToRestore = previousActiveElementRef.current;
+      if (elementToRestore && document.contains(elementToRestore)) {
+        elementToRestore.focus();
+      }
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="upload-modal-overlay" onClick={handleClose}>
-      <div className="upload-modal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="upload-modal-overlay"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          handleClose();
+        }
+      }}
+    >
+      <div
+        ref={modalRef}
+        className="upload-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex="-1"
+      >
         {/* Header */}
         <div className="upload-modal__header">
-          <h2 className="upload-modal__title">
+          <h2 id={titleId} className="upload-modal__title">
             {success ? '¡Archivo Subido!' : 'Subir Archivo de Usuario'}
           </h2>
-          <button 
-            className="upload-modal__close" 
+          <button
+            ref={closeButtonRef}
+            className="upload-modal__close"
             onClick={handleClose}
             aria-label="Cerrar modal"
           >
@@ -179,10 +268,11 @@ const UploadFileModal = ({ isOpen, onClose }) => {
               <form onSubmit={handleSubmit} className="upload-modal__form">
                 {/* Email del usuario */}
                 <div className="upload-modal__field">
-                  <label className="upload-modal__label">
+                  <label htmlFor="upload-user-email" className="upload-modal__label">
                     Email del Usuario
                   </label>
                   <input
+                    id="upload-user-email"
                     className="upload-modal__input"
                     type="email"
                     name="userEmail"
@@ -205,6 +295,7 @@ const UploadFileModal = ({ isOpen, onClose }) => {
                   <input
                     type="file"
                     id="file-input"
+                    aria-label="Seleccionar archivo"
                     className="upload-modal__file-input"
                     onChange={handleFileChange}
                     disabled={loading}

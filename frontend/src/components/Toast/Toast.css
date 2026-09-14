@@ -45,7 +45,11 @@
   height: 3px;
   background: currentColor;
   opacity: 0.3;
-  animation: progress 5s linear;
+  animation: progress var(--toast-duration) linear;
+}
+
+.toast--persistent::before {
+  display: none;
 }
 
 @keyframes progress {
@@ -106,7 +110,7 @@
   border-radius: 6px;
   cursor: pointer;
   color: #6b7280;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s;
   margin: -4px -4px 0 0;
 }
 

@@ -74,3 +74,10 @@
   85%  { transform: scaleX(-1); }  /* pausa cara trasera */
   100% { transform: scaleX(1); }   /* flip de regreso (duración ~15% del ciclo) */
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .coin--3d,
+  .coin--flat {
+    animation: none;
+  }
+}

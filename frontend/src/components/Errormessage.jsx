@@ -5,9 +5,10 @@ import React from 'react';
 // - message: string (mensaje a mostrar)
 // - className: string opcional para estilos adicionales
 // - small: boolean opcional para tamaño compacto (por defecto true)
-const ErrorCard = ({ message = 'Error - Credenciales Incorrectas.', className = '', small = true }) => {
+const ErrorCard = ({ message = 'Error - Credenciales Incorrectas.', className = '', small = true, id }) => {
   return (
     <div
+      id={id}
       role="alert"
       style={{
         backgroundColor: '#fee2e2',

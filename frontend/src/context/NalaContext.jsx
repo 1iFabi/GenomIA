@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useState } from "react";
+import { useCallback, useState } from "react";
+import { NalaContext } from "./use-nala";
 
-const NalaContext = createContext(null);
+export { useNala } from "./use-nala";
 
 export function NalaProvider({ children }) {
   const [open, setOpen] = useState(false);
@@ -33,10 +34,4 @@ export function NalaProvider({ children }) {
       {children}
     </NalaContext.Provider>
   );
-}
-
-export function useNala() {
-  const ctx = useContext(NalaContext);
-  if (!ctx) throw new Error("useNala debe usarse dentro de NalaProvider");
-  return ctx;
 }

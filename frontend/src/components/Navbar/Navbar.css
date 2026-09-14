@@ -28,7 +28,7 @@
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: none;
-  transition: all 0.25s ease, background-color 0.25s ease, color 0.25s ease, backdrop-filter 0.25s ease;
+  transition: background 0.25s ease, color 0.25s ease, backdrop-filter 0.25s ease, border-color 0.25s ease, border-bottom-width 0.25s ease, box-shadow 0.25s ease, grid-template-columns 0.25s ease, padding 0.25s ease, column-gap 0.25s ease;
 }
 
 .nav-left, .nav-right {
@@ -78,7 +78,7 @@
   left: 50%;
   background-color: currentColor;
   opacity: 0.35;
-  transition: all 0.4s;
+  transition: width var(--genomia-motion-duration-slow) ease, left var(--genomia-motion-duration-slow) ease, opacity var(--genomia-motion-duration-slow) ease;
 }
 
 .nav-left a:not(.login-btn):hover::before,
