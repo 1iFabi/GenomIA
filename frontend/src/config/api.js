@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
   CSRF: `${API_BASE}/auth/csrf/`,
   LOGIN: `${API_BASE}/auth/login/`,
   REGISTER: `${API_BASE}/auth/register/`,
+  REGISTER_EMAIL_VALIDATION: `${API_BASE}/auth/register/email-validation/`,
   PASSWORD_RESET: `${API_BASE}/auth/password-reset/`,
   PASSWORD_RESET_CONFIRM: `${API_BASE}/auth/password-reset-confirm/`,
   ME: `${API_BASE}/auth/me/`,
@@ -67,12 +68,14 @@ export const getCsrfToken = () => {
 
 const isUnsafeMethod = (method) => !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method);
 
-const ensureCsrfCookie = async () => {
+const ensureCsrfCookie = async (signal) => {
   try {
-    await fetch(API_ENDPOINTS.CSRF, {
+    const config = {
       method: 'GET',
       credentials: 'include',
-    });
+    };
+    if (signal) config.signal = signal;
+    await fetch(API_ENDPOINTS.CSRF, config);
   } catch {
     // La petición principal conserva su manejo habitual de errores.
   }
@@ -92,7 +95,7 @@ export const apiRequest = async (endpoint, options = {}) => {
   // CSRF double-submit: bootstrap y enviar X-CSRFToken en métodos mutables.
   if (isUnsafeMethod(method)) {
     let csrf = getCsrfToken();
-    if (!csrf) csrf = await ensureCsrfCookie();
+    if (!csrf) csrf = await ensureCsrfCookie(options.signal);
     if (csrf) headers['X-CSRFToken'] = csrf;
   }
   // La autenticación viaja en cookie HttpOnly.

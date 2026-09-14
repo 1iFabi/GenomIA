@@ -105,6 +105,13 @@
   gap: 1rem;  /* Gap entre columnas */
 }
 
+/* Step 1 account fields stay readable in one column at every width. */
+.register-page .account-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
 /* ============ INPUTS ============ */
 
 .uv-field {
@@ -134,7 +141,7 @@
   border-radius: 10px;
   font-size: 14px;
   background: #ffffff;
-  transition: all 0.2s ease;
+  transition: border-color var(--genomia-motion-duration-fast) ease, background-color var(--genomia-motion-duration-fast) ease, box-shadow var(--genomia-motion-duration-fast) ease;
   font-family: inherit;
   color: #1e293b;
   flex-shrink: 0;
@@ -223,7 +230,7 @@
   place-items: center;
   color: #6b7280;
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition: color var(--genomia-motion-duration-fast) ease, background-color var(--genomia-motion-duration-fast) ease, transform var(--genomia-motion-duration-fast) ease, outline var(--genomia-motion-duration-fast) ease;
   z-index: 2;
 }
 
@@ -288,7 +295,7 @@
   align-items: center; 
   gap: 0.3rem;
   font-size: 0.68rem; 
-  transition: all 0.2s ease;
+  transition: color var(--genomia-motion-duration-fast) ease;
 }
 
 .validator-rule.valid { color: #10b981; }
@@ -440,7 +447,7 @@
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background var(--genomia-motion-duration-fast) ease, transform var(--genomia-motion-duration-fast) ease, box-shadow var(--genomia-motion-duration-fast) ease, opacity var(--genomia-motion-duration-fast) ease;
   margin-top: 0.3rem;
   box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
 }
@@ -485,7 +492,7 @@
   color: #4A90E2;
   text-decoration: none;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: color var(--genomia-motion-duration-fast) ease, text-decoration var(--genomia-motion-duration-fast) ease;
 }
 
 .login-link:hover {
@@ -547,7 +554,7 @@
   display: none;
 }
 
-/* ============ FLOATING LABELS LIKE LOGIN ============ */
+/* ============ FLOATING LABELS FOR OTHER REGISTER FIELDS ============ */
 /* Usar mismo estilo flotante que Login pero con iconos ocultos */
 
 .register-page .uv-field {
@@ -575,7 +582,7 @@
   border-radius: 8px;
   font-size: 14px;
   background: #ffffff;
-  transition: all 0.2s ease;
+  transition: border-color var(--genomia-motion-duration-fast) ease, background-color var(--genomia-motion-duration-fast) ease, box-shadow var(--genomia-motion-duration-fast) ease;
   box-sizing: border-box;
   outline: none;
 }
@@ -586,7 +593,7 @@
 }
 
 /* Label flotante - posición inicial */
-.register-page .uv-label {
+.register-page .uv-field:not(.account-field) .uv-label {
   position: absolute;
   left: 16px;
   top: 50%;
@@ -594,15 +601,15 @@
   color: #9ca3af;
   font-size: 14px;
   font-weight: 400;
-  transition: all 0.2s ease;
+  transition: transform var(--genomia-motion-duration-fast) ease, color var(--genomia-motion-duration-fast) ease, background-color var(--genomia-motion-duration-fast) ease, padding var(--genomia-motion-duration-fast) ease;
   pointer-events: none;
   z-index: 1;
   background: transparent;
 }
 
 /* Label flotante - cuando está enfocado o tiene contenido */
-.register-page .uv-input:focus + .uv-label,
-.register-page .uv-input:not(:placeholder-shown) + .uv-label {
+.register-page .uv-field:not(.account-field) .uv-input:focus + .uv-label,
+.register-page .uv-field:not(.account-field) .uv-input:not(:placeholder-shown) + .uv-label {
   transform: translateY(-40px) scale(0.85);
   color: #4A90E2;
   background: #ffffff;
@@ -610,7 +617,7 @@
 }
 
 /* Label flotante - cuando hay error */
-.register-page .uv-field-error .uv-label {
+.register-page .uv-field-error:not(.account-field) .uv-label {
   transform: translateY(-40px) scale(0.85) !important;
   background: #ffffff;
   padding: 0 6px;
@@ -620,12 +627,12 @@
 /* ====== REGISTER: override login-form para evitar solapamiento ======
    Register.jsx usa la clase "login-form" que arrastra estilos de Login.css
    (label estático arriba del input). Estos selectores con mayor especificidad
-   restauran el label flotante propio de Register sin afectar la página de login. */
+   restauran el label flotante de los demás campos de Register sin afectar la página de login. */
 .register-page .login-form .uv-field {
   gap: 0;
 }
 
-.register-page .login-form .uv-label {
+.register-page .login-form .uv-field:not(.account-field) .uv-label {
   position: absolute;
   top: 50%;
   left: 16px;
@@ -637,21 +644,46 @@
   margin: 0;
   padding: 0;
   border: none;
-  transition: all 0.2s ease;
+  transition: transform var(--genomia-motion-duration-fast) ease, color var(--genomia-motion-duration-fast) ease, background-color var(--genomia-motion-duration-fast) ease, padding var(--genomia-motion-duration-fast) ease;
   pointer-events: none;
   z-index: 1;
 }
 
-.register-page .login-form .uv-input:focus + .uv-label,
-.register-page .login-form .uv-input:not(:placeholder-shown) + .uv-label {
+.register-page .login-form .uv-field:not(.account-field) .uv-input:focus + .uv-label,
+.register-page .login-form .uv-field:not(.account-field) .uv-input:not(:placeholder-shown) + .uv-label {
   transform: translateY(-30px) scale(0.85);
   color: #4A90E2;
   background: #ffffff;
   padding: 0 6px;
 }
 
+/* ====== ACCOUNT FIELDS: explicit labels above inputs ====== */
+.register-page .login-form .account-field {
+  gap: 0;
+}
+
+.register-page .login-form .account-field .uv-label {
+  position: static;
+  align-self: flex-start;
+  transform: none;
+  color: #4A90E2;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  margin: 0 0 6px;
+  padding: 0 0 0 2px;
+  border: none;
+  transition: color var(--genomia-motion-duration-fast) ease;
+  pointer-events: auto;
+  z-index: auto;
+}
+
+.register-page .login-form .account-field:focus-within .uv-label {
+  color: #4A90E2;
+}
+
 /* ====== TELÉFONO: prefijo fijo "+569 -" y label estático ====== */
-.register-page .login-form .phone-prefix-field .uv-label {
+.register-page .login-form .uv-field.phone-prefix-field .uv-label {
   position: static;
   top: auto;
   left: auto;
@@ -702,6 +734,40 @@
   box-shadow: none !important;
 }
 
+/* ====== SECURITY FIELDS: explicit labels above input rows ====== */
+.register-page .login-form .uv-field.security-field {
+  gap: 0;
+}
+
+.register-page .login-form .uv-field.security-field .uv-label {
+  position: static;
+  align-self: flex-start;
+  top: auto;
+  left: auto;
+  transform: none !important;
+  color: #4A90E2;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  margin: 0 0 6px;
+  padding: 0 0 0 2px;
+  border: none;
+  transition: color var(--genomia-motion-duration-fast) ease;
+  pointer-events: auto;
+  z-index: auto;
+}
+
+.register-page .login-form .uv-field.security-field:focus-within .uv-label {
+  color: #4A90E2;
+}
+
+.register-page .login-form .security-input-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 /* Password toggle button */
 .register-page .password-field-container .uv-input {
   padding-right: 48px !important;
@@ -733,20 +799,19 @@
   
   .register-page .password-validator,
   .register-page .password-validator-responsive {
-    position: absolute !important;
-    left: calc(100% + 0.8rem) !important;
-    top: 0 !important;
-    width: 180px;
-    min-width: 180px;
-    max-width: 180px;
-    margin-top: 0;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin-top: 0.5rem;
     border-radius: 8px;
     padding: 0.5rem 0.6rem;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    animation: slideInRight 0.25s ease;
+    animation: slideDown 0.2s ease;
     background: #fff;
     border: 1px solid #e5e7eb;
-    z-index: 1000;
   }
   
   .register-page .password-validator .validator-title,
@@ -784,26 +849,6 @@
   }
 }
 
-/* Validador de RUT - Siempre debajo */
-.rut-wrapper {
-  display: flex;
-  position: relative;
-  flex-direction: column;
-}
-
-.rut-wrapper .phone-validator {
-  position: static;
-  width: 100%;
-  margin-top: 0.5rem;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 0.6rem;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  animation: slideDown 0.2s ease;
-  z-index: 1;
-}
-
 /* Validador de teléfono - Siempre debajo */
 .phone-wrapper {
   display: flex;
@@ -824,17 +869,16 @@
   z-index: 1;
 }
 
-/* Mensaje de ayuda al hacer focus - dentro del input */
+/* Mensaje de ayuda al hacer focus; permanece en el flujo del campo. */
 .input-hint {
-  position: absolute;
-  left: 16px;
-  top: 11px;
-  font-size: 14px;
-  color: #9ca3af;
+  position: static;
+  margin-top: 4px;
+  padding-left: 2px;
+  font-size: 0.65rem;
+  color: #64748b;
   font-style: normal;
   animation: fadeInHint 0.15s ease;
   pointer-events: none;
-  z-index: 5;
   white-space: nowrap;
 }
 
@@ -920,7 +964,7 @@
   display: grid; 
   place-items: center; 
   border-radius: 50%;
-  transition: all .2s ease; 
+  transition: background-color var(--genomia-motion-duration-fast) ease, color var(--genomia-motion-duration-fast) ease;
   flex-shrink: 0;
 }
 
@@ -989,7 +1033,7 @@
   font-size: .95rem; 
   font-weight: 600; 
   cursor: pointer;
-  transition: all .2s ease;
+  transition: background-color var(--genomia-motion-duration-fast) ease, transform var(--genomia-motion-duration-fast) ease, box-shadow var(--genomia-motion-duration-fast) ease;
 }
 
 .terms-modal-accept:hover { 
@@ -1008,7 +1052,7 @@
 }
 
 .terms-link { 
-  transition: all .2s ease; 
+  transition: color var(--genomia-motion-duration-fast) ease, text-decoration-thickness var(--genomia-motion-duration-fast) ease;
 }
 
 .terms-link:hover { 
@@ -1078,17 +1122,17 @@
   margin: 0;
 }
 
-/* ============ STEP SPACER - Reduce espacio entre campos y botones en pasos 1 y 3 ============ */
+/* ============ STEP SPACER - Reduce espacio entre campos y botones ============ */
 
 .step-spacer {
   height: 0;
-  margin-bottom: -1rem;
+  margin-bottom: 0;
 }
 
 /* Móvil: ajuste diferente */
 @media (max-width: 768px) {
   .step-spacer {
-    margin-bottom: -1rem;
+    margin-bottom: 0;
   }
 }
 
@@ -1217,7 +1261,9 @@
   
   .login-card { 
     padding: 1.25rem 0.75rem;
-    max-width: 92%;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
   
   .register-form {
@@ -1228,6 +1274,30 @@
     padding: 13px 13px 13px 44px;
     font-size: 14px;
   }
+}
+
+/* ============ REGISTER STEPPER FLOW ============ */
+/* Keep the Stepper content-sized instead of inheriting its generic aspect ratio. */
+.register-page .outer-container {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: auto;
+  flex: none;
+  padding-top: 0;
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+/* Remove Stepper's step-specific top offsets only on Register. */
+.register-page .outer-container > .step-circle-container {
+  margin-top: 0;
+}
+
+/* Keep the heading at the top while the complete form remains scrollable. */
+.register-page .register-left {
+  align-items: center;
+  justify-content: flex-start;
+  overflow-y: auto;
 }
 
 /* Landscape bajo */
@@ -1255,10 +1325,10 @@
   }
   
   .password-validator {
-    position: fixed; 
-    top: 50%; 
-    right: 10px; 
-    transform: translateY(-50%);
-    z-index: 100;
+    position: static;
+    top: auto;
+    right: auto;
+    transform: none;
+    z-index: 1;
   }
 }

@@ -1,5 +1,5 @@
 // components/Register/Register.jsx
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ENDPOINTS, apiRequest } from "../../config/api.js";
 import { useToast } from "../../hooks/useToast.js";
@@ -12,62 +12,46 @@ import Stepper, { Step } from "../../components/Stepper/Stepper.jsx";
 import logo from "/cNormal.png";
 import cromo from "/login.png";
 
-// Reglas de formato RUT / teléfono (Chile)
-const RUT_INPUT_PATTERN = /^\d{1,2}(?:\.\d{3}){1,2}-[0-9Kk]$/;
-const RUT_VALID_PATTERN = /^\d{7,8}-[0-9Kk]$/; // sin puntos: mismo criterio que el backend
+// Reglas de formato de usuario y teléfono (Chile)
+const USERNAME_PATTERN = /^[a-z0-9_.-]{3,30}$/i;
 const PHONE_PATTERN = /^\+569\d{8}$/;
 const PHONE_DIGITS_PATTERN = /^\d{8}$/;
+const EMAIL_INVALID_MESSAGE = 'El correo no es válido.';
+const EMAIL_VALIDATION_TIMEOUT_MS = 10000;
 
-/**
- * Formatea el RUT insertando puntos automáticamente, agrupando de 3 en 3 desde la derecha.
- * El guión lo escribe el usuario manualmente. El dígito verificador queda como último carácter.
- * Ej: "12345678-9" → "12.345.678-9" | "1234567-K" → "1.234.567-K"
- */
-const formatRut = (raw) => {
-  const value = raw.toUpperCase();
-  const hyphenIndex = value.indexOf('-');
-  const hasHyphen = hyphenIndex !== -1;
+const normalizeUsername = (value) => (value || '').trim().toLowerCase();
+const isValidUsername = (value) => USERNAME_PATTERN.test(normalizeUsername(value));
+const normalizeEmail = (value) => (value || '').trim().toLowerCase();
 
-  // Cuerpo (dígitos antes del guión) y dígito verificador (después del guión)
-  const bodyRaw = hasHyphen ? value.slice(0, hyphenIndex) : value;
-  const dv = hasHyphen ? value.slice(hyphenIndex + 1) : '';
-
-  // Solo dígitos en el cuerpo, máximo 8
-  const bodyDigits = bodyRaw.replace(/\D/g, '').slice(0, 8);
-
-  // Agrupar de 3 en 3 desde la derecha: 12345678 → 12.345.678
-  const formattedBody = bodyDigits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-
-  // Dígito verificador: un único carácter 0-9 o K
-  const cleanDv = dv.replace(/[^0-9K]/g, '').slice(0, 1);
-
-  return hasHyphen ? `${formattedBody}-${cleanDv}` : formattedBody;
-};
-
-// Valida el RUT ignorando los puntos visuales (mismo criterio que el backend: 7-8 dígitos + DV)
-const isValidRut = (rut) => RUT_VALID_PATTERN.test(rut.replace(/\./g, ''));
-
+const focusableSelector = [
+  'a[href]',
+  'area[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
 
 const Register = () => {
   const [formData, setFormData] = useState({
-    nombre: "",
-    apellido: "",
+    username: "",
+    correo: "",
+    telefono: "",
     contraseña: "",
     repetirContraseña: "",
-    correo: "",
-    rut: "",
-    telefono: "",
     terminos: false,
   });
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showPasswordValidation, setShowPasswordValidation] = useState(false);
   const [showPhoneValidation, setShowPhoneValidation] = useState(false);
-  const [showRutValidation, setShowRutValidation] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [attemptedNext, setAttemptedNext] = useState(false);
+  const [isEmailValidationPending, setIsEmailValidationPending] = useState(false);
+  const emailValidationRequestRef = useRef(0);
   const navigate = useNavigate();
 
   const passwordValidation = useMemo(() => {
@@ -92,14 +76,6 @@ const Register = () => {
 
   const isPhoneValid = phoneValidation.format || formData.telefono.length === 0;
 
-  const rutValidation = useMemo(() => {
-    const rut = (formData.rut || "").trim();
-    return {
-      format: isValidRut(rut),
-    };
-  }, [formData.rut]);
-
-  const isRutValid = rutValidation.format || formData.rut.length === 0;
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -107,6 +83,19 @@ const Register = () => {
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
+
+    if (name === 'correo') {
+      emailValidationRequestRef.current += 1;
+      setIsEmailValidationPending(false);
+    }
+
+    if (name === 'correo' || name === 'username') {
+      setFieldErrors((previous) => {
+        const next = { ...previous };
+        delete next[name];
+        return next;
+      });
+    }
   };
 
   const [isLoading, setIsLoading] = useState(false);
@@ -115,6 +104,10 @@ const Register = () => {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState('');
+  const termsModalRef = useRef(null);
+  const termsCloseButtonRef = useRef(null);
+  const termsPreviousActiveElementRef = useRef(null);
+  const closeTermsModalRef = useRef(null);
   
   // Sistema de notificaciones Toast
   const toast = useToast();
@@ -126,17 +119,13 @@ const Register = () => {
       return false;
     }
 
+    const normalizedUsername = normalizeUsername(formData.username);
     const telefonoCompleto = `+569${(formData.telefono || '').trim()}`;
     if (!PHONE_PATTERN.test(telefonoCompleto)) {
       alert('El teléfono debe tener 8 dígitos después de +569');
       return false;
     }
 
-    if (!isValidRut((formData.rut || '').trim())) {
-      alert('El RUT debe tener formato 12.345.678-9 (7-8 dígitos, guión y dígito verificador 0-9 o K)');
-      return false;
-    }
-    
     if (!passwordsMatch) {
       alert('Las contraseñas no coinciden');
       return false;
@@ -146,21 +135,21 @@ const Register = () => {
       alert('Debes aceptar los términos y condiciones');
       return false;
     }
-    
+
+    const normalizedEmail = normalizeEmail(formData.correo);
     // No necesitamos limpiar errores porque los toasts se autogestionan
+    setIsLoading(true);
     
     try {
       const result = await apiRequest(API_ENDPOINTS.REGISTER, {
         method: 'POST',
         body: JSON.stringify({
-          nombre: formData.nombre,
-          apellido: formData.apellido,
-          correo: formData.correo,
-          rut: formData.rut.replace(/\./g, '').toUpperCase(),
+          username: normalizedUsername,
+          correo: normalizedEmail,
           telefono: telefonoCompleto,
           contraseña: formData.contraseña,
           repetirContraseña: formData.repetirContraseña,
-          terminos: formData.terminos
+          terminos: formData.terminos,
         }),
       });
       
@@ -194,8 +183,7 @@ const Register = () => {
             }
           });
           return false;
-        } else if (result.data.rut_exists) {
-          // Si el RUT ya existe, mostrar error
+        } else if (result.data.username_exists) {
           toast.error(errorMessage, {
             duration: 7000
           });
@@ -210,6 +198,8 @@ const Register = () => {
       console.error('Error de conexión:', error);
       toast.error('Error de conexión con el servidor. Verifica tu conexión a internet.');
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -230,6 +220,8 @@ const Register = () => {
     setShowTermsModal(false);
   };
 
+  closeTermsModalRef.current = handleCloseTermsModal;
+
   const handlePasswordFocus = () => {
     setShowPasswordValidation(true);
   };
@@ -242,39 +234,93 @@ const Register = () => {
     }, 150);
   };
 
+  useEffect(() => {
+    if (!showTermsModal) return undefined;
+
+    const previousActiveElement = document.activeElement;
+    termsPreviousActiveElementRef.current = previousActiveElement;
+
+    const modal = termsModalRef.current;
+    if (!modal) return undefined;
+
+    const getFocusableElements = () => Array.from(modal.querySelectorAll(focusableSelector));
+    const initialFocus = termsCloseButtonRef.current || getFocusableElements()[0] || modal;
+
+    try {
+      initialFocus.focus({ preventScroll: true });
+    } catch {
+      initialFocus.focus();
+    }
+
+    const handleTermsKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeTermsModalRef.current?.();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        modal.focus();
+        return;
+      }
+
+      const currentIndex = focusableElements.indexOf(document.activeElement);
+      const isLeavingForward = !event.shiftKey && (currentIndex === -1 || currentIndex === focusableElements.length - 1);
+      const isLeavingBackward = event.shiftKey && (currentIndex === -1 || currentIndex === 0);
+
+      if (isLeavingForward || isLeavingBackward) {
+        event.preventDefault();
+        const target = event.shiftKey
+          ? focusableElements[focusableElements.length - 1]
+          : focusableElements[0];
+        target.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleTermsKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleTermsKeyDown);
+      const elementToRestore = termsPreviousActiveElementRef.current;
+      if (elementToRestore && document.contains(elementToRestore)) {
+        elementToRestore.focus();
+      }
+    };
+  }, [showTermsModal]);
+
   // Funciones de validación para cada paso
-  const validateStep = (stepNumber) => {
+  const validateStep = async (stepNumber) => {
+    setAttemptedNext(true);
     const errors = {};
-    
+
     switch(stepNumber) {
-      case 1: // Información Personal
-        if (!formData.nombre.trim()) {
-          errors.nombre = 'El nombre es requerido';
+      case 1: { // Información de cuenta
+        const normalizedUsername = normalizeUsername(formData.username);
+        const normalizedEmail = normalizeEmail(formData.correo);
+
+        if (!normalizedUsername) {
+          errors.username = 'El nombre de usuario es requerido';
+        } else if (!isValidUsername(normalizedUsername)) {
+          errors.username = 'Usa 3-30 caracteres: letras, números, _, - o .';
         }
-        if (!formData.apellido.trim()) {
-          errors.apellido = 'El apellido es requerido';
+        if (!normalizedEmail) {
+          errors.correo = EMAIL_INVALID_MESSAGE;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+          errors.correo = EMAIL_INVALID_MESSAGE;
         }
         break;
-        
-      case 2: // Información de Contacto
-        if (!formData.correo.trim()) {
-          errors.correo = 'El correo es requerido';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.correo)) {
-          errors.correo = 'El correo no es válido';
-        }
-        if (!formData.rut.trim()) {
-          errors.rut = 'El RUT es requerido';
-        } else if (!isValidRut(formData.rut)) {
-          errors.rut = 'El formato debe ser 12.345.678-9';
-        }
+      }
+
+      case 2: { // Contacto y seguridad
         if (!formData.telefono.trim()) {
           errors.telefono = 'El teléfono es requerido';
-        } else if (!/^\d{8}$/.test(formData.telefono)) {
+        } else if (!PHONE_DIGITS_PATTERN.test(formData.telefono.trim())) {
           errors.telefono = 'El teléfono debe tener 8 dígitos después de +569';
         }
-        break;
-        
-      case 3: // Seguridad
         if (!formData.contraseña) {
           errors.contraseña = 'La contraseña es requerida';
         } else if (!isPasswordValid) {
@@ -289,10 +335,58 @@ const Register = () => {
           errors.terminos = 'Debe aceptar los términos y condiciones';
         }
         break;
+      }
     }
-    
+
     setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    if (Object.keys(errors).length > 0 || stepNumber !== 1) {
+      return Object.keys(errors).length === 0;
+    }
+
+    const normalizedUsername = normalizeUsername(formData.username);
+    const normalizedEmail = normalizeEmail(formData.correo);
+    setFormData((previous) => ({
+      ...previous,
+      username: normalizedUsername,
+      correo: normalizedEmail,
+    }));
+
+    const requestId = emailValidationRequestRef.current + 1;
+    emailValidationRequestRef.current = requestId;
+    setIsEmailValidationPending(true);
+    const emailValidationController = new AbortController();
+    const timeoutId = setTimeout(
+      () => emailValidationController.abort(),
+      EMAIL_VALIDATION_TIMEOUT_MS,
+    );
+
+    try {
+      const result = await apiRequest(API_ENDPOINTS.REGISTER_EMAIL_VALIDATION, {
+        method: 'POST',
+        body: JSON.stringify({ email: normalizedEmail }),
+        signal: emailValidationController.signal,
+      });
+
+      if (requestId !== emailValidationRequestRef.current) return false;
+      if (!result.ok || result.data?.valid !== true || typeof result.data.normalized_email !== 'string') {
+        setFieldErrors({ correo: EMAIL_INVALID_MESSAGE });
+        return false;
+      }
+
+      setFormData((previous) => ({ ...previous, correo: result.data.normalized_email }));
+      setFieldErrors({});
+      return true;
+    } catch {
+      if (requestId === emailValidationRequestRef.current) {
+        setFieldErrors({ correo: EMAIL_INVALID_MESSAGE });
+      }
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+      if (requestId === emailValidationRequestRef.current) {
+        setIsEmailValidationPending(false);
+      }
+    }
   };
 
   React.useEffect(() => {
@@ -333,10 +427,17 @@ const Register = () => {
           <p className="subtitle register-subtitle">Regístrate para acceder a tu perfil genético.</p>
           <div className="title-underline" />
 
-          <div className="login-form login-card register-form form-container">
+          <form
+            className="login-form login-card register-form form-container"
+            onSubmit={(e) => e.preventDefault()}
+          >
             <Stepper
               initialStep={1}
+              aria-busy={isLoading || isEmailValidationPending}
+              isSubmitting={isLoading}
+              isNextDisabled={isEmailValidationPending}
               onStepChange={(step) => {
+                if (step) setAttemptedNext(false);
                 setFieldErrors({}); // Limpiar errores al cambiar de paso
               }}
               onFinalStepCompleted={handleSubmit}
@@ -345,63 +446,73 @@ const Register = () => {
               backButtonText="Anterior"
               nextButtonText="Siguiente"
             >
-              {/* PASO 1: Nombre y Apellido */}
+              {/* PASO 1: Nombre de usuario y correo */}
               <Step>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem', color: '#333' }}>Información Personal</h2>
-                <div className="form-row">
-                  <div className={`uv-field ${fieldErrors.nombre ? 'uv-field-error' : ''}`}>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem', color: '#333' }}>Información de cuenta</h2>
+                <div className="account-row">
+                  <div className={`account-field uv-field ${fieldErrors.username ? 'uv-field-error' : ''}`}>
                     <span className="uv-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" width="20" height="20">
                         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" fill="currentColor" />
                       </svg>
                     </span>
+                    <label htmlFor="register-username" className="uv-label">Nombre de usuario *</label>
                     <input
                       className="uv-input"
                       type="text"
-                      name="nombre"
-                      value={formData.nombre}
+                      id="register-username"
+                      name="username"
+                      value={formData.username}
                       onChange={handleInputChange}
-                      onFocus={() => setFocusedField('nombre')}
-                      onBlur={() => setFocusedField(null)}
-                      placeholder=" "
+                      onFocus={() => setFocusedField('username')}
+                      onBlur={() => {
+                        setFocusedField(null);
+                        setFormData((previous) => ({ ...previous, username: normalizeUsername(previous.username) }));
+                      }}
                       required
-                      autoComplete="given-name"
+                      minLength={3}
+                      maxLength={30}
+                      pattern="[A-Za-z0-9_.-]{3,30}"
+                      autoComplete="username"
+                      aria-invalid={!!fieldErrors.username || (attemptedNext && !isValidUsername(formData.username))}
+                      aria-describedby={fieldErrors.username ? 'register-username-error' : undefined}
                     />
-                    <label className="uv-label">Nombre *</label>
                     <span className="uv-focus-bg" />
-                    {focusedField === 'nombre' && !formData.nombre && (
-                      <div className="input-hint">Ej: María</div>
+                    {focusedField === 'username' && !formData.username && (
+                      <div className="input-hint">3-30 caracteres: letras, números, _, - o .</div>
                     )}
-                    {fieldErrors.nombre && (
-                      <div className="field-error-message">{fieldErrors.nombre}</div>
+                    {fieldErrors.username && (
+                      <div id="register-username-error" className="field-error-message">{fieldErrors.username}</div>
                     )}
                   </div>
 
-                  <div className={`uv-field ${fieldErrors.apellido ? 'uv-field-error' : ''}`}>
+                  <div className={`account-field uv-field ${fieldErrors.correo ? 'uv-field-error' : ''}`}>
                     <span className="uv-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" width="20" height="20">
                         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" fill="currentColor" />
                       </svg>
                     </span>
+                    <label htmlFor="register-correo" className="uv-label">Correo *</label>
                     <input
                       className="uv-input"
-                      type="text"
-                      name="apellido"
-                      value={formData.apellido}
+                      type="email"
+                      id="register-correo"
+                      name="correo"
+                      value={formData.correo}
                       onChange={handleInputChange}
-                      onFocus={() => setFocusedField('apellido')}
+                      onFocus={() => setFocusedField('correo')}
                       onBlur={() => setFocusedField(null)}
-                      placeholder=" "
                       required
-                      autoComplete="family-name"
+                      autoComplete="email"
+                      aria-invalid={!!fieldErrors.correo || (attemptedNext && !normalizeEmail(formData.correo))}
+                      aria-describedby={fieldErrors.correo ? 'register-correo-error' : undefined}
                     />
-                    <label className="uv-label">Apellido *</label>
                     <span className="uv-focus-bg" />
-                    {focusedField === 'apellido' && !formData.apellido && (
-                      <div className="input-hint">Ej: González</div>
+                    {focusedField === 'correo' && !formData.correo && (
+                      <div className="input-hint">ejemplo@correo.com</div>
                     )}
-                    {fieldErrors.apellido && (
-                      <div className="field-error-message">{fieldErrors.apellido}</div>
+                    {fieldErrors.correo && (
+                      <div id="register-correo-error" className="field-error-message">{fieldErrors.correo}</div>
                     )}
                   </div>
                 </div>
@@ -416,112 +527,34 @@ const Register = () => {
                 </p>
               </Step>
 
-              {/* PASO 2: Correo, RUT y Teléfono */}
+              {/* PASO 2: Teléfono y seguridad */}
               <Step>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem', color: '#333' }}>Información de Contacto</h2>
+                <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', color: '#333' }}>Información de Contacto y Seguridad</h2>
                 
-                <div className={`uv-field ${fieldErrors.correo ? 'uv-field-error' : ''}`} style={{ marginBottom: '1.5rem' }}>
-                  <span className="uv-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20">
-                      <path d="M20 8l-8 5-8-5V6l8 5 8-5v2zm0 3v7H4v-7l8 5 8-5z" fill="currentColor" />
-                    </svg>
-                  </span>
-                  <input
-                    className="uv-input"
-                    type="email"
-                    name="correo"
-                    value={formData.correo}
-                    onChange={handleInputChange}
-                    onFocus={() => setFocusedField('correo')}
-                    onBlur={() => setFocusedField(null)}
-                    placeholder=" "
-                    required
-                  />
-                  <label className="uv-label">Correo *</label>
-                  <span className="uv-focus-bg" />
-                  {focusedField === 'correo' && !formData.correo && (
-                    <div className="input-hint">ejemplo@correo.com</div>
-                  )}
-                  {fieldErrors.correo && (
-                    <div className="field-error-message">{fieldErrors.correo}</div>
-                  )}
-                </div>
-
-<div className="rut-wrapper" style={{ marginBottom: '1.5rem' }}>
-                  <div className={`uv-field ${fieldErrors.rut ? 'uv-field-error' : ''}`}>
-                    <span className="uv-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="20" height="20">
-                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" fill="currentColor" />
-                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="white" strokeWidth="1" fill="none" />
-                      </svg>
-                    </span>
-                    <input
-                      className="uv-input"
-                      type="text"
-                      name="rut"
-                      value={formData.rut}
-                      inputMode="text"
-                      pattern={RUT_INPUT_PATTERN.source}
-                      onChange={(e) => {
-                        handleInputChange({ target: { name: 'rut', value: formatRut(e.target.value), type: 'text' } });
-                      }}
-                      onFocus={() => {
-                        setFocusedField('rut');
-                        setShowRutValidation(true);
-                      }}
-                      onBlur={() => {
-                        setFocusedField(null);
-                        setShowRutValidation(false);
-                      }}
-                      placeholder=" "
-                      required
-                      aria-describedby="rut-hint"
-                    />
-                    <label className="uv-label">RUT *</label>
-                    <span className="uv-focus-bg" />
-                    {focusedField === 'rut' && !formData.rut && (
-                      <div className="input-hint">12.345.678-9</div>
-                    )}
-                    {fieldErrors.rut && (
-                      <div className="field-error-message">{fieldErrors.rut}</div>
-                    )}
-                  </div>
-                  
-                  {showRutValidation && (
-                    <div className="phone-validator">
-                      <div className="validator-header">
-                        <span className="validator-title">Formato:</span>
-                      </div>
-                      <div className="validator-rules">
-                        <div className={`validator-rule ${isValidRut(formData.rut) ? 'valid' : 'invalid'}`}>
-                          <span className="validator-icon">{isValidRut(formData.rut) ? '✓' : '×'}</span>
-                          <span className="validator-text">Formato: 12.345.678-9</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-<div className="phone-wrapper">
+                <div className="phone-wrapper">
                   <div className={`uv-field phone-prefix-field ${fieldErrors.telefono ? 'uv-field-error' : ''}`}>
                     <span className="uv-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" width="20" height="20">
                         <path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.1A2 2 0 014.1 2h3a2 2 0 012 1.72c.07.96.27 1.9.7 2.81a2 2 0 01-.45 2.11L8.1 9.9a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.43 1.85.63 2.81.7A2 2 0 0122 16.92z" fill="currentColor" />
                       </svg>
                     </span>
-                    <label className="uv-label">Teléfono *</label>
+                    <label htmlFor="register-telefono" className="uv-label">Teléfono *</label>
                     <div className="phone-input-group">
                       <span className="phone-prefix">+569 </span>
                       <input
                         className="uv-input"
                         type="tel"
+                        id="register-telefono"
                         name="telefono"
                         value={formData.telefono}
                         inputMode="tel"
                         pattern={/^\d{8}$/.source}
                         onChange={(e) => {
                           // Solo los 8 dígitos: el prefijo +569 es fijo y va aparte
-                          const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                          const rawDigits = e.target.value.replace(/\D/g, '');
+                          const digits = rawDigits.startsWith('569')
+                            ? rawDigits.slice(3, 11)
+                            : rawDigits.slice(0, 8);
                           handleInputChange({ target: { name: 'telefono', value: digits, type: 'tel' } });
                         }}
                         onFocus={() => {
@@ -534,17 +567,21 @@ const Register = () => {
                         }}
                         placeholder=" "
                         required
-                        aria-describedby="phone-hint"
+                        aria-invalid={!!fieldErrors.telefono || !isPhoneValid}
+                        aria-describedby={[
+                          showPhoneValidation && 'phone-hint',
+                          fieldErrors.telefono && 'register-telefono-error',
+                        ].filter(Boolean).join(' ') || undefined}
                       />
                     </div>
                     <span className="uv-focus-bg" />
                     {fieldErrors.telefono && (
-                      <div className="field-error-message">{fieldErrors.telefono}</div>
+                      <div id="register-telefono-error" className="field-error-message">{fieldErrors.telefono}</div>
                     )}
                   </div>
                   
                   {showPhoneValidation && (
-                    <div className="phone-validator">
+                    <div id="phone-hint" className="phone-validator">
                       <div className="validator-header">
                         <span className="validator-title">Formato:</span>
                       </div>
@@ -557,40 +594,36 @@ const Register = () => {
                     </div>
                   )}
                 </div>
-              </Step>
-
-              {/* PASO 3: Contraseña y Repetir Contraseña */}
-              <Step>
-                <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', color: '#333' }}>Seguridad</h2>
-                
                 <div className="password-wrapper" style={{ marginBottom: '1rem' }}>
-                  <div className={`uv-field password-field-container ${fieldErrors.contraseña ? 'uv-field-error' : ''}`}>
+                  <div className={`uv-field password-field-container security-field ${fieldErrors.contraseña ? 'uv-field-error' : ''}`}>
                     <span className="uv-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" width="20" height="20">
                         <path d="M17 10h-1V7a4 4 0 10-8 0v3H7a2 2 0 00-2 2v7a2 2 0 002 2h10a2 2 0 002-2v-7a2 2 0 00-2-2zm-6 0V7a3 3 0 616 0v3h-6z" fill="currentColor" />
                       </svg>
                     </span>
-                    <input
-                      className="uv-input"
-                      type={showPassword ? "text" : "password"}
-                      name="contraseña"
-                      value={formData.contraseña}
-                      onChange={handleInputChange}
-                      onFocus={handlePasswordFocus}
-                      onBlur={handlePasswordBlur}
-                      placeholder=" "
-                      required
-                    />
-                    <label className="uv-label">Contraseña *</label>
-                    <span className="uv-focus-bg" />
-                    
-                    <button
-                      type="button"
-                      className="pwd-toggle"
-                      onClick={() => setShowPassword(prev => !prev)}
-                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                      tabIndex="-1"
-                    >
+                    <label htmlFor="register-password" className="uv-label">Contraseña *</label>
+                    <div className="security-input-row">
+                      <input
+                        className="uv-input"
+                        type={showPassword ? "text" : "password"}
+                        id="register-password"
+                        aria-invalid={!!fieldErrors.contraseña}
+                        aria-describedby={fieldErrors.contraseña ? 'register-password-error' : undefined}
+                        name="contraseña"
+                        value={formData.contraseña}
+                        onChange={handleInputChange}
+                        onFocus={handlePasswordFocus}
+                        onBlur={handlePasswordBlur}
+                        placeholder=" "
+                        required
+                      />
+                      <span className="uv-focus-bg" />
+                      <button
+                        type="button"
+                        className="pwd-toggle"
+                        onClick={() => setShowPassword(prev => !prev)}
+                        aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                      >
                       {showPassword ? (
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -602,9 +635,10 @@ const Register = () => {
                           <line x1="1" y1="1" x2="23" y2="23"/>
                         </svg>
                       )}
-                    </button>
+                      </button>
+                    </div>
                     {fieldErrors.contraseña && (
-                      <div className="field-error-message">{fieldErrors.contraseña}</div>
+                      <div id="register-password-error" className="field-error-message">{fieldErrors.contraseña}</div>
                     )}
                   </div>
                   
@@ -635,31 +669,36 @@ const Register = () => {
                   )}
                 </div>
 
-                <div className={`uv-field password-field-container ${fieldErrors.repetirContraseña ? 'uv-field-error' : ''}`}>
+                <div className={`uv-field password-field-container security-field ${fieldErrors.repetirContraseña ? 'uv-field-error' : ''}`}>
                   <span className="uv-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="20" height="20">
                       <path d="M17 10h-1V7a4 4 0 10-8 0v3H7a2 2 0 00-2 2v7a2 2 0 002 2h10a2 2 0 002-2v-7a2 2 0 00-2-2zm-6 0V7a3 3 0 616 0v3h-6z" fill="currentColor" />
                     </svg>
                   </span>
-                  <input
-                    className={`uv-input ${formData.repetirContraseña && !passwordsMatch ? 'input-error' : ''}`}
-                    type={showConfirmPassword ? "text" : "password"}
-                    name="repetirContraseña"
-                    value={formData.repetirContraseña}
-                    onChange={handleInputChange}
-                    placeholder=" "
-                    required
-                  />
-                  <label className="uv-label">Repetir contraseña *</label>
-                  <span className="uv-focus-bg" />
-                  
-                  <button
-                    type="button"
-                    className="pwd-toggle"
-                    onClick={() => setShowConfirmPassword(prev => !prev)}
-                    aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                    tabIndex="-1"
-                  >
+                  <label htmlFor="register-confirm-password" className="uv-label">Repetir contraseña *</label>
+                  <div className="security-input-row">
+                    <input
+                      className={`uv-input ${formData.repetirContraseña && !passwordsMatch ? 'input-error' : ''}`}
+                      type={showConfirmPassword ? "text" : "password"}
+                      id="register-confirm-password"
+                      aria-invalid={Boolean(fieldErrors.repetirContraseña || (formData.repetirContraseña && !passwordsMatch))}
+                      aria-describedby={[
+                        formData.repetirContraseña && !passwordsMatch && 'register-confirm-password-mismatch',
+                        fieldErrors.repetirContraseña && 'register-confirm-password-error',
+                      ].filter(Boolean).join(' ') || undefined}
+                      name="repetirContraseña"
+                      value={formData.repetirContraseña}
+                      onChange={handleInputChange}
+                      placeholder=" "
+                      required
+                    />
+                    <span className="uv-focus-bg" />
+                    <button
+                      type="button"
+                      className="pwd-toggle"
+                      onClick={() => setShowConfirmPassword(prev => !prev)}
+                      aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
                     {showConfirmPassword ? (
                       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -671,19 +710,23 @@ const Register = () => {
                         <line x1="1" y1="1" x2="23" y2="23"/>
                       </svg>
                     )}
-                  </button>
+                    </button>
+                  </div>
                   
                   {formData.repetirContraseña && !passwordsMatch && (
-                    <div className="password-error">Las contraseñas no coinciden</div>
+                    <div id="register-confirm-password-mismatch" className="password-error">Las contraseñas no coinciden</div>
                   )}
                   {fieldErrors.repetirContraseña && (
-                    <div className="field-error-message">{fieldErrors.repetirContraseña}</div>
+                    <div id="register-confirm-password-error" className="field-error-message">{fieldErrors.repetirContraseña}</div>
                   )}
                 </div>
 
                 <label className={`checkbox-line ${fieldErrors.terminos ? 'checkbox-error' : ''}`} style={{ marginTop: '1rem' }}>
                   <input
                     type="checkbox"
+                    id="register-terminos"
+                    aria-invalid={!!fieldErrors.terminos}
+                    aria-describedby={fieldErrors.terminos ? 'register-terminos-error' : undefined}
                     name="terminos"
                     checked={formData.terminos}
                     onChange={handleInputChange}
@@ -706,13 +749,13 @@ const Register = () => {
                   </span>
                 </label>
                 {fieldErrors.terminos && (
-                  <div className="field-error-message" style={{ marginTop: '6px' }}>{fieldErrors.terminos}</div>
+                  <div id="register-terminos-error" className="field-error-message" style={{ marginTop: '6px' }}>{fieldErrors.terminos}</div>
                 )}
                 
                 <div className="step-spacer"></div>
               </Step>
             </Stepper>
-          </div>
+          </form>
         </div>
       </section>
 
@@ -735,10 +778,19 @@ const Register = () => {
 
       {showTermsModal && (
         <div className="terms-modal-overlay" onClick={handleCloseTermsModal}>
-          <div className="terms-modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={termsModalRef}
+            className="terms-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="terms-modal-title"
+            tabIndex="-1"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="terms-modal-header">
-              <h2>Términos y Condiciones de Genomia</h2>
-              <button 
+              <h2 id="terms-modal-title">Términos y Condiciones de Genomia</h2>
+              <button
+                ref={termsCloseButtonRef}
                 className="terms-modal-close"
                 onClick={handleCloseTermsModal}
                 aria-label="Cerrar"
@@ -833,8 +885,13 @@ const Register = () => {
         </div>
       )}
       
-      {showSuccessModal && (
-        <div className="success-modal-overlay">
+      {showSuccessModal && registrationSuccess && (
+        <div
+          className="success-modal-overlay"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <div className="success-modal">
             <div className="success-icon">
               <svg viewBox="0 0 24 24" width="64" height="64" fill="none">

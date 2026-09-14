@@ -56,6 +56,18 @@
   }
 }
 
+@media (max-width: 480px) {
+  .outer-container,
+  .step-circle-container {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .step-circle-container {
+    max-width: 100%;
+  }
+}
+
 .step-indicator-row {
   display: flex;
   width: 100%;
@@ -94,7 +106,7 @@
 }
 
 .back-button {
-  transition: all 350ms;
+  transition: color 350ms, border-color 350ms, background-color 350ms;
   border-radius: 9999px;
   padding: 0.5rem 1.5rem;
   color: #64748b;
@@ -117,7 +129,7 @@
 }
 
 .next-button {
-  transition: all 350ms;
+  transition: color 350ms, background-image 350ms, transform 350ms, box-shadow 350ms, opacity 350ms;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,8 +170,24 @@
 
 .step-indicator {
   position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
   outline: none;
+}
+
+.step-indicator:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 3px;
+  border-radius: 9999px;
+}
+
+.step-indicator:disabled {
+  cursor: default;
 }
 
 .step-indicator-inner {
@@ -170,7 +198,7 @@
   justify-content: center;
   border-radius: 9999px;
   font-weight: 600;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease, background-color 0.3s ease, color 0.3s ease;
 }
 
 .active-dot {

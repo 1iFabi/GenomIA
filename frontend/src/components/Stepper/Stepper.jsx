@@ -1,5 +1,5 @@
 import React, { useState, Children, useRef, useLayoutEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion as Motion, AnimatePresence, useReducedMotion } from 'motion/react';
 
 import './Stepper.css';
 
@@ -18,13 +18,17 @@ export default function Stepper({
   backButtonText = 'Back',
   nextButtonText = 'Continue',
   disableStepIndicators = false,
+  isSubmitting = false,
+  isNextDisabled = false,
   renderStepIndicator,
   onKeyDown,
   ...rest
 }) {
   const [currentStep, setCurrentStep] = useState(initialStep);
   const [direction, setDirection] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const shouldReduceMotion = useReducedMotion() === true;
+  const submissionInProgressRef = useRef(false);
+  const validationInProgressRef = useRef(false);
   const stepsArray = Children.toArray(children);
   const totalSteps = stepsArray.length;
   const isCompleted = currentStep > totalSteps;
@@ -41,36 +45,49 @@ export default function Stepper({
   };
 
   const handleBack = () => {
+    if (isNextDisabled || validationInProgressRef.current) return;
     if (currentStep > 1) {
       setDirection(-1);
       updateStep(currentStep - 1);
     }
   };
 
-  const handleNext = () => {
-    if (!isLastStep) {
-      // Validar el paso actual antes de avanzar
-      if (validateStep(currentStep)) {
+  const handleNext = async () => {
+    if (isSubmitting || isNextDisabled || validationInProgressRef.current || isLastStep) return;
+
+    validationInProgressRef.current = true;
+    try {
+      // Validar el paso actual antes de avanzar; puede requerir una petición asíncrona.
+      if (await validateStep(currentStep)) {
         setDirection(1);
         updateStep(currentStep + 1);
       }
+    } finally {
+      validationInProgressRef.current = false;
     }
   };
 
   const handleComplete = async () => {
-    // Validar el último paso antes de completar
-    if (validateStep(currentStep)) {
-      // Permitir que el consumidor cancele la finalización devolviendo false
-      try {
-        const result = onFinalStepCompleted();
-        const proceed = typeof result === 'boolean' ? result : (typeof result?.then === 'function' ? await result : true);
-        if (proceed !== false) {
-          setDirection(1);
-          updateStep(totalSteps + 1);
+    if (isSubmitting || submissionInProgressRef.current) return;
+
+    submissionInProgressRef.current = true;
+    try {
+      // Validar el último paso antes de completar
+      if (await validateStep(currentStep)) {
+        // Permitir que el consumidor cancele la finalización devolviendo false
+        try {
+          const result = onFinalStepCompleted();
+          const proceed = typeof result === 'boolean' ? result : (typeof result?.then === 'function' ? await result : true);
+          if (proceed !== false) {
+            setDirection(1);
+            updateStep(totalSteps + 1);
+          }
+        } catch {
+          // Si hay excepción, no finalizar
         }
-      } catch (e) {
-        // Si hay excepción, no finalizar
       }
+    } finally {
+      submissionInProgressRef.current = false;
     }
   };
 
@@ -83,7 +100,7 @@ export default function Stepper({
       if (isLastStep) {
         handleComplete();
       } else {
-        handleNext();
+        void handleNext();
       }
     }
   };
@@ -92,6 +109,7 @@ export default function Stepper({
     <div
       className="outer-container"
       {...rest}
+      aria-busy={isSubmitting || rest['aria-busy']}
       onKeyDown={(e) => {
         handleEnterKey(e);
         onKeyDown?.(e);
@@ -117,6 +135,7 @@ export default function Stepper({
                   <StepIndicator
                     step={stepNumber}
                     disableStepIndicators={disableStepIndicators}
+                    reducedMotion={shouldReduceMotion}
                     currentStep={currentStep}
                     onClickStep={clicked => {
                       setDirection(clicked > currentStep ? 1 : -1);
@@ -124,7 +143,12 @@ export default function Stepper({
                     }}
                   />
                 )}
-                {isNotLastStep && <StepConnector isComplete={currentStep > stepNumber} />}
+                {isNotLastStep && (
+                  <StepConnector
+                    isComplete={currentStep > stepNumber}
+                    reducedMotion={shouldReduceMotion}
+                  />
+                )}
               </React.Fragment>
             );
           })}
@@ -134,6 +158,7 @@ export default function Stepper({
           isCompleted={isCompleted}
           currentStep={currentStep}
           direction={direction}
+          reducedMotion={shouldReduceMotion}
           className={`step-content-default ${contentClassName}`}
         >
           {stepsArray[currentStep - 1]}
@@ -147,15 +172,18 @@ export default function Stepper({
                   onClick={handleBack}
                   className={`back-button ${currentStep === 1 ? 'inactive' : ''}`}
                   {...backButtonProps}
+                  disabled={isSubmitting || isNextDisabled || backButtonProps.disabled}
+                  type="button"
                 >
                   {backButtonText}
                 </button>
               )}
-              <button 
-                onClick={isLastStep ? handleComplete : handleNext} 
-                className="next-button" 
-                disabled={isSubmitting}
+              <button
+                onClick={isLastStep ? handleComplete : handleNext}
+                className="next-button"
                 {...nextButtonProps}
+                disabled={isSubmitting || isNextDisabled || nextButtonProps.disabled}
+                type="button"
               >
                 {isSubmitting ? 'Procesando...' : (isLastStep ? 'Registrar' : nextButtonText)}
               </button>
@@ -167,47 +195,62 @@ export default function Stepper({
   );
 }
 
-function StepContentWrapper({ isCompleted, currentStep, direction, children, className }) {
+function StepContentWrapper({ isCompleted, currentStep, direction, children, className, reducedMotion }) {
   const [parentHeight, setParentHeight] = useState(0);
 
   return (
-    <motion.div
+    <Motion.div
       className={className}
       style={{ position: 'relative', overflow: 'visible' }}
       animate={{ height: isCompleted ? 0 : parentHeight }}
-      transition={{ type: 'spring', duration: 0.4 }}
+      transition={reducedMotion ? { duration: 0 } : { type: 'spring', duration: 0.4 }}
     >
       <AnimatePresence initial={false} mode="sync" custom={direction}>
         {!isCompleted && (
-          <SlideTransition key={currentStep} direction={direction} onHeightReady={h => setParentHeight(h)}>
+          <SlideTransition
+            key={currentStep}
+            direction={direction}
+            reducedMotion={reducedMotion}
+            onHeightReady={h => setParentHeight(h)}
+          >
             {children}
           </SlideTransition>
         )}
       </AnimatePresence>
-    </motion.div>
+    </Motion.div>
   );
 }
 
-function SlideTransition({ children, direction, onHeightReady }) {
+function SlideTransition({ children, direction, onHeightReady, reducedMotion }) {
   const containerRef = useRef(null);
 
   useLayoutEffect(() => {
-    if (containerRef.current) onHeightReady(containerRef.current.offsetHeight);
-  }, [children, onHeightReady]);
+    const container = containerRef.current;
+    if (!container) return undefined;
+
+    const reportHeight = () => onHeightReady(container.offsetHeight);
+    reportHeight();
+
+    if (typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [onHeightReady]);
 
   return (
-    <motion.div
+    <Motion.div
       ref={containerRef}
       custom={direction}
-      variants={stepVariants}
+      variants={reducedMotion ? reducedStepVariants : stepVariants}
       initial="enter"
       animate="center"
       exit="exit"
-      transition={{ duration: 0.4 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: 0.4 }}
       style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
     >
       {children}
-    </motion.div>
+    </Motion.div>
   );
 }
 
@@ -226,47 +269,73 @@ const stepVariants = {
   })
 };
 
+const reducedStepVariants = {
+  enter: { x: '0%', opacity: 1 },
+  center: { x: '0%', opacity: 1 },
+  exit: { x: '0%', opacity: 1 }
+};
+
+const stepIndicatorVariants = {
+  inactive: { scale: 1, backgroundColor: '#e2e8f0', color: '#94a3b8' },
+  active: { scale: 1, backgroundColor: '#4A90E2', color: '#4A90E2' },
+  complete: { scale: 1, backgroundColor: '#4A90E2', color: '#ffffff' }
+};
+
+const reducedStepIndicatorVariants = {
+  inactive: { backgroundColor: '#e2e8f0', color: '#94a3b8' },
+  active: { backgroundColor: '#4A90E2', color: '#4A90E2' },
+  complete: { backgroundColor: '#4A90E2', color: '#ffffff' }
+};
+
 export function Step({ children }) {
   return <div className="step-default">{children}</div>;
 }
 
-function StepIndicator({ step, currentStep, onClickStep, disableStepIndicators }) {
+function StepIndicator({ step, currentStep, onClickStep, disableStepIndicators, reducedMotion }) {
   const status = currentStep === step ? 'active' : currentStep < step ? 'inactive' : 'complete';
 
   const handleClick = () => {
     if (step !== currentStep && !disableStepIndicators) onClickStep(step);
   };
 
+  const ariaLabel = disableStepIndicators
+    ? `Paso ${step}, deshabilitado`
+    : status === 'active'
+      ? `Paso ${step}, actual`
+      : status === 'complete'
+        ? `Paso ${step}, completado`
+        : `Ir al paso ${step}`;
+
   return (
-    <motion.div 
-      onClick={handleClick} 
-      className="step-indicator" 
-      animate={status} 
+    <Motion.button
+      type="button"
+      onClick={handleClick}
+      className="step-indicator"
+      animate={status}
       initial={false}
+      disabled={disableStepIndicators}
+      aria-current={status === 'active' ? 'step' : undefined}
+      aria-label={ariaLabel}
       style={{ cursor: disableStepIndicators ? 'default' : 'pointer' }}
     >
-      <motion.div
-        variants={{
-          inactive: { scale: 1, backgroundColor: '#e2e8f0', color: '#94a3b8' },
-          active: { scale: 1, backgroundColor: '#4A90E2', color: '#4A90E2' },
-          complete: { scale: 1, backgroundColor: '#4A90E2', color: '#ffffff' }
-        }}
-        transition={{ duration: 0.3 }}
+      <Motion.div
+        variants={reducedMotion ? reducedStepIndicatorVariants : stepIndicatorVariants}
+        transition={reducedMotion ? { duration: 0 } : { duration: 0.3 }}
         className="step-indicator-inner"
       >
         {status === 'complete' ? (
-          <CheckIcon className="check-icon" />
+          <CheckIcon className="check-icon" reducedMotion={reducedMotion} />
         ) : status === 'active' ? (
           <div className="active-dot" />
         ) : (
           <span className="step-number">{step}</span>
         )}
-      </motion.div>
-    </motion.div>
+      </Motion.div>
+    </Motion.button>
   );
 }
 
-function StepConnector({ isComplete }) {
+function StepConnector({ isComplete, reducedMotion }) {
   const lineVariants = {
     incomplete: { width: 0, backgroundColor: 'transparent' },
     complete: { width: '100%', backgroundColor: '#4A90E2' }
@@ -274,28 +343,36 @@ function StepConnector({ isComplete }) {
 
   return (
     <div className="step-connector">
-      <motion.div
+      <Motion.div
         className="step-connector-inner"
         variants={lineVariants}
         initial={false}
         animate={isComplete ? 'complete' : 'incomplete'}
-        transition={{ duration: 0.4 }}
+        transition={reducedMotion ? { duration: 0 } : { duration: 0.4 }}
       />
     </div>
   );
 }
 
-function CheckIcon(props) {
+function CheckIcon({ reducedMotion = false, ...props }) {
   return (
     <svg {...props} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-      <motion.path
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ delay: 0.1, type: 'tween', ease: 'easeOut', duration: 0.3 }}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M5 13l4 4L19 7"
-      />
+      {reducedMotion ? (
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M5 13l4 4L19 7"
+        />
+      ) : (
+        <Motion.path
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ delay: 0.1, type: 'tween', ease: 'easeOut', duration: 0.3 }}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M5 13l4 4L19 7"
+        />
+      )}
     </svg>
   );
 }
