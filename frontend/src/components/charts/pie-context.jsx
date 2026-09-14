@@ -1,31 +1,20 @@
-"use client";;
-import { createContext, useContext, useMemo } from "react";
+"use client";
 
-// CSS variable references for pie chart theming
-export const pieCssVars = {
-  background: "var(--chart-background)",
-  foreground: "var(--chart-foreground)",
-  foregroundMuted: "var(--chart-foreground-muted)",
-  label: "var(--chart-label)",
-  // Default slice colors from chart palette
-  slice1: "var(--chart-1)",
-  slice2: "var(--chart-2)",
-  slice3: "var(--chart-3)",
-  slice4: "var(--chart-4)",
-  slice5: "var(--chart-5)",
-};
+import { useMemo } from "react";
+import {
+  PieHoverContext,
+  PieStableContext,
+} from "./pie-context-hooks";
 
-// Default slice color palette
-export const defaultPieColors = [
-  pieCssVars.slice1,
-  pieCssVars.slice2,
-  pieCssVars.slice3,
-  pieCssVars.slice4,
-  pieCssVars.slice5,
-];
-
-const PieStableContext = createContext(null);
-const PieHoverContext = createContext(null);
+export {
+  defaultPieColors,
+  pieCssVars,
+} from "./pie-context-constants";
+export {
+  usePie,
+  usePieHover,
+  usePieStable,
+} from "./pie-context-hooks";
 
 export function PieProvider({
   children,
@@ -87,30 +76,4 @@ export function PieProvider({
   );
 }
 
-export function usePieStable() {
-  const context = useContext(PieStableContext);
-  if (!context) {
-    throw new Error(
-      "usePieStable must be used within a PieProvider. " +
-        "Make sure your component is wrapped in <PieChart>."
-    );
-  }
-  return context;
-}
-
-export function usePieHover() {
-  const context = useContext(PieHoverContext);
-  if (!context) {
-    throw new Error(
-      "usePieHover must be used within a PieProvider. " +
-        "Make sure your component is wrapped in <PieChart>."
-    );
-  }
-  return context;
-}
-
-export function usePie() {
-  return { ...usePieStable(), ...usePieHover() };
-}
-
-export default PieStableContext;
+export { PieStableContext as default } from "./pie-context-hooks";

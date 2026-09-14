@@ -2,11 +2,9 @@
 import NumberFlow from "@number-flow/react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { defaultChartStatFlowFormat } from "./chart-stat-flow-format";
 
-export const defaultChartStatFlowFormat = {
-  notation: "standard",
-  maximumFractionDigits: 0,
-};
+export { defaultChartStatFlowFormat } from "./chart-stat-flow-format";
 
 function formatStatValue(value, formatOptions, prefix, suffix) {
   const formatted = new Intl.NumberFormat(undefined, formatOptions).format(

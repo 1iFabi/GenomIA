@@ -228,7 +228,7 @@ function Overview({ groupedData, onOpenCategory }) {
                 <PieSlice
                   key={item.label}
                   index={index}
-                  ariaLabel={`Abrir categoría ${item.label}, ${item.value} rasgos`}
+                  ariaLabel={`Abrir categoría ${item.label}, ${item.value} ${item.value === 1 ? 'rasgo' : 'rasgos'}`}
                   onClick={() => onOpenCategory(categoryGroups[index])}
                 />
               ))}
@@ -250,12 +250,12 @@ function Overview({ groupedData, onOpenCategory }) {
                 type="button"
                 className="rasgos-overview__legend-item"
                 onClick={() => onOpenCategory(group)}
-                aria-label={`Abrir categoría ${group.name}, ${group.traits.length} rasgos`}
+                aria-label={`Abrir categoría ${group.name}, ${group.traits.length} ${group.traits.length === 1 ? 'rasgo' : 'rasgos'}`}
               >
                 <span className="rasgos-overview__legend-marker" style={{ backgroundColor: CATEGORY_COLORS[group.name] }} aria-hidden="true" />
                 <span className="rasgos-overview__legend-copy">
                   <span className="rasgos-overview__legend-name">{group.name}</span>
-                  <span className="rasgos-overview__legend-count">{group.traits.length} rasgos</span>
+                  <span className="rasgos-overview__legend-count">{group.traits.length} {group.traits.length === 1 ? 'rasgo' : 'rasgos'}</span>
                 </span>
                 <ChevronRight size={16} aria-hidden="true" />
               </button>
