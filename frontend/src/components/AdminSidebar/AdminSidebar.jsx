@@ -3,7 +3,7 @@ import { LogOut, FileText, Database, Shield } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import './AdminSidebar.css'
 
-const AdminSidebar = ({ onLogout, user, isMobileMenuOpen = false, setIsMobileMenuOpen = () => {}, isAdmin = false, showNavItems = true }) => {
+const AdminSidebar = ({ onLogout, isMobileMenuOpen = false, setIsMobileMenuOpen = () => {}, isAdmin = false, showNavItems = true }) => {
   const navigate = useNavigate()
   const [isHovered, setIsHovered] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -41,6 +41,8 @@ const AdminSidebar = ({ onLogout, user, isMobileMenuOpen = false, setIsMobileMen
   }
 
   const isExpanded = isHovered
+  const isMobileSidebarClosed = isMobile && !isMobileMenuOpen
+  const childTabIndex = isMobileSidebarClosed ? -1 : undefined
 
   return (
     <>
@@ -57,14 +59,30 @@ const AdminSidebar = ({ onLogout, user, isMobileMenuOpen = false, setIsMobileMen
         } ${
           isMobile && isMobileMenuOpen ? 'admin-sidebar--mobile-open' : ''
         }`}
+        aria-hidden={isMobileSidebarClosed}
         onMouseEnter={() => !isMobile && setIsHovered(true)}
         onMouseLeave={() => !isMobile && setIsHovered(false)}
       >
         <div className="admin-sidebar__header">
-          <div className="admin-sidebar__brand" onClick={() => navigate('/dashboard')} style={{ cursor: 'pointer' }}>
+          <button
+            type="button"
+            className="admin-sidebar__brand"
+            onClick={() => navigate('/dashboard')}
+            aria-label="Ir al panel principal"
+            tabIndex={childTabIndex}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              color: 'inherit',
+              font: 'inherit',
+              textAlign: 'left',
+              cursor: 'pointer'
+            }}
+          >
             <img src="/cSolido.png" alt="GenomIA Logo" className="admin-sidebar__logo" />
             {isExpanded && !isMobile && <span className="admin-sidebar__brand-text">Genom<span className="admin-sidebar__brand-highlight">IA</span>.</span>}
-          </div>
+          </button>
         </div>
 
         <nav className="admin-sidebar__nav">
@@ -75,6 +93,7 @@ const AdminSidebar = ({ onLogout, user, isMobileMenuOpen = false, setIsMobileMen
                 href="#"
                 className="admin-sidebar__nav-item"
                 title={!isExpanded && !isMobile ? 'Administrar reportes genéticos' : undefined}
+                tabIndex={childTabIndex}
                 onClick={closeMenuAndNavigate('/dashboard/admin/reports')}
               >
                 <FileText size={20} className="admin-sidebar__nav-icon" />
@@ -90,6 +109,7 @@ const AdminSidebar = ({ onLogout, user, isMobileMenuOpen = false, setIsMobileMen
                 href="#ver-variantes"
                 className="admin-sidebar__nav-item"
                 title={!isExpanded && !isMobile ? 'Ver variantes en base de datos' : undefined}
+                tabIndex={childTabIndex}
                 onClick={closeMenuAndNavigate('/dashboard/admin/variants')}
               >
                 <Database size={20} className="admin-sidebar__nav-icon" />
@@ -105,6 +125,7 @@ const AdminSidebar = ({ onLogout, user, isMobileMenuOpen = false, setIsMobileMen
                   href="#gestionar-analistas"
                   className="admin-sidebar__nav-item"
                   title={!isExpanded && !isMobile ? 'Otorgar permisos' : undefined}
+                  tabIndex={childTabIndex}
                   onClick={closeMenuAndNavigate('/dashboard/admin/analysts')}
                 >
                   <Shield size={20} className="admin-sidebar__nav-icon" />
@@ -122,6 +143,7 @@ const AdminSidebar = ({ onLogout, user, isMobileMenuOpen = false, setIsMobileMen
             <button 
               type="button" 
               className="admin-sidebar__logout" 
+              tabIndex={childTabIndex}
               onClick={() => {
                 if (isMobile) setIsMobileMenuOpen(false)
                 onLogout()

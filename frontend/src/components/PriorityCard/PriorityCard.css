@@ -1,27 +1,229 @@
-.btn-priority-high {
-    background-color: #dc2626;
+.priority-card {
+  --priority-accent: #2f7b8a;
+  --priority-accent-soft: #e9f4f3;
+  --priority-border-hover: #b8d8d5;
+  --priority-focus: #8fc1bb;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #dfe8e6;
+  border-radius: 18px;
+  box-shadow: 0 14px 30px -24px rgba(15, 35, 65, 0.5);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.btn-priority-high:hover {
-    background-color: #b91c1c;
+.priority-card--high {
+  --priority-accent: #b65359;
+  --priority-accent-soft: #f8ecec;
+  --priority-border-hover: #e6c4c7;
+  --priority-focus: #d7a0a5;
 }
 
-.btn-priority-medium {
-    background-color: #ca8a04;
+.priority-card--medium {
+  --priority-accent: #b47b2c;
+  --priority-accent-soft: #fbf3e4;
+  --priority-border-hover: #ead9b9;
+  --priority-focus: #d8b56f;
 }
 
-.btn-priority-medium:hover {
-    background-color: #a16207;
+.priority-card--low {
+  --priority-accent: #2f7b8a;
+  --priority-accent-soft: #e9f4f3;
+  --priority-border-hover: #b8d8d5;
+  --priority-focus: #8fc1bb;
 }
 
-.btn-priority-low {
-    background-color: #2563eb;
+.priority-card--high .priority-card__rail {
+  width: 6px;
 }
 
-.btn-priority-low:hover {
-    background-color: #1d4ed8;
+.priority-card--high .priority-card__toggle {
+  padding: 1.75rem 1.7rem 1.55rem 2rem;
 }
 
-.btn-ver-recomendaciones {
-    font-size: 0.875rem;
+.priority-card--high .priority-card__icon {
+  width: 2.7rem;
+  height: 2.7rem;
+}
+
+.priority-card--high .priority-card__title {
+  font-size: clamp(1.2rem, 2vw, 1.45rem);
+}
+
+.priority-card--high .priority-card__body {
+  padding: 1.4rem 1.7rem 1.8rem 2rem;
+}
+
+.priority-card--high .priority-card__list {
+  gap: 1rem;
+}
+
+.priority-card:hover {
+  border-color: var(--priority-border-hover);
+  box-shadow: 0 18px 34px -24px rgba(15, 35, 65, 0.6);
+  transform: translateY(-2px);
+}
+
+.priority-card__rail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--priority-accent);
+}
+
+.priority-card__toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 1rem;
+  padding: 1.3rem 1.35rem 1.2rem 1.55rem;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: #ffffff;
+  color: #0f2341;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.priority-card__toggle:hover {
+  background: #f9fbfb;
+}
+
+.priority-card__toggle:focus-visible {
+  outline: 3px solid var(--priority-focus);
+  outline-offset: -3px;
+}
+
+.priority-card__toggle[aria-expanded='true'] {
+  border-bottom-color: #e6eeec;
+}
+
+.priority-card__summary {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.85rem;
+}
+
+.priority-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 10px;
+  background: var(--priority-accent-soft);
+  color: var(--priority-accent);
+}
+
+.priority-card__icon-glyph {
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke-width: 2.2;
+}
+
+.priority-card__heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.28rem;
+}
+
+.priority-card__title {
+  overflow: hidden;
+  color: #0f2341;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.priority-card__count {
+  color: var(--priority-accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.priority-card__chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--priority-accent);
+  transition: transform 0.2s ease;
+}
+
+.priority-card__chevron svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  stroke-width: 2;
+}
+
+.priority-card__toggle[aria-expanded='true'] .priority-card__chevron {
+  transform: rotate(180deg);
+}
+
+.priority-card__body {
+  padding: 1.15rem 1.35rem 1.4rem;
+  background: #ffffff;
+}
+
+.priority-card__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.priority-card__empty {
+  margin: 0;
+  padding: 1rem 0 0.35rem;
+  color: #66768a;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .priority-card__toggle {
+    padding: 1.15rem 1rem 1.05rem 1.25rem;
+  }
+
+  .priority-card__body {
+    padding: 1rem 1rem 1.2rem;
+  }
+
+  .priority-card__title {
+    font-size: 1.02rem;
+  }
+
+  .priority-card--high .priority-card__toggle {
+    padding: 1.35rem 1rem 1.2rem 1.4rem;
+  }
+
+  .priority-card--high .priority-card__body {
+    padding: 1.15rem 1rem 1.35rem 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .priority-card,
+  .priority-card__toggle,
+  .priority-card__chevron {
+    transition: none;
+  }
+
+  .priority-card:hover {
+    transform: none;
+  }
 }
