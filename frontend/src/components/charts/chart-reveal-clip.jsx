@@ -1,5 +1,5 @@
 "use client";;
-import { motion } from "motion/react";
+import { motion as Motion } from "motion/react";
 import { clipRevealTransition } from "./animation";
 
 /**
@@ -41,7 +41,7 @@ export function ChartRevealClip({
 
     return (
       <clipPath id={clipPathId}>
-        <motion.rect
+        <Motion.rect
           animate={{ width: 0, x: rightEdge }}
           height={paddedHeight}
           initial={{ width: paddedWidth, x: -padding }}
@@ -56,7 +56,7 @@ export function ChartRevealClip({
 
   return (
     <clipPath id={clipPathId}>
-      <motion.rect
+      <Motion.rect
         animate={{ width: paddedWidth }}
         height={paddedHeight}
         initial={{ width: 0 }}

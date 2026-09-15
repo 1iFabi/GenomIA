@@ -1,4 +1,5 @@
 "use client";
+/* eslint react-refresh/only-export-components: ["error", { "allowExportNames": ["useStaticChartPreview"] }] */
 
 import { createContext, useContext } from "react";
 
