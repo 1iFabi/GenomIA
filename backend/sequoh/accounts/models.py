@@ -33,6 +33,47 @@ class EmailVerification(models.Model):
         return timezone.now() > self.expires_at
 
 
+class RegistrationEmailChallenge(models.Model):
+    """Short-lived mailbox-access challenge used before account creation."""
+
+    email = models.EmailField(max_length=254)
+    code_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    attempt_count = models.PositiveIntegerField(default=0)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Desafío de correo de registro'
+        verbose_name_plural = 'Desafíos de correo de registro'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['email', '-created_at'], name='accounts_reg_email_created_idx'),
+            models.Index(fields=['expires_at'], name='accounts_reg_expiry_idx'),
+        ]
+
+    def __str__(self):
+        return f"RegistrationEmailChallenge(id={self.pk}, email={self.email})"
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_verified(self) -> bool:
+        return self.verified_at is not None
+
+    @property
+    def is_consumed(self) -> bool:
+        return self.consumed_at is not None
+
+    @property
+    def attempts_exhausted(self) -> bool:
+        max_attempts = int(getattr(settings, 'REGISTRATION_EMAIL_CHALLENGE_MAX_ATTEMPTS', 5))
+        return self.attempt_count >= max_attempts
+
+
 class WelcomeStatus(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='welcome_status')
     welcome_sent = models.BooleanField(default=False)

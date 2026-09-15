@@ -120,6 +120,7 @@ REST_FRAMEWORK = {
         'reset': '5/min',
         'resend': '5/min',
         'contact': '5/min',
+        'register_email_validation': '20/min',
     },
 }
 
@@ -274,8 +275,8 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 
 # EMAIL CONFIGURATION - Usar API de Gmail mediante adapter de allauth
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'GenomIA <seqgenomia@gmail.com>')
-SERVER_EMAIL = os.environ.get('SERVER_EMAIL', 'seqgenomia@gmail.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or 'GenomIA <seqgenomia@gmail.com>'
+SERVER_EMAIL = os.environ.get('SERVER_EMAIL') or 'seqgenomia@gmail.com'
 EMAIL_SUBJECT_PREFIX = '[GenomIA] '
 
 # Rutas para credenciales/token de Gmail API (puedes ajustarlas por env)
@@ -288,6 +289,18 @@ ACCOUNT_ADAPTER = 'accounts.adapters.GmailAPIAccountAdapter'
 # Verificación obligatoria y URLs de redirección tras confirmar
 REQUIRE_EMAIL_VERIFICATION = True
 EMAIL_VERIFICATION_EXPIRE_HOURS = 24
+EMAIL_VALIDATION_DNS_TIMEOUT_SECONDS = float(os.getenv('EMAIL_VALIDATION_DNS_TIMEOUT_SECONDS', '3'))
+EMAIL_VALIDATION_DNS_FALLBACK_NAMESERVERS = os.getenv(
+    'EMAIL_VALIDATION_DNS_FALLBACK_NAMESERVERS',
+    '1.1.1.1,8.8.8.8',
+)
+# Comma-separated; domains are normalized to IDNA for exact server-side matching.
+BLOCKED_EMAIL_DOMAINS = os.getenv('BLOCKED_EMAIL_DOMAINS', '')
+# Server-only allowlist. An explicit empty value disables the allowlist for custom domains.
+ALLOWED_EMAIL_DOMAINS = os.getenv(
+    'ALLOWED_EMAIL_DOMAINS',
+    'gmail.com,googlemail.com,outlook.com,hotmail.com,live.com,yahoo.com,icloud.com,me.com,proton.me,protonmail.com,pregrado.uoh.cl,uoh.cl',
+)
 
 # Dominio del FRONTEND: detecta automáticamente el entorno
 # En Render, usa DATABASE_URL como indicador de producción
