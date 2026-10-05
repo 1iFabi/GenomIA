@@ -1,13 +1,5 @@
 import './index.css';
 
-function EnrollButton({ className = '' }: { className?: string }) {
-  return (
-    <button className={`enroll-button ${className}`} type="button">
-      INSCRIBIRSE
-    </button>
-  );
-}
-
 export default function App() {
   return (
     <main className="genomia-page relative h-full w-full overflow-hidden" aria-label="GenomIA">
@@ -34,7 +26,9 @@ export default function App() {
             <span className="title-line title-line--subtitle">Descubre la historia que tu</span>
             <span className="title-line title-line--subtitle">ADN tiene para contarte</span>
           </h1>
-          <EnrollButton className="enroll-button--hero" />
+          <button className="enroll-button enroll-button--hero" type="button">
+            INSCRIBIRSE
+          </button>
         </div>
 
         <span className="hero-horizon" aria-hidden="true" />

@@ -46,27 +46,6 @@ a:focus-visible {
   outline-offset: 5px;
 }
 
-.font-inter {
-  font-family: 'Inter', sans-serif;
-}
-
-.font-instrument {
-  font-family: 'Instrument Serif', serif;
-}
-
-.font-script {
-  font-family: 'Dancing Script', cursive;
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
 .genomia-page {
   width: 100%;
   height: 100vh;
