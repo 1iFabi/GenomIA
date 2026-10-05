@@ -1,0 +1,74 @@
+{
+  "demo_id": "gdb-04f1-synthetic-genomics",
+  "demo_version": "2",
+  "schema_version": "2",
+  "synthetic": true,
+  "non_clinical": true,
+  "clinically_reviewed": false,
+  "display_only": true,
+  "numeric_semantics": "arbitrary_demo_only_not_evaluated",
+  "disclaimer": "SYNTHETIC DEMO ONLY: fictional non-clinical display fixtures, not derived from a biological sample. All numeric values are arbitrary demo-only display fixtures and are not evaluated. No biological, risk, actionability, or clinical interpretation is provided. Not for diagnosis, treatment, or medical decisions. No clinical review or consent is implied.",
+  "modules": [
+    {
+      "module": "global_ancestry",
+      "label": "Demo group A",
+      "state": "not_evaluated",
+      "display": {
+        "kind": "fictional_components",
+        "components": [
+          {"label": "Demo group A", "display_percentage": 60},
+          {"label": "Demo group B", "display_percentage": 40}
+        ]
+      }
+    },
+    {
+      "module": "local_ancestry",
+      "label": "Demo group A",
+      "state": "not_evaluated",
+      "display": {
+        "kind": "abstract_segments",
+        "axis": {"label": "Demo axis A", "extent": 100, "unit": "abstract_demo_units"},
+        "segments": [
+          {"label": "Demo group A", "offset": 0, "length": 60},
+          {"label": "Demo group B", "offset": 60, "length": 40}
+        ]
+      }
+    },
+    {
+      "module": "polygenic_risk",
+      "label": "Demo index A",
+      "state": "not_evaluated",
+      "display": {
+        "kind": "demo_index",
+        "items": [{"label": "Demo index A", "display_value": 37}]
+      }
+    },
+    {
+      "module": "monogenic_risk",
+      "label": "Demo index A",
+      "state": "not_evaluated",
+      "display": {
+        "kind": "demo_entries",
+        "items": [{"label": "Demo index A", "display_value": 12}]
+      }
+    },
+    {
+      "module": "traits",
+      "label": "Demo trait A",
+      "state": "not_evaluated",
+      "display": {
+        "kind": "demo_traits",
+        "items": [{"label": "Demo trait A", "display_value": 24}]
+      }
+    },
+    {
+      "module": "pharmacogenetics",
+      "label": "Demo interaction A",
+      "state": "not_evaluated",
+      "display": {
+        "kind": "demo_interactions",
+        "items": [{"label": "Demo interaction A", "display_value": 8}]
+      }
+    }
+  ]
+}

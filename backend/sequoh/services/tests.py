@@ -45,7 +45,7 @@ if __name__ == '__main__':
         assert connections['default'].settings_dict['HOST'] == config['HOST']
         allowed = {'services.tests', 'accounts.tests', 'accounts.test_registration_email_challenge',
                    'participants.tests', 'profiles.tests', 'reception.tests',
-                   'genetics.tests', 'reports.tests'}
+                   'genoma.tests', 'reports.tests'}
         labels = sys.argv[1:]
         assert labels and set(labels) <= allowed, 'Only scoped test labels allowed'
         print(f'ISOLATED_DB={target}; labels={labels}', flush=True)

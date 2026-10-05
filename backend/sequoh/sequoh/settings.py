@@ -84,7 +84,7 @@ INSTALLED_APPS = [
     'participants',
     'services',
     'reception',
-    'genetics',
+    'genoma',
     'reports',
     'rest_framework',
     'corsheaders',

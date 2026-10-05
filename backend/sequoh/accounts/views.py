@@ -28,7 +28,6 @@ from services.legacy_profile import (
     get_legacy_service_projection, get_paid_legacy_service_projections,
 )
 from services.models import Purchase
-from genetics.models import SNP, UserSNP
 from .models import AppUser, RevokedToken, Role, WelcomeStatus
 from .email_validation import is_valid_registration_name, validate_registration_email
 from .username_validation import normalize_registration_username
@@ -440,8 +439,6 @@ class DashboardAPIView(APIView):
         if is_admin_or_analyst(u):
             payload.update({
                 "total_users": User.objects.filter(is_active=True).count(),
-                "processed_reports": UserSNP.objects.values('user').distinct().count() if UserSNP.objects.exists() else 0,
-                "variants_count": SNP.objects.count() if SNP.objects.exists() else 0,
                 # Keep the legacy dashboard cohort: all users with a Profile, regardless
                 # of role/activity. A paid service overrides only its own Profile row.
                 "analysis_count": _dashboard_analysis_count(),
@@ -1043,13 +1040,9 @@ class AdminStatsAPIView(APIView):
             analysis_count = projected.count(ServiceStatus.COMPLETED)
             pending_reports = projected.count(ServiceStatus.PENDING)
             
-            # Contar variantes en la BD
-            variants_count = SNP.objects.count()
-            
             payload = {
                 "total_users": total_users,
                 "pending_reports": pending_reports,
-                "variants_count": variants_count,
                 "analysis_count": analysis_count,
                 "user_growth": "+12%",
                 "report_growth": "+8%",
@@ -1064,8 +1057,6 @@ class AdminStatsAPIView(APIView):
             # Devolver al menos los usuarios que podemos contar
             return Response({
                 "total_users": clients.count(),
-                "processed_reports": 0,
-                "variants_count": 0,
                 "analysis_count": 0,
                 "user_growth": "+0%",
                 "report_growth": "+0%",

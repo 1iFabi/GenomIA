@@ -189,9 +189,6 @@ class AuthHttpOnlyCookieTests(TestCase):
             ("POST", "/api/auth/service/status/", {"userId": self.user.id, "status": "PENDING"}),
             ("POST", "/api/auth/logout/", {}),
             ("POST", "/api/admin/analysts/", {"userId": self.user.id, "grant": True}),
-            ("POST", "/api/genetics/variantes/", {}),
-            ("POST", "/api/ingest/upload-genetic-file/", {}),
-            ("POST", "/api/ingest/delete-genetic-file/", {}),
             ("POST", "/api/reception/arrival/", {}),
             ("POST", "/api/reception/sample-code/", {}),
             ("POST", "/api/reception/sample-status/", {}),
@@ -317,7 +314,6 @@ class FunctionalRoleAuthorizationTests(TestCase):
              None, {'ADMIN', 'RECEPCION'}, 200),
             ('POST', '/api/reception/arrival/',
              {'userId': self.target.pk}, {'ADMIN', 'RECEPCION'}, 200),
-            ('POST', '/api/genetics/variantes/', {}, {'ADMIN', 'ANALISTA'}, 400),
         )
 
     def request_as(self, user, method, path, payload):
@@ -545,17 +541,59 @@ class FunctionalRoleReadSurfaceTests(TestCase):
         self.assertTrue(all(set(user) == {'id', 'sample_code', 'service_status'}
                             for user in listing.data))
 
-    def test_stats_count_active_functional_clients_only_in_normal_and_fallback_paths(self):
-        response = self.get_as(self.analyst, '/api/admin/stats/')
-        self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response.data['total_users'], 2)
-        self.assertEqual(response.data['analysis_count'], 1)
-        self.assertEqual(response.data['pending_reports'], 1)
-        self.assertIn('variants_count', response.data)
-        with patch('accounts.views.SNP.objects.count', side_effect=RuntimeError('test failure')):
-            fallback = self.get_as(self.admin, '/api/admin/stats/')
-        self.assertEqual(fallback.status_code, 200, fallback.data)
-        self.assertEqual(fallback.data['total_users'], 2)
+    def assert_no_legacy_snp_queries(self, queries):
+        for query in queries:
+            for table in ('snps', 'user_snps', 'rsid_extra_info', 'genetics_pharmacogeneticsystem'):
+                self.assertNotIn(f'"{table}"', query['sql'])
+
+    def test_stats_count_active_functional_clients_without_legacy_snp_metrics(self):
+        for actor in (self.admin, self.analyst):
+            with self.subTest(actor=actor.username):
+                with CaptureQueriesContext(connection) as queries:
+                    response = self.get_as(actor, '/api/admin/stats/')
+                self.assertEqual(response.status_code, 200, response.data)
+                self.assertEqual(response.data['total_users'], 2)
+                self.assertEqual(response.data['analysis_count'], 1)
+                self.assertEqual(response.data['pending_reports'], 1)
+                self.assertNotIn('variants_count', response.data)
+                self.assertNotIn('processed_reports', response.data)
+                self.assertIn('no-store', response['Cache-Control'])
+                self.assert_no_legacy_snp_queries(queries)
+
+    def test_stats_fallback_preserves_client_count_without_legacy_snp_metrics(self):
+        for actor in (self.admin, self.analyst):
+            with self.subTest(actor=actor.username):
+                with patch('accounts.views.get_paid_legacy_service_projections',
+                           side_effect=RuntimeError('test projection failure')) as projection:
+                    with CaptureQueriesContext(connection) as queries:
+                        fallback = self.get_as(actor, '/api/admin/stats/')
+                projection.assert_called_once()
+                self.assertEqual(fallback.status_code, 200, fallback.data)
+                self.assertEqual(fallback.data['total_users'], 2)
+                self.assertEqual(fallback.data['analysis_count'], 0)
+                self.assertEqual(set(fallback.data), {
+                    'total_users', 'analysis_count', 'user_growth', 'report_growth',
+                    'analysis_growth', 'last_update',
+                })
+                self.assert_no_legacy_snp_queries(queries)
+
+    def test_dashboard_retains_role_access_without_legacy_snp_metrics_or_queries(self):
+        for actor in (self.admin, self.analyst, self.reception, self.client_user,
+                      self.super_client, self.unmapped):
+            with self.subTest(actor=actor.username):
+                with CaptureQueriesContext(connection) as queries:
+                    response = self.get_as(actor, '/api/auth/dashboard/')
+                self.assertEqual(response.status_code, 200, response.data)
+                self.assertEqual(response.data['user']['id'], actor.pk)
+                expected = {'user', 'profile'}
+                if actor in (self.admin, self.analyst):
+                    expected |= {'total_users', 'analysis_count', 'user_growth', 'report_growth',
+                                 'analysis_growth', 'last_update'}
+                    self.assertEqual(response.data['total_users'], 6)
+                    self.assertEqual(response.data['analysis_count'], 3)
+                self.assertEqual(set(response.data), expected)
+                self.assertIn('no-store', response['Cache-Control'])
+                self.assert_no_legacy_snp_queries(queries)
 
 
 class AccountReadProjectionTests(TestCase):
@@ -656,12 +694,11 @@ class AccountReadProjectionTests(TestCase):
                 response = self.read_as(actor, '/api/admin/stats/')
                 self.assertEqual(response.status_code, 200, response.data)
                 self.assertEqual(set(response.data), {
-                    'total_users', 'pending_reports', 'analysis_count', 'variants_count',
+                    'total_users', 'pending_reports', 'analysis_count',
                     'user_growth', 'report_growth', 'analysis_growth', 'last_update',
                 })
                 self.assertEqual((response.data['total_users'], response.data['pending_reports'],
                                   response.data['analysis_count']), (4, 1, 2))
-                self.assertEqual(response.data['variants_count'], 0)
                 self.assertIn('no-store', response['Cache-Control'])
         rows = {row['id']: row for row in self.read_as(self.admin, '/api/admin/users/').data}
         self.assertEqual(rows[broken.pk]['service_status'], 'NO_PURCHASED')
@@ -715,12 +752,11 @@ class AccountReadProjectionTests(TestCase):
         response = self.read_as(self.admin, '/api/auth/dashboard/')
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(set(response.data), {
-            'user', 'profile', 'total_users', 'processed_reports', 'variants_count',
+            'user', 'profile', 'total_users',
             'analysis_count', 'user_growth', 'report_growth', 'analysis_growth', 'last_update',
         })
         self.assertEqual(response.data['total_users'], 5)  # Inactive Profile still counts in analysis.
         self.assertEqual(response.data['analysis_count'], 3)  # Legacy, inactive, analyst; no profile excluded.
-        self.assertEqual((response.data['processed_reports'], response.data['variants_count']), (0, 0))
         self.assertIn('no-store', response['Cache-Control'])
 
     def test_list_and_stats_query_count_does_not_grow_per_paid_client(self):
