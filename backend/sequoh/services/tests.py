@@ -69,7 +69,7 @@ import json
 from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from importlib import import_module
+from importlib import import_module, reload
 from threading import Barrier
 from types import SimpleNamespace
 
@@ -77,9 +77,10 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.db import IntegrityError, connection, connections, transaction
 from django.db.migrations.loader import MigrationLoader
-from django.db.models.deletion import PROTECT, ProtectedError
+from django.db.models.deletion import PROTECT, SET_NULL, ProtectedError
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -520,6 +521,256 @@ class ServiceRequestSchemaTests(TestCase):
                 self.assertEqual(domain.ServiceRequest.objects.filter(purchase_id=purchase_id).count(), 1)
             finally:
                 pool.submit(remove_purchase, purchase_id, user_id).result()
+
+
+class SampleSchemaTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(username='schema-sample-owner')
+        cls.participant = Participant.objects.create(user=cls.user, participant_code='schema-sample')
+        cls.purchase = domain.Purchase.objects.create(owner=cls.user.app_user)
+        cls.request = domain.ServiceRequest.objects.create(
+            purchase=cls.purchase, participant=cls.participant,
+            status=domain.ServiceStatus.objects.get(code='WAITING_SAMPLE'),
+        )
+        cls.other_user = get_user_model().objects.create_user(username='schema-sample-other')
+        cls.other_participant = Participant.objects.create(
+            user=cls.other_user, participant_code='schema-sample-other',
+        )
+        cls.second_request = domain.ServiceRequest.objects.create(
+            purchase=domain.Purchase.objects.create(owner=cls.user.app_user),
+            participant=cls.participant, status=cls.request.status,
+        )
+        cls.other_request = domain.ServiceRequest.objects.create(
+            purchase=domain.Purchase.objects.create(owner=cls.other_user.app_user),
+            participant=cls.other_participant, status=cls.request.status,
+        )
+
+    def sample(self, **changes):
+        values = dict(service_request=self.request, participant=self.participant,
+                      sample_code=f'schema-{uuid.uuid4().hex}', sample_type='saliva')
+        return domain.Sample(**(values | changes))
+
+    def assert_invalid(self, sample, field):
+        for action in (sample.clean, sample.save):
+            with self.subTest(action=action.__name__):
+                with self.assertRaises(ValidationError) as error:
+                    action()
+                self.assertIn(field, error.exception.message_dict)
+
+    def test_creates_sample_bound_to_one_service_and_participant(self):
+        profiles = list(Profile.objects.values())
+        sample = domain.Sample.objects.create(
+            service_request=self.request, participant=self.participant,
+            sample_code='schema-sample-001', sample_type='saliva',
+        )
+        sample.refresh_from_db()
+        self.assertEqual(sample.service_request_id, self.request.pk)
+        self.assertEqual(sample.participant_id, self.participant.pk)
+        self.assertEqual(sample.status, 'available')
+        self.assertIsInstance(sample.pk, uuid.UUID)
+        self.assertTrue(timezone.is_aware(sample.created_at))
+        for field in ('parent_sample', 'material', 'collection_method', 'collected_at',
+                      'storage_location', 'metadata'):
+            self.assertIsNone(getattr(sample, field))
+        optional = dict(material='DNA', collection_method='swab', collected_at=timezone.now(),
+                        storage_location='Freezer A', metadata={'batch': ['A1']}, status='stored')
+        for field, value in optional.items():
+            setattr(sample, field, value)
+        sample.full_clean()
+        sample.save()
+        sample.refresh_from_db()
+        for field, value in optional.items():
+            self.assertEqual(getattr(sample, field), value)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status.code, 'WAITING_SAMPLE')
+        self.assertFalse(domain.ServiceStatusLog.objects.exists())
+        self.assertEqual(list(Profile.objects.values()), profiles)
+
+    def test_exact_physical_schema_columns_types_and_foreign_keys(self):
+        columns = {
+            'sample_id': ('uuid', None, 'NO'),
+            'service_request_id': ('uuid', None, 'NO'),
+            'participant_id': ('uuid', None, 'NO'),
+            'parent_sample_id': ('uuid', None, 'YES'),
+            'sample_code': ('character varying', 96, 'NO'),
+            'sample_type': ('character varying', 64, 'NO'),
+            'material': ('character varying', 64, 'YES'),
+            'collection_method': ('character varying', 128, 'YES'),
+            'collected_at': ('timestamp with time zone', None, 'YES'),
+            'storage_location': ('character varying', 255, 'YES'),
+            'metadata': ('jsonb', None, 'YES'),
+            'status': ('character varying', 32, 'NO'),
+            'created_at': ('timestamp with time zone', None, 'NO'),
+        }
+        self.assertEqual((domain.Sample._meta.db_table, domain.Sample._meta.pk.name), ('sample', 'sample_id'))
+        self.assertEqual({field.column for field in domain.Sample._meta.local_fields}, set(columns))
+        for field in domain.Sample._meta.local_fields:
+            _, length, nullable = columns[field.column]
+            self.assertEqual(field.null, nullable == 'YES')
+            self.assertEqual(field.blank, field.null)
+            if length is not None:
+                self.assertEqual(field.max_length, length)
+        self.assertFalse(domain.Sample._meta.get_field('status').choices)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable '
+                           "FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'sample'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'sample')
+        self.assertTrue(any(info['primary_key'] and info['columns'] == ['sample_id']
+                            for info in constraints.values()))
+        for field, table, deletion in (
+            ('service_request', 'service_request', PROTECT),
+            ('participant', 'participant', PROTECT), ('parent_sample', 'sample', SET_NULL),
+        ):
+            relation = domain.Sample._meta.get_field(field)
+            self.assertEqual(relation.remote_field.on_delete, deletion)
+            self.assertTrue(any(info['foreign_key'] == (table, f'{table}_id')
+                                and info['columns'] == [relation.column] for info in constraints.values()))
+
+    def test_postgresql_defaults_support_required_columns_only_insert(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, column_default FROM information_schema.columns '
+                           "WHERE table_schema = current_schema() AND table_name = 'sample' "
+                           "AND column_name IN ('status', 'created_at')")
+            defaults = dict(cursor.fetchall())
+            self.assertIsNotNone(defaults['status'])
+            self.assertIsNotNone(defaults['created_at'])
+            cursor.execute('INSERT INTO sample (sample_id, service_request_id, participant_id, sample_code, sample_type) '
+                           'VALUES (%s, %s, %s, %s, %s) RETURNING status, created_at, statement_timestamp()',
+                           [uuid.uuid4(), self.request.pk, self.participant.pk, 'sql-defaults', 'saliva'])
+            status, created_at, database_now = cursor.fetchone()
+        self.assertEqual(status, 'available')
+        self.assertTrue(timezone.is_aware(created_at))
+        self.assertLess(abs(created_at - database_now), timedelta(seconds=1))
+
+    def test_database_uniqueness_and_referential_integrity(self):
+        self.sample(sample_code='unique-sample').save()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.sample(sample_code='unique-sample').save()
+        for field in ('service_request_id', 'participant_id', 'parent_sample_id'):
+            sample = self.sample()
+            setattr(sample, field, uuid.uuid4())
+            with self.subTest(field=field), self.assertRaises(IntegrityError), transaction.atomic():
+                domain.Sample.objects.bulk_create([sample])
+                connection.check_constraints()
+
+    def test_rejects_missing_and_mismatched_required_identities(self):
+        for changes, field in (
+            ({'service_request': None}, 'service_request'),
+            ({'participant': None}, 'participant'),
+            ({'participant': self.other_participant}, 'participant'),
+            ({'service_request': self.other_request}, 'participant'),
+        ):
+            with self.subTest(changes=changes):
+                sample = self.sample(**changes)
+                self.assert_invalid(sample, field)
+                self.assertFalse(domain.Sample.objects.filter(pk=sample.pk).exists())
+        sample = self.sample()
+        sample.service_request_id = uuid.uuid4()
+        self.assert_invalid(sample, 'service_request')
+        sample.participant_id = uuid.uuid4()
+        sample.service_request = self.request
+        self.assert_invalid(sample, 'participant')
+
+    def test_revalidates_live_request_and_purchase_for_creation_and_ordinary_save(self):
+        saved = self.sample()
+        saved.save()  # Keep cached relations deliberately; validation must read persisted ownership.
+        for participant, field in ((None, 'service_request'), (self.other_participant, 'participant')):
+            domain.ServiceRequest.objects.filter(pk=self.request.pk).update(participant=participant)
+            for sample in (self.sample(), saved):
+                self.assert_invalid(sample, field)
+        self.assert_invalid(self.sample(participant=self.other_participant), 'service_request')
+        domain.ServiceRequest.objects.filter(pk=self.request.pk).update(participant=self.participant)
+        domain.Purchase.objects.filter(pk=self.purchase.pk).update(owner=self.other_user.app_user)
+        for sample in (self.sample(), saved):
+            self.assert_invalid(sample, 'service_request')
+        self.assertEqual(domain.Sample.objects.count(), 1)
+
+    def test_persisted_service_and_participant_are_immutable_even_for_compatible_rebinding(self):
+        sample = self.sample()
+        sample.save()
+        for request, participant in ((self.second_request, self.participant),
+                                     (self.other_request, self.other_participant)):
+            sample.service_request, sample.participant = request, participant
+            self.assert_invalid(sample, 'service_request')
+        clone = self.sample(sample_id=sample.pk, service_request=self.other_request,
+                            participant=self.other_participant)
+        self.assert_invalid(clone, 'service_request')
+        sample.refresh_from_db()
+        domain.ServiceRequest.objects.filter(pk=self.request.pk).update(participant=self.other_participant)
+        domain.Purchase.objects.filter(pk=self.purchase.pk).update(owner=self.other_user.app_user)
+        sample.participant = self.other_participant
+        self.assert_invalid(sample, 'participant')
+        sample.refresh_from_db()
+        self.assertEqual((sample.service_request_id, sample.participant_id), (self.request.pk, self.participant.pk))
+
+    def test_parent_must_match_live_service_and_participant_on_create_and_save(self):
+        saved = self.sample()
+        saved.save()
+        for request, participant in ((self.second_request, self.participant),
+                                     (self.other_request, self.other_participant)):
+            parent = self.sample(service_request=request, participant=participant)
+            parent.save()
+            self.assert_invalid(self.sample(parent_sample=parent), 'parent_sample')
+            saved.parent_sample = parent
+            self.assert_invalid(saved, 'parent_sample')
+        domain.Sample.objects.filter(pk=parent.pk).update(service_request=self.request)
+        self.assert_invalid(self.sample(parent_sample=parent), 'parent_sample')
+        self.assert_invalid(self.sample(parent_sample_id=uuid.uuid4()), 'parent_sample')
+
+    def test_rejects_self_indirect_and_preexisting_ancestor_cycles(self):
+        root = self.sample()
+        root.parent_sample = root
+        self.assert_invalid(root, 'parent_sample')
+        root.parent_sample = None
+        root.save()
+        child = self.sample(parent_sample=root)
+        child.save()
+        grandchild = self.sample(parent_sample=child)
+        grandchild.save()
+        root.parent_sample = grandchild
+        self.assert_invalid(root, 'parent_sample')
+        child.parent_sample = child
+        self.assert_invalid(child, 'parent_sample')
+        domain.Sample.objects.filter(pk=root.pk).update(parent_sample=child)
+        self.assert_invalid(self.sample(parent_sample=grandchild), 'parent_sample')
+
+    def test_protects_service_and_participant_and_nulls_deleted_parent(self):
+        parent = self.sample()
+        parent.save()
+        child = self.sample(parent_sample=parent)
+        child.save()
+        for item in (self.request, self.participant, self.purchase, self.user):
+            with self.assertRaises(ProtectedError):
+                item.delete()
+        parent.delete()
+        child.refresh_from_db()
+        self.assertIsNone(child.parent_sample_id)
+        self.assertEqual(child.service_request_id, self.request.pk)
+
+    def test_bulk_paths_bypass_ownership_validation_but_ordinary_save_rejects_bad_rows(self):
+        sample = self.sample(participant=self.other_participant)
+        domain.Sample.objects.bulk_create([sample])
+        self.assert_invalid(sample, 'participant')
+        sample = self.sample()
+        sample.save()
+        domain.Sample.objects.filter(pk=sample.pk).update(participant=self.other_participant)
+        sample.refresh_from_db()
+        self.assert_invalid(sample, 'participant')
+
+    def test_migration_is_schema_only_imports_without_queries_and_matches_model(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('services.migrations.0004_sample')).Migration
+        self.assertEqual(set(migration.dependencies), {
+            ('services', '0003_service_request_status_log'), ('participants', '0001_initial'),
+        })
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel'])
+        historical = MigrationLoader(connection).project_state([('services', '0004_sample')]).apps.get_model('services', 'Sample')
+        self.assertEqual(historical._meta.db_table, 'sample')
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in domain.Sample._meta.local_fields})
+        call_command('makemigrations', check=True, dry_run=True)  # Inside the guarded test database only.
 
 
 class ManualPurchaseFlowTests(APITestCase):
