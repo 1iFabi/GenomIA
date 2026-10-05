@@ -138,6 +138,43 @@ class Genotype(models.Model):
         ]
 
 
+class Artifact(models.Model):
+    """Provenance metadata for files stored outside PostgreSQL."""
+
+    artifact_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    analysis = models.ForeignKey(
+        'genetics.Analysis', on_delete=models.SET_NULL, db_column='analysis_id',
+        null=True, blank=True, db_index=False, related_name='artifacts',
+    )
+    release = models.ForeignKey(
+        'genetics.DataRelease', on_delete=models.SET_NULL, db_column='release_id',
+        null=True, blank=True, db_index=False, related_name='artifacts',
+    )
+    sample = models.ForeignKey(
+        'services.Sample', on_delete=models.SET_NULL, db_column='sample_id',
+        null=True, blank=True, db_index=False, related_name='artifacts',
+    )
+    role = models.CharField(max_length=32)
+    artifact_type = models.CharField(max_length=64)
+    format = models.CharField(max_length=64)
+    uri = models.TextField()
+    checksum_sha256 = FixedCharField(max_length=64)
+    size_bytes = models.BigIntegerField(null=True, blank=True)
+    reference_assembly = models.CharField(max_length=32, null=True, blank=True)
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'artifact'
+        indexes = [
+            models.Index(fields=['analysis'], name='idx_artifact_analysis'),
+            models.Index(fields=['checksum_sha256'], name='idx_artifact_checksum'),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(size_bytes__gte=0), name='artifact_size_bytes_gte_0'),
+        ]
+
+
 class Variant(models.Model):
     """Stable variant concept independent of genomic placements."""
 

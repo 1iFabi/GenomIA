@@ -31,6 +31,284 @@ from services.models import (
 )
 
 
+class ArtifactSchemaTests(TestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        from participants.models import Participant
+        self.user = User.objects.create_user(username=f'artifact-{uuid.uuid4().hex}')
+        self.participant = Participant.objects.create(
+            user=self.user, participant_code=f'artifact-{uuid.uuid4().hex}',
+        )
+        self.release = domain.DataRelease.objects.create(
+            name=uuid.uuid4().hex, version='v1', status='unlisted', reference_assembly='synthetic',
+        )
+        self.analysis = domain.Analysis.objects.create(
+            module='synthetic', pipeline_name='artifact-pipeline', pipeline_version='v1', status='unlisted',
+        )
+        request = ServiceRequest.objects.create(
+            purchase=Purchase.objects.create(owner=self.user.app_user), participant=self.participant,
+            status=RequestStatus.objects.get(code='WAITING_SAMPLE'),
+        )
+        self.sample = Sample.objects.create(
+            service_request=request, participant=self.participant,
+            sample_code=f'artifact-{uuid.uuid4().hex}', sample_type='synthetic',
+        )
+
+    def artifact(self, **changes):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        values = {
+            'role': 'input', 'artifact_type': 'vcf', 'format': 'vcf.gz',
+            'uri': 'object://synthetic/artifact.vcf.gz', 'checksum_sha256': 'a' * 64,
+        }
+        return domain.Artifact(**(values | changes))
+
+    def test_exact_physical_columns_custom_char_jsonb_and_only_two_declared_indexes(self):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        columns = {
+            'artifact_id': ('uuid', None, 'NO', None),
+            'analysis_id': ('uuid', None, 'YES', None),
+            'release_id': ('uuid', None, 'YES', None),
+            'sample_id': ('uuid', None, 'YES', None),
+            'role': ('character varying', 32, 'NO', None),
+            'artifact_type': ('character varying', 64, 'NO', None),
+            'format': ('character varying', 64, 'NO', None),
+            'uri': ('text', None, 'NO', None),
+            'checksum_sha256': ('character', 64, 'NO', None),
+            'size_bytes': ('bigint', None, 'YES', None),
+            'reference_assembly': ('character varying', 32, 'YES', None),
+            'metadata': ('jsonb', None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT column_name, data_type, character_maximum_length, is_nullable, column_default '
+                'FROM information_schema.columns WHERE table_schema = current_schema() '
+                "AND table_name = 'artifact' ORDER BY ordinal_position"
+            )
+            physical_columns = cursor.fetchall()
+            constraints = connection.introspection.get_constraints(cursor, 'artifact')
+            cursor.execute(
+                'SELECT indexname, indexdef FROM pg_indexes '
+                'WHERE schemaname = current_schema() AND tablename = %s', ['artifact'],
+            )
+            index_definitions = dict(cursor.fetchall())
+            cursor.execute(
+                'SELECT conname, confdeltype, confupdtype, condeferrable, condeferred '
+                'FROM pg_constraint WHERE conrelid = %s::regclass AND contype = %s', ['artifact', 'f'],
+            )
+            fk_actions = {row[0]: row[1:] for row in cursor.fetchall()}
+        self.assertEqual(physical_columns, [(name, *spec) for name, spec in columns.items()])
+        model = domain.Artifact
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('artifact', 'artifact_id'))
+        self.assertEqual([field.column for field in model._meta.local_fields], list(columns))
+        self.assertEqual(
+            {field.name for field in model._meta.local_fields},
+            {'artifact_id', 'analysis', 'release', 'sample', 'role', 'artifact_type', 'format', 'uri',
+             'checksum_sha256', 'size_bytes', 'reference_assembly', 'metadata', 'created_at'},
+        )
+        for field in model._meta.local_fields:
+            nullable = columns[field.column][2] == 'YES'
+            self.assertEqual((field.null, field.blank), (nullable, nullable))
+        self.assertEqual(model._meta.get_field('uri').get_internal_type(), 'TextField')
+        self.assertNotIsInstance(model._meta.get_field('uri'), models.FileField)
+        self.assertEqual((model._meta.get_field('checksum_sha256').max_length,
+                          model._meta.get_field('checksum_sha256').db_type(connection)), (64, 'char(64)'))
+        self.assertIsInstance(model._meta.get_field('created_at').db_default, TransactionNow)
+        self.assertEqual(
+            {index.name: index.fields for index in model._meta.indexes},
+            {'idx_artifact_analysis': ['analysis'], 'idx_artifact_checksum': ['checksum_sha256']},
+        )
+        self.assertEqual(set(index_definitions), {
+            'artifact_pkey', 'idx_artifact_analysis', 'idx_artifact_checksum',
+        })
+        self.assertIn('(analysis_id)', index_definitions['idx_artifact_analysis'])
+        self.assertIn('(checksum_sha256)', index_definitions['idx_artifact_checksum'])
+        self.assertEqual({constraint.name for constraint in model._meta.constraints},
+                         {'artifact_size_bytes_gte_0'})
+        self.assertEqual(set(constraints), {
+            'artifact_pkey', 'artifact_size_bytes_gte_0', 'idx_artifact_analysis', 'idx_artifact_checksum',
+            'fk_artifact_analysis', 'fk_artifact_release', 'fk_artifact_sample',
+        })
+        self.assertEqual(
+            {name: (info['columns'], info['foreign_key']) for name, info in constraints.items()
+             if info['foreign_key']},
+            {
+                'fk_artifact_analysis': (['analysis_id'], ('analysis', 'analysis_id')),
+                'fk_artifact_release': (['release_id'], ('data_release', 'release_id')),
+                'fk_artifact_sample': (['sample_id'], ('sample', 'sample_id')),
+            },
+        )
+        self.assertEqual(fk_actions, {
+            'fk_artifact_analysis': ('n', 'c', False, False),
+            'fk_artifact_release': ('n', 'c', False, False),
+            'fk_artifact_sample': ('n', 'c', False, False),
+        })
+        for field_name, target, target_key in (
+            ('analysis', domain.Analysis, 'analysis_id'),
+            ('release', domain.DataRelease, 'release_id'),
+            ('sample', Sample, 'sample_id'),
+        ):
+            field = model._meta.get_field(field_name)
+            self.assertIs(field.remote_field.model, target)
+            self.assertIs(field.remote_field.on_delete, SET_NULL)
+            self.assertEqual((field.column, field.target_field.name, field.db_index, field.db_constraint),
+                             (field_name + '_id', target_key, False, True))
+
+    def test_database_defaults_nullable_metadata_and_uri_remain_storage_metadata(self):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        identifier = uuid.uuid4()
+        checksum = 'b' * 64
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'INSERT INTO artifact (artifact_id, role, artifact_type, format, uri, checksum_sha256) '
+                'VALUES (%s, %s, %s, %s, %s, %s) '
+                'RETURNING analysis_id, release_id, sample_id, size_bytes, metadata, created_at, '
+                'transaction_timestamp(), pg_typeof(metadata)',
+                [identifier, 'manifest', 'opaque', 'unknown', 'object://synthetic/manifest', checksum],
+            )
+            row = cursor.fetchone()
+        self.assertEqual(row[:5], (None, None, None, None, None))
+        self.assertEqual(row[5], row[6])
+        self.assertEqual(row[7], 'jsonb')
+        self.assertTrue(domain.Artifact.objects.filter(pk=identifier, uri='object://synthetic/manifest').exists())
+        defaulted = self.artifact(analysis=self.analysis, release=self.release, sample=self.sample,
+                                  size_bytes=0, metadata={'synthetic': True})
+        created = defaulted.created_at
+        self.assertIsInstance(defaulted.pk, uuid.UUID)
+        self.assertTrue(timezone.is_aware(created))
+        self.assertIs(domain.Artifact._meta.get_field('artifact_id').default, uuid.uuid4)
+        self.assertIs(domain.Artifact._meta.get_field('created_at').default, timezone.now)
+        defaulted.full_clean()
+        defaulted.save()
+        defaulted.refresh_from_db()
+        self.assertEqual(defaulted.created_at, created)
+        self.assertEqual(defaulted.metadata, {'synthetic': True})
+        duplicate_checksum = self.artifact(checksum_sha256='a' * 64)
+        duplicate_checksum.save()
+        self.assertEqual(domain.Artifact.objects.filter(checksum_sha256='a' * 64).count(), 2)
+
+    def test_nullable_nonnegative_size_and_only_declared_check(self):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        self.artifact(size_bytes=None).save()
+        self.artifact(size_bytes=0).save()
+        invalid = self.artifact(size_bytes=-1)
+        with self.assertRaises(ValidationError):
+            invalid.full_clean()
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            invalid.save(force_insert=True)
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'artifact_size_bytes_gte_0')
+
+    def test_raw_updates_cascade_analysis_release_and_sample_keys(self):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        artifact = self.artifact(analysis=self.analysis, release=self.release, sample=self.sample)
+        artifact.save()
+        parents = (
+            ('analysis', self.analysis, domain.Analysis, 'analysis_id'),
+            ('release', self.release, domain.DataRelease, 'release_id'),
+            ('sample', self.sample, Sample, 'sample_id'),
+        )
+        with connection.cursor() as cursor:
+            for relation, parent, model, key in parents:
+                new_id = uuid.uuid4()
+                table = connection.ops.quote_name(model._meta.db_table)
+                column = connection.ops.quote_name(key)
+                cursor.execute(f'UPDATE {table} SET {column} = %s WHERE {column} = %s', [new_id, parent.pk])
+                parent.pk = new_id
+                artifact.refresh_from_db()
+                self.assertEqual(getattr(artifact, relation + '_id'), new_id)
+
+    def test_raw_deletes_set_each_optional_reference_null(self):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        artifact = self.artifact(analysis=self.analysis, release=self.release, sample=self.sample)
+        artifact.save()
+        for relation, table, key, value in (
+            ('analysis', 'analysis', 'analysis_id', self.analysis.pk),
+            ('release', 'data_release', 'release_id', self.release.pk),
+            ('sample', 'sample', 'sample_id', self.sample.pk),
+        ):
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f'DELETE FROM {connection.ops.quote_name(table)} WHERE {connection.ops.quote_name(key)} = %s',
+                    [value],
+                )
+            artifact.refresh_from_db()
+            self.assertIsNone(getattr(artifact, relation + '_id'))
+        self.assertTrue(domain.Artifact.objects.filter(pk=artifact.pk).exists())
+
+    def test_orm_reverse_relations_and_delete_policy_keep_artifact_metadata(self):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        artifact = self.artifact(analysis=self.analysis, release=self.release, sample=self.sample)
+        artifact.save()
+        for parent in (self.analysis, self.release, self.sample):
+            self.assertEqual(list(parent.artifacts.all()), [artifact])
+        for parent, relation in (
+            (self.analysis, 'analysis_id'), (self.release, 'release_id'), (self.sample, 'sample_id'),
+        ):
+            parent.delete()
+            artifact.refresh_from_db()
+            self.assertIsNone(getattr(artifact, relation))
+        self.assertEqual(domain.Artifact.objects.get(pk=artifact.pk).uri, 'object://synthetic/artifact.vcf.gz')
+
+    def test_migration_state_matches_model_and_has_no_dependency_cycle(self):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        migration = import_module('genetics.migrations.0014_artifact').Migration
+        self.assertIn(('genetics', '0013_genotype'), migration.dependencies)
+        loader = MigrationLoader(connection)
+        state = loader.project_state([('genetics', '0014_artifact')])
+        historical = state.apps.get_model('genetics', 'Artifact')
+        self.assertEqual(
+            {field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+            {field.name: field.deconstruct()[1:] for field in domain.Artifact._meta.local_fields},
+        )
+        self.assertEqual(historical._meta.indexes, domain.Artifact._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.Artifact._meta.constraints)
+        self.assertIn(('genetics', '0013_genotype'), loader.graph.forwards_plan(('genetics', '0014_artifact')))
+
+
+class ArtifactMigrationTests(TransactionTestCase):
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT conname, confdeltype, confupdtype, condeferrable, condeferred '
+                'FROM pg_constraint WHERE conrelid = %s::regclass AND contype = %s', ['artifact', 'f'],
+            )
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def test_fk_reverse_restores_deferred_no_action_and_forward_is_physical(self):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        migration = import_module('genetics.migrations.0014_artifact')
+        editor = connection.SchemaEditorClass(connection)
+        with transaction.atomic():
+            migration.restore_artifact_fks(None, editor)
+            self.assertEqual(self.fk_actions(), {
+                name: ('a', 'a', True, True) for name in (
+                    'fk_artifact_analysis', 'fk_artifact_release', 'fk_artifact_sample',
+                )
+            })
+            migration.replace_artifact_fks(None, editor, physical=True)
+            self.assertEqual(self.fk_actions(), {
+                'fk_artifact_analysis': ('n', 'c', False, False),
+                'fk_artifact_release': ('n', 'c', False, False),
+                'fk_artifact_sample': ('n', 'c', False, False),
+            })
+        self.assertIs(migration.Migration.operations[-1].reverse_code, migration.restore_artifact_fks)
+
+    def test_fk_lookup_failure_does_not_partially_replace_constraints(self):
+        self.assertTrue(hasattr(domain, 'Artifact'), 'Artifact schema model is missing.')
+        migration = import_module('genetics.migrations.0014_artifact')
+        editor = connection.SchemaEditorClass(connection)
+        with transaction.atomic():
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE artifact DROP CONSTRAINT fk_artifact_release')
+                before = self.fk_actions()
+                with self.assertRaisesRegex(RuntimeError, 'artifact.release_id -> data_release.release_id'):
+                    migration.replace_artifact_fks(None, editor, physical=True)
+                self.assertEqual(self.fk_actions(), before)
+            finally:
+                transaction.set_rollback(True)
+
+
 class GenotypeTests(TestCase):
     def setUp(self):
         self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
