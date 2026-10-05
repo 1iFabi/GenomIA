@@ -9,11 +9,12 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from accounts.authentication import JWTAuthentication
 from accounts.csrf import CSRFDoubleSubmitMixin
-from profiles.models import Profile, SampleStatus, ServiceStatus
+from profiles.models import Profile, SampleStatus
 from accounts.models import Role
 from accounts.roles import is_admin, is_reception
 from profiles.utils import ensure_sample_code
 from accounts.email_utils import send_email, build_branded_html
+from services.models import Purchase
 from services.legacy_profile import (
     get_legacy_service_projection, get_paid_legacy_service_projections,
 )
@@ -22,6 +23,17 @@ from services.legacy_profile import (
 def has_reception_access(user) -> bool:
     """Devuelve True si el usuario puede operar en recepciИn (admin o recepciИn)."""
     return is_admin(user) or is_reception(user)
+
+
+def legacy_mutation_conflict(profile: Profile):
+    """User-only sample writes are legacy-only until per-service samples exist."""
+    if Purchase.objects.filter(owner__django_user_id=profile.user_id).exists():
+        return Response({"error": (
+            "Este usuario tiene compras. Para recibir una muestra pagada, usa "
+            "/api/services/requests/{serviceRequestId}/receive-sample/. "
+            "Las demás acciones requieren muestras por servicio (GDB03)."
+        )}, status=status.HTTP_409_CONFLICT)
+    return None
 
 
 def serialize_reception_profile(profile: Profile, *, service_status=None) -> dict:
@@ -114,14 +126,15 @@ class ReceptionArrivalAPIView(CSRFDoubleSubmitMixin, APIView):
         except Profile.DoesNotExist:
             return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
+        conflict = legacy_mutation_conflict(profile)
+        if conflict is not None:
+            return conflict
+
         ensure_sample_code(profile)
         profile.arrival_confirmed_at = timezone.now()
         if not profile.sample_status:
             profile.sample_status = SampleStatus.PENDING_COLLECTION
-        # Marcar el servicio como pendiente para que el analista lo vea
-        if profile.service_status != ServiceStatus.COMPLETED:
-            profile.service_status = ServiceStatus.PENDING
-        profile.save(update_fields=["arrival_confirmed_at", "sample_status", "service_status"])
+        profile.save(update_fields=["arrival_confirmed_at", "sample_status"])
 
         return Response({"user": serialize_reception_profile(profile)})
 
@@ -153,13 +166,12 @@ class ReceptionSampleCodeAPIView(CSRFDoubleSubmitMixin, APIView):
         except Profile.DoesNotExist:
             return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
+        conflict = legacy_mutation_conflict(profile)
+        if conflict is not None:
+            return conflict
+
         code = ensure_sample_code(profile)
         payload = serialize_reception_profile(profile)
-
-        # Marcar servicio como pendiente al generar/reenviar sample
-        if profile.service_status != ServiceStatus.COMPLETED:
-            profile.service_status = ServiceStatus.PENDING
-            profile.save(update_fields=["service_status"])
 
         if resend:
             try:
@@ -221,7 +233,9 @@ class ReceptionSampleStatusAPIView(CSRFDoubleSubmitMixin, APIView):
         except Profile.DoesNotExist:
             return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
-        ensure_sample_code(profile)
+        conflict = legacy_mutation_conflict(profile)
+        if conflict is not None:
+            return conflict
 
         if action in {"mark_taken", "taken"}:
             profile.sample_status = SampleStatus.COLLECTED_PENDING_ANALYSIS
@@ -234,5 +248,6 @@ class ReceptionSampleStatusAPIView(CSRFDoubleSubmitMixin, APIView):
         else:
             return Response({"error": "Acción no soportada"}, status=status.HTTP_400_BAD_REQUEST)
 
+        ensure_sample_code(profile)
         profile.save(update_fields=update_fields)
         return Response({"user": serialize_reception_profile(profile)})

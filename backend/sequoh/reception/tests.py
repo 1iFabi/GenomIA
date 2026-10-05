@@ -13,6 +13,7 @@ from accounts.models import AppUser, Role
 from accounts.roles import grant_admin_role, grant_reception_role
 from participants.models import Participant
 from profiles.models import Profile, SampleStatus, ServiceStatus
+from profiles.utils import ensure_sample_code
 from reception.views import serialize_reception_profile
 from services import models as domain
 
@@ -223,8 +224,7 @@ class ReceptionServiceProjectionTests(APITestCase):
         self.assertEqual(self.client.get('/api/reception/search/', {'email': self.owner.email}).data['results'][0], row)
         self.assertEqual(Profile.objects.filter(pk=self.profile.pk).values().get(), after)
 
-    def test_sample_code_response_uses_scalar_projection_with_existing_fields_only(self):
-        self.paid_service()
+    def test_legacy_sample_code_response_preserves_existing_fields_only(self):
         before = self.snapshot()
         self.client.cookies['csrftoken'] = 'valid-test-csrf'
         response = self.client.post(
@@ -232,7 +232,7 @@ class ReceptionServiceProjectionTests(APITestCase):
             HTTP_X_CSRFTOKEN='valid-test-csrf',
         )
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response.data, {'user': self.expected_payload(ServiceStatus.PENDING)})
+        self.assertEqual(response.data, {'user': self.expected_payload(ServiceStatus.COMPLETED)})
         self.assertEqual(self.snapshot(), before)
 
     def test_search_requires_functional_reception_or_admin_not_flags_or_groups(self):
@@ -308,6 +308,7 @@ class ReceptionMutationTargetTests(APITestCase):
     )
 
     def setUp(self):
+        self.now = timezone.now()
         self.receptionist = User.objects.create_user(username='mutation-reception')
         grant_reception_role(self.receptionist)
         self.admin = User.objects.create_user(username='mutation-admin')
@@ -315,7 +316,10 @@ class ReceptionMutationTargetTests(APITestCase):
         self.client.cookies['csrftoken'] = 'valid-test-csrf'
 
     def as_actor(self, actor):
-        self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(actor.pk)})
+        if actor is None:
+            self.client.cookies.pop(settings.AUTH_COOKIE_NAME, None)
+        else:
+            self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(actor.pk)})
 
     def target(self, name, role='CLIENTE', group=None, **flags):
         if role is None:
@@ -327,10 +331,10 @@ class ReceptionMutationTargetTests(APITestCase):
             user.groups.add(Group.objects.get_or_create(name=group)[0])
         return user, Profile.objects.create(user=user)
 
-    def post_target(self, path, user_id, extra):
+    def post_target(self, path, user_id, extra, *, key='userId'):
         self.client.cookies['csrftoken'] = 'valid-test-csrf'
         return self.client.post(
-            path, data=json.dumps({'userId': user_id, **extra}),
+            path, data=json.dumps({key: user_id, **extra}),
             content_type='application/json', HTTP_X_CSRFTOKEN='valid-test-csrf',
         )
 
@@ -379,7 +383,7 @@ class ReceptionMutationTargetTests(APITestCase):
                         self.assertTrue(arrival.data['user']['sample_code'])
                         profile.refresh_from_db()
                         self.assertIsNotNone(profile.arrival_confirmed_at)
-                        self.assertEqual(profile.service_status, ServiceStatus.PENDING)
+                        self.assertEqual(profile.service_status, ServiceStatus.NO_PURCHASED)
 
                         code = self.post_target(self.routes[1][0], user.pk, {'resend': True})
                         self.assertEqual(code.status_code, 200, code.data)
@@ -392,3 +396,194 @@ class ReceptionMutationTargetTests(APITestCase):
                         profile.refresh_from_db()
                         self.assertEqual(profile.sample_status, SampleStatus.COLLECTED_PENDING_ANALYSIS)
                         self.assertIsNotNone(profile.sample_taken_at)
+
+    def snapshot(self):
+        return {model._meta.label: list(model.objects.order_by('pk').values()) for model in (
+            Profile, domain.Purchase, domain.PurchaseStatus, domain.ServiceRequest,
+            domain.ServiceStatus, domain.ServiceStatusLog,
+        )}
+
+    def assert_rejected(self, path, user, extra, status_code, *, key='userId', error_key='error'):
+        before = self.snapshot()
+        with patch('reception.views.ensure_sample_code', wraps=ensure_sample_code) as sample_code, \
+                patch('reception.views.send_email') as send_email:
+            response = self.post_target(path, user.pk, extra, key=key)
+        self.assertEqual(response.status_code, status_code, response.data)
+        self.assertIn(error_key, response.data)
+        sample_code.assert_not_called()
+        send_email.assert_not_called()
+        self.assertEqual(self.snapshot(), before)
+        return response
+
+    def paid_service(self, user, code):
+        purchase = domain.Purchase.objects.create(
+            owner=user.app_user, status=domain.PurchaseStatus.objects.get(code='PAID'),
+            purchased_at=self.now - timedelta(days=2),
+        )
+        state = domain.ServiceStatus.objects.get(code=code)
+        service = domain.ServiceRequest.objects.create(
+            purchase=purchase, status=state, started_at=purchase.purchased_at,
+            completed_at=self.now if code == 'COMPLETED' else None,
+        )
+        for status_code, changed_at in (('WAITING_SAMPLE', purchase.purchased_at), (code, self.now)):
+            domain.ServiceStatusLog.objects.create(
+                request=service, status=domain.ServiceStatus.objects.get(code=status_code),
+                actor=self.admin.app_user, changed_at=changed_at,
+            )
+        return service
+
+    def test_any_purchase_rejects_user_only_mutations_before_code_profile_or_email(self):
+        cases = (('PENDING', ServiceStatus.NO_PURCHASED), ('PAID', ServiceStatus.NO_PURCHASED),
+                 ('PENDING', ServiceStatus.PENDING), ('PAID', ServiceStatus.COMPLETED),
+                 ('CANCELLED', ServiceStatus.NO_PURCHASED), ('REFUNDED', ServiceStatus.NO_PURCHASED),
+                 (None, ServiceStatus.NO_PURCHASED))
+        for index, (code, legacy) in enumerate(cases):
+            user, profile = self.target(f'purchase-target-{index}')
+            Profile.objects.filter(pk=profile.pk).update(service_status=legacy, sample_status='')
+            domain.Purchase.objects.create(
+                owner=user.app_user, status=domain.PurchaseStatus.objects.get(code=code) if code else None,
+                purchased_at=self.now if code == 'PAID' else None,
+            )
+            for actor in (self.receptionist, self.admin):
+                self.as_actor(actor)
+                for path, extra in self.routes:
+                    with self.subTest(code=code, legacy=legacy, actor=actor.username, path=path):
+                        self.assert_rejected(path, user, extra, 409)
+
+    def test_multiple_paid_and_pending_services_reject_both_id_aliases_without_changes(self):
+        user, profile = self.target('multi-service-target')
+        Profile.objects.filter(pk=profile.pk).update(
+            sample_code='KEEP-MULTI', sample_code_created_at=self.now - timedelta(days=4),
+            sample_status=SampleStatus.SENT_TO_LAB, service_status=ServiceStatus.COMPLETED,
+            arrival_confirmed_at=self.now - timedelta(days=3),
+            sample_taken_at=self.now - timedelta(days=2), sample_sent_at=self.now - timedelta(days=1),
+            phone='5550100', rut='10000000-K', report_filename='keep.pdf', report_uploaded_at=self.now,
+        )
+        self.paid_service(user, 'COMPLETED')
+        self.paid_service(user, 'WAITING_SAMPLE')
+        domain.Purchase.objects.create(
+            owner=user.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        )
+        other, _ = self.target('unrelated-service-target')
+        self.paid_service(other, 'PROCESSING')
+        for actor in (self.receptionist, self.admin):
+            self.as_actor(actor)
+            for key in ('userId', 'user_id'):
+                for path, extra in self.routes:
+                    with self.subTest(actor=actor.username, key=key, path=path):
+                        self.assert_rejected(path, user, extra, 409, key=key)
+
+    def test_legacy_actions_preserve_service_status_timestamps_and_response_contract(self):
+        other, _ = self.target('legacy-unrelated-paid-owner')
+        self.paid_service(other, 'PROCESSING')
+        cases = [(self.routes[0][0], {}, {'arrival_confirmed_at': self.now}),
+                 (self.routes[1][0], {}, {}), (self.routes[1][0], {'resend': True}, {})]
+        for action, state, timestamp in (
+            (None, SampleStatus.COLLECTED_PENDING_ANALYSIS, 'sample_taken_at'),
+            ('mark_taken', SampleStatus.COLLECTED_PENDING_ANALYSIS, 'sample_taken_at'),
+            ('taken', SampleStatus.COLLECTED_PENDING_ANALYSIS, 'sample_taken_at'),
+            ('sent_lab', SampleStatus.SENT_TO_LAB, 'sample_sent_at'),
+            ('sent_to_lab', SampleStatus.SENT_TO_LAB, 'sample_sent_at'),
+        ):
+            cases.append((self.routes[2][0], {'action': action} if action else {},
+                          {'sample_status': state, timestamp: self.now}))
+        self.as_actor(self.receptionist)
+        for legacy in ServiceStatus.values:
+            for existing in (False, True):
+                for index, (path, extra, changes) in enumerate(cases):
+                    with self.subTest(legacy=legacy, existing=existing, path=path, extra=extra):
+                        user, profile = self.target(f'legacy-{legacy}-{existing}-{index}')
+                        Profile.objects.filter(pk=profile.pk).update(
+                            phone='5550199', rut=f'{user.pk:08d}-K', service_status=legacy,
+                            service_updated_at=self.now - timedelta(days=10),
+                            sample_code=f'KEEP-{user.pk}' if existing else None,
+                            sample_code_created_at=self.now - timedelta(days=4) if existing else None,
+                            sample_status=SampleStatus.SENT_TO_LAB if existing else '',
+                            arrival_confirmed_at=self.now - timedelta(days=3),
+                            sample_taken_at=self.now - timedelta(days=2), sample_sent_at=self.now - timedelta(days=1),
+                            report_filename='legacy.pdf', report_uploaded_at=self.now - timedelta(days=5),
+                        )
+                        before = self.snapshot()
+                        expected = {**Profile.objects.filter(pk=profile.pk).values().get(), **changes}
+                        with patch('reception.views.timezone.now', return_value=self.now), \
+                                patch('reception.views.send_email', return_value=True) as send_email:
+                            response = self.post_target(path, user.pk, extra, key='userId' if existing else 'user_id')
+                        self.assertEqual(response.status_code, 200, response.data)
+                        payload = response.data['user']
+                        if not existing:
+                            self.assertTrue(payload['sample_code'].startswith(f'SC-{user.pk:05d}-'))
+                            expected.update(sample_code=payload['sample_code'], sample_code_created_at=self.now)
+                            if path == self.routes[0][0]:
+                                expected['sample_status'] = SampleStatus.PENDING_COLLECTION
+                        expected_payload = {field: expected[field] for field in (
+                            'phone', 'rut', 'sample_code', 'arrival_confirmed_at', 'sample_taken_at',
+                            'sample_sent_at', 'service_status',
+                        )}
+                        sample_status = expected['sample_status'] or SampleStatus.PENDING_COLLECTION
+                        expected_payload.update(
+                            user_id=user.pk, first_name=user.first_name, last_name=user.last_name, email=user.email,
+                            sample_status=sample_status, sample_status_display=SampleStatus(sample_status).label,
+                        )
+                        if extra.get('resend'):
+                            expected_payload['sample_code_sent'] = True
+                            send_email.assert_called_once()
+                        else:
+                            send_email.assert_not_called()
+                        self.assertEqual(response.data, {'user': expected_payload})
+                        before[Profile._meta.label] = [expected if row['id'] == profile.pk else row
+                                                      for row in before[Profile._meta.label]]
+                        self.assertEqual(self.snapshot(), before)
+
+    def test_invalid_legacy_sample_status_is_400_before_sample_code_generation(self):
+        self.as_actor(self.admin)
+        for existing in (False, True):
+            user, profile = self.target(f'invalid-action-{existing}')
+            if existing:
+                Profile.objects.filter(pk=profile.pk).update(sample_code='KEEP-INVALID')
+            for action in ('unsupported', 'receive_sample', 'PROCESSING'):
+                with self.subTest(existing=existing, action=action):
+                    response = self.assert_rejected(self.routes[2][0], user, {'action': action}, 400)
+                    self.assertEqual(response.data, {'error': 'Acción no soportada'})
+
+    def test_all_mutations_require_functional_staff_roles_before_purchase_guard(self):
+        legacy, _ = self.target('role-legacy-target')
+        purchased, _ = self.target('role-purchase-target')
+        domain.Purchase.objects.create(
+            owner=purchased.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        )
+        flagged, _ = self.target('mutation-flagged', group='RECEPCION', is_staff=True, is_superuser=True)
+        analyst, _ = self.target('mutation-analyst', role='ANALISTA')
+        unmapped, _ = self.target('mutation-unmapped', role=None)
+        for actor in (None, legacy, flagged, analyst, unmapped):
+            self.as_actor(actor)
+            for user in (legacy, purchased):
+                for path, extra in self.routes:
+                    with self.subTest(actor=actor, user=user, path=path):
+                        self.assert_rejected(path, user, extra, 403, error_key='detail' if actor is None else 'error')
+
+    def test_csrf_missing_or_mismatched_blocks_legacy_and_purchased_targets(self):
+        legacy, _ = self.target('csrf-legacy-target')
+        purchased, _ = self.target('csrf-purchase-target')
+        domain.Purchase.objects.create(
+            owner=purchased.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        )
+        for actor in (self.receptionist, self.admin):
+            self.as_actor(actor)
+            for user in (legacy, purchased):
+                for path, extra in self.routes:
+                    for cookie, header in ((None, 'matching'), ('matching', None), ('different', 'matching')):
+                        with self.subTest(actor=actor.username, user=user, path=path, cookie=cookie, header=header), \
+                                patch('reception.views.ensure_sample_code') as sample_code, \
+                                patch('reception.views.send_email') as send_email:
+                            self.client.cookies.pop('csrftoken', None)
+                            if cookie:
+                                self.client.cookies['csrftoken'] = cookie
+                            before = self.snapshot()
+                            response = self.client.post(
+                                path, data=json.dumps({'userId': user.pk, **extra}), content_type='application/json',
+                                **({'HTTP_X_CSRFTOKEN': header} if header else {}),
+                            )
+                            self.assertEqual(response.status_code, 403, response.data)
+                            sample_code.assert_not_called()
+                            send_email.assert_not_called()
+                            self.assertEqual(self.snapshot(), before)
