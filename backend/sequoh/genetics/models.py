@@ -66,6 +66,29 @@ class ReleaseVariant(models.Model):
         indexes = [models.Index(fields=['variant'], name='idx_release_variant_variant')]
 
 
+class ReleaseEpigeneticFeature(models.Model):
+    """Epigenetic feature membership with optional inclusion provenance."""
+
+    pk = models.CompositePrimaryKey('release_id', 'epigenetic_feature_id')
+    release = models.ForeignKey(
+        'genetics.DataRelease', on_delete=models.CASCADE, db_column='release_id',
+        db_index=False, related_name='epigenetic_feature_memberships',
+    )
+    epigenetic_feature = models.ForeignKey(
+        'genetics.EpigeneticFeature', on_delete=models.RESTRICT, db_column='epigenetic_feature_id',
+        db_index=False, related_name='release_memberships',
+    )
+    included_by_analysis = models.ForeignKey(
+        'genetics.Analysis', on_delete=models.SET_NULL, db_column='included_by_analysis_id',
+        null=True, blank=True, db_index=False, related_name='included_epigenetic_feature_memberships',
+    )
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'release_epigenetic_feature'
+        indexes = [models.Index(fields=['epigenetic_feature'], name='idx_release_epi_feature')]
+
+
 class Variant(models.Model):
     """Stable variant concept independent of genomic placements."""
 

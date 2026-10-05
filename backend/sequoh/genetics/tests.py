@@ -31,6 +31,384 @@ from services.models import (
 )
 
 
+class ReleaseEpigeneticFeatureTests(TestCase):
+    fk_specs = (
+        ('release', domain.DataRelease, 'release_id', 'fk_release_epi_feature_release', CASCADE, 'c'),
+        ('epigenetic_feature', domain.EpigeneticFeature, 'epigenetic_feature_id', 'fk_release_epi_feature_feature', RESTRICT, 'r'),
+        ('included_by_analysis', domain.Analysis, 'analysis_id', 'fk_release_epi_feature_analysis', SET_NULL, 'n'),
+    )
+
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        self.release, self.feature = self.new_release(), self.new_feature()
+
+    def new_release(self):
+        return domain.DataRelease.objects.create(
+            name=uuid.uuid4().hex, version='v1', status='unlisted', reference_assembly='release-assembly',
+        )
+
+    def new_feature(self):
+        return domain.EpigeneticFeature.objects.create(
+            feature_type='synthetic', reference_assembly='feature-assembly', contig='synthetic', start_pos=1, end_pos=1,
+        )
+
+    def membership(self, **changes):
+        return domain.ReleaseEpigeneticFeature(**(dict(release_id=self.release.pk, epigenetic_feature_id=self.feature.pk) | changes))
+
+    def linked_membership(self):
+        analysis = domain.Analysis.objects.create(
+            release=self.new_release(), module='synthetic', pipeline_name='synthetic', pipeline_version='v1', status='unlisted',
+        )
+        membership = self.membership(included_by_analysis_id=analysis.pk)
+        membership.full_clean()  # SQL does not require matching analysis release or feature assembly.
+        membership.save()
+        return membership, {'release': self.release, 'epigenetic_feature': self.feature, 'included_by_analysis': analysis}
+
+    def physical_columns(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable, column_default '
+                           'FROM information_schema.columns WHERE table_schema = current_schema() '
+                           "AND table_name = 'release_epigenetic_feature' ORDER BY ordinal_position")
+            return cursor.fetchall()
+
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT conname, confdeltype, confupdtype, condeferrable, condeferred FROM pg_constraint '
+                           "WHERE conrelid = 'release_epigenetic_feature'::regclass AND contype = 'f'")
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def fk_operation(self):
+        migration = import_module('genetics.migrations.0012_release_epigenetic_feature').Migration
+        return migration.operations[2], MigrationLoader(connection).project_state([('genetics', '0012_release_epigenetic_feature')])
+
+    def test_minimal_membership_uses_ordered_native_key(self):
+        self.assertTrue(hasattr(domain, 'ReleaseEpigeneticFeature'), 'ReleaseEpigeneticFeature is missing.')
+        before = timezone.now()
+        membership = self.membership()
+        created = membership.created_at
+        membership.full_clean()
+        membership.save()
+        membership.refresh_from_db()
+        self.assertEqual(membership.pk, (self.release.pk, self.feature.pk))
+        self.assertEqual(domain.ReleaseEpigeneticFeature.objects.get(pk=membership.pk), membership)
+        self.assertFalse(domain.ReleaseEpigeneticFeature.objects.filter(pk=tuple(reversed(membership.pk))).exists())
+        self.assertIsNone(membership.included_by_analysis_id)
+        self.assertEqual(membership.created_at, created)
+        self.assertTrue(timezone.is_aware(created))
+        self.assertLessEqual(before, created)
+        self.assertLessEqual(created, timezone.now())
+
+    def test_exact_four_columns_native_pk_three_fks_and_only_feature_index(self):
+        columns = {
+            'release_id': ('uuid', None, 'NO', None),
+            'epigenetic_feature_id': ('uuid', None, 'NO', None),
+            'included_by_analysis_id': ('uuid', None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        model = domain.ReleaseEpigeneticFeature
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('release_epigenetic_feature', 'pk'))
+        self.assertIsInstance(model._meta.pk, models.CompositePrimaryKey)
+        self.assertEqual(model._meta.pk.field_names, ('release_id', 'epigenetic_feature_id'))
+        self.assertEqual(tuple(field.attname for field in model._meta.pk.fields), model._meta.pk.field_names)
+        self.assertIsNone(model._meta.pk.column)
+        self.assertFalse(model._meta.pk.editable or model._meta.pk.has_default() or model._meta.pk.has_db_default())
+        self.assertEqual([field.column for field in model._meta.local_fields if field.column], list(columns))
+        self.assertEqual({field.name for field in model._meta.local_fields},
+                         {'pk', 'release', 'epigenetic_feature', 'included_by_analysis', 'created_at'})
+        for field in model._meta.local_fields:
+            if field.column:
+                nullable = columns[field.column][2] == 'YES'
+                self.assertEqual((field.null, field.blank), (nullable, nullable))
+                self.assertFalse(field.choices or field.db_index or field.unique or field.primary_key)
+                self.assertEqual((field.has_default(), field.has_db_default()), (field.name == 'created_at',) * 2)
+        created = model._meta.get_field('created_at')
+        self.assertIs(created.default, timezone.now)
+        self.assertIsInstance(created.db_default, TransactionNow)
+        self.assertFalse(created.auto_now or created.auto_now_add)
+        self.assertEqual(model._meta.constraints, [])
+        self.assertEqual({index.name: index.fields for index in model._meta.indexes}, {'idx_release_epi_feature': ['epigenetic_feature']})
+        for field, target, key, _, action, _ in self.fk_specs:
+            relation = model._meta.get_field(field)
+            self.assertIs(relation.remote_field.model, target)
+            self.assertIs(relation.remote_field.on_delete, action)
+            self.assertEqual((relation.column, relation.db_column, relation.target_field.name), (field + '_id', field + '_id', key))
+            self.assertTrue(relation.db_constraint)
+        self.assertEqual(self.physical_columns(), [(name, *spec) for name, spec in columns.items()])
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, 'release_epigenetic_feature')
+            cursor.execute("SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'release_epigenetic_feature'")
+            self.assertEqual({row[0] for row in cursor.fetchall()}, {'release_epigenetic_feature_pkey', 'idx_release_epi_feature'})
+            cursor.execute("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'release_epigenetic_feature'::regclass AND contype = 'p'")
+            self.assertEqual(cursor.fetchone()[0], 'PRIMARY KEY (release_id, epigenetic_feature_id)')
+        self.assertEqual(set(constraints), {'release_epigenetic_feature_pkey', 'idx_release_epi_feature', *[spec[3] for spec in self.fk_specs]})
+        self.assertEqual([info['columns'] for info in constraints.values() if info['primary_key']], [['release_id', 'epigenetic_feature_id']])
+        self.assertFalse(any(info['check'] or info['unique'] and not info['primary_key'] for info in constraints.values()))
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']},
+                         {'idx_release_epi_feature': ['epigenetic_feature_id']})
+        self.assertEqual({name: (info['columns'], info['foreign_key']) for name, info in constraints.items() if info['foreign_key']},
+                         {name: ([field + '_id'], (target._meta.db_table, key)) for field, target, key, name, _, _ in self.fk_specs})
+        self.assertEqual(self.fk_actions(), {name: (deletion, 'c', False, False) for _, _, _, name, _, deletion in self.fk_specs})
+
+    def test_raw_minimal_insert_uses_nullable_analysis_and_transaction_timestamp_without_side_effects(self):
+        others = (SNP, UserSNP, domain.DataRelease, domain.EpigeneticFeature, domain.Analysis, domain.ReleaseVariant,
+                  domain.Variant, domain.VariantPlacement, domain.VariantAnnotation, domain.AlleleFrequency,
+                  domain.ExternalIdentifier, domain.Population)
+        before = {model: model.objects.count() for model in others}
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO release_epigenetic_feature (release_id, epigenetic_feature_id) VALUES (%s, %s) '
+                           'RETURNING included_by_analysis_id, created_at, transaction_timestamp()', [self.release.pk, self.feature.pk])
+            analysis, created, database_now = cursor.fetchone()
+        self.assertIsNone(analysis)
+        self.assertTrue(timezone.is_aware(created))
+        self.assertEqual(created, database_now)
+        self.assertEqual({model: model.objects.count() for model in others}, before)
+
+    def test_pair_uniqueness_distinct_components_and_native_lookup_update_delete(self):
+        first = self.membership()
+        first.save()
+        with self.assertRaises(ValidationError):
+            self.membership().full_clean()
+        for insert in (lambda: domain.ReleaseEpigeneticFeature.objects.create(release=self.release, epigenetic_feature=self.feature),
+                       lambda: domain.ReleaseEpigeneticFeature.objects.bulk_create([self.membership()])):
+            with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                insert()
+            self.assertEqual(error.exception.__cause__.diag.constraint_name, 'release_epigenetic_feature_pkey')
+        with self.assertRaises(IntegrityError) as error, transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute('INSERT INTO release_epigenetic_feature (release_id, epigenetic_feature_id) VALUES (%s, %s)', list(first.pk))
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'release_epigenetic_feature_pkey')
+        second, third = self.membership(epigenetic_feature_id=self.new_feature().pk), self.membership(release_id=self.new_release().pk)
+        for membership in (second, third):
+            membership.full_clean()
+            membership.save()
+        self.assertEqual(set(domain.ReleaseEpigeneticFeature.objects.values_list('pk', flat=True)), {first.pk, second.pk, third.pk})
+        created = timezone.now() - timedelta(days=90)
+        self.assertEqual(domain.ReleaseEpigeneticFeature.objects.filter(pk=first.pk).update(created_at=created), 1)
+        first.refresh_from_db()
+        self.assertEqual(first.created_at, created)
+        first.delete()
+        self.assertEqual(domain.ReleaseEpigeneticFeature.objects.filter(pk=second.pk).delete()[0], 1)
+        self.assertEqual(list(domain.ReleaseEpigeneticFeature.objects.values_list('pk', flat=True)), [third.pk])
+
+    def test_required_columns_reject_explicit_nulls_and_unrelated_provenance_is_allowed(self):
+        values = dict(release_id=self.release.pk, epigenetic_feature_id=self.feature.pk, created_at=timezone.now())
+        sql = f"INSERT INTO release_epigenetic_feature ({', '.join(values)}) VALUES (%s, %s, %s)"
+        for column in values:
+            with self.subTest(column=column):
+                with self.assertRaises(ValidationError):
+                    self.membership(**{column: None}).full_clean()
+                with self.assertRaises(IntegrityError) as error, transaction.atomic(), connection.cursor() as cursor:
+                    cursor.execute(sql, [None if name == column else value for name, value in values.items()])
+                self.assertEqual(error.exception.__cause__.diag.column_name, column)
+        membership, parents = self.linked_membership()
+        self.assertNotEqual(parents['included_by_analysis'].release_id, membership.release_id)
+        self.assertNotEqual(self.feature.reference_assembly, self.release.reference_assembly)
+        created = membership.created_at = timezone.now() - timedelta(days=90)
+        membership.full_clean()
+        membership.save(update_fields=['created_at'])
+        membership.refresh_from_db()
+        self.assertEqual(membership.created_at, created)
+        self.assertEqual(membership.included_by_analysis_id, parents['included_by_analysis'].pk)
+
+    def test_raw_updates_of_all_three_parent_keys_cascade_including_both_pk_components(self):
+        membership, parents = self.linked_membership()
+        untouched = self.membership(release_id=self.new_release().pk, epigenetic_feature_id=self.new_feature().pk)
+        untouched.save()
+        before = domain.ReleaseEpigeneticFeature.objects.filter(pk=untouched.pk).values().get()
+        with connection.cursor() as cursor:
+            for field, target, key, _, _, _ in self.fk_specs:
+                parent, new_id, old_pair = parents[field], uuid.uuid4(), membership.pk
+                cursor.execute(f'UPDATE {target._meta.db_table} SET {key} = %s WHERE {key} = %s', [new_id, parent.pk])
+                parent.pk = new_id
+                setattr(membership, field + '_id', new_id)
+                membership.refresh_from_db()
+                self.assertEqual(getattr(membership, field + '_id'), new_id)
+                self.assertEqual(membership.pk, (self.release.pk, self.feature.pk))
+                if field != 'included_by_analysis':
+                    self.assertFalse(domain.ReleaseEpigeneticFeature.objects.filter(pk=old_pair).exists())
+        self.assertEqual(domain.ReleaseEpigeneticFeature.objects.filter(pk=untouched.pk).values().get(), before)
+
+    def test_raw_deletes_set_analysis_null_restrict_feature_immediately_and_cascade_only_release(self):
+        membership, parents = self.linked_membership()
+        untouched = self.membership(release_id=self.new_release().pk)
+        untouched.save()
+        before = domain.ReleaseEpigeneticFeature.objects.filter(pk=untouched.pk).values().get()
+        with connection.cursor() as cursor:
+            cursor.execute('DELETE FROM analysis WHERE analysis_id = %s', [parents['included_by_analysis'].pk])
+            membership.refresh_from_db()
+            self.assertIsNone(membership.included_by_analysis_id)
+            with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                cursor.execute('SET CONSTRAINTS ALL DEFERRED')
+                cursor.execute('DELETE FROM epigenetic_feature WHERE epigenetic_feature_id = %s', [self.feature.pk])
+                self.fail('RESTRICT must reject the delete at the statement.')
+            self.assertEqual(error.exception.__cause__.diag.constraint_name, 'fk_release_epi_feature_feature')
+            cursor.execute('DELETE FROM data_release WHERE release_id = %s', [self.release.pk])
+        self.assertFalse(domain.ReleaseEpigeneticFeature.objects.filter(pk=membership.pk).exists())
+        self.assertTrue(domain.EpigeneticFeature.objects.filter(pk=self.feature.pk).exists())
+        self.assertEqual(domain.ReleaseEpigeneticFeature.objects.filter(pk=untouched.pk).values().get(), before)
+
+    def test_orm_reverse_relations_and_deletions_match_physical_actions(self):
+        membership, parents = self.linked_membership()
+        for parent, related in ((self.release, 'epigenetic_feature_memberships'), (self.feature, 'release_memberships'),
+                                (parents['included_by_analysis'], 'included_epigenetic_feature_memberships')):
+            self.assertEqual(list(getattr(parent, related).all()), [membership])
+        for delete in (self.feature.delete, lambda: domain.EpigeneticFeature.objects.filter(pk=self.feature.pk).delete()):
+            with self.assertRaises(RestrictedError):
+                delete()
+        parents['included_by_analysis'].delete()
+        membership.refresh_from_db()
+        self.assertIsNone(membership.included_by_analysis_id)
+        pair = membership.pk
+        self.release.delete()
+        self.assertFalse(domain.ReleaseEpigeneticFeature.objects.filter(pk=pair).exists())
+        self.assertTrue(domain.EpigeneticFeature.objects.filter(pk=self.feature.pk).exists())
+
+    def test_all_three_orphan_inserts_and_updates_fail_at_the_statement_even_when_deferred(self):
+        membership = self.membership()
+        membership.save()
+        insert_release = self.new_release()
+        for field, _, _, name, _, _ in self.fk_specs:
+            column, orphan = field + '_id', uuid.uuid4()
+            with self.subTest(field=field):
+                with self.assertRaises(ValidationError):
+                    self.membership(**{column: orphan}).full_clean()
+                values = dict(release_id=insert_release.pk, epigenetic_feature_id=self.feature.pk) | {column: orphan}
+                insert = f"INSERT INTO release_epigenetic_feature ({', '.join(values)}) VALUES ({', '.join(['%s'] * len(values))})"
+                for sql, args in ((insert, list(values.values())),
+                                  (f'UPDATE release_epigenetic_feature SET {column} = %s WHERE release_id = %s AND epigenetic_feature_id = %s', [orphan, *membership.pk])):
+                    with self.assertRaises(IntegrityError) as error, transaction.atomic(), connection.cursor() as cursor:
+                        cursor.execute('SET CONSTRAINTS ALL DEFERRED')
+                        cursor.execute(sql, args)
+                        self.fail('FK must reject an orphan before transaction end.')
+                    self.assertEqual(error.exception.__cause__.diag.constraint_name, name)
+                for insert in (lambda: domain.ReleaseEpigeneticFeature.objects.create(**values),
+                               lambda: domain.ReleaseEpigeneticFeature.objects.bulk_create([domain.ReleaseEpigeneticFeature(**values)])):
+                    with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                        insert()
+                        self.fail('ORM writes must also fail before transaction end.')
+                    self.assertEqual(error.exception.__cause__.diag.constraint_name, name)
+
+    def test_fk_reverse_restores_deferred_no_action_then_forward_restores_all_actions(self):
+        operation, state = self.fk_operation()
+        membership, parents = self.linked_membership()
+        connection.check_constraints()
+        expected = self.fk_actions()
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            operation.database_backwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), {name: ('a', 'a', True, True) for name in expected})
+            for field, target, key, name, _, _ in self.fk_specs:
+                with self.subTest(field=field), self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    new_id = uuid.uuid4()
+                    cursor.execute(f'UPDATE {target._meta.db_table} SET {key} = %s WHERE {key} = %s', [new_id, parents[field].pk])
+                    membership.refresh_from_db()
+                    self.assertEqual(getattr(membership, field + '_id'), parents[field].pk)
+                    cursor.execute(f'DELETE FROM {target._meta.db_table} WHERE {key} = %s', [new_id])
+                    self.assertTrue(domain.ReleaseEpigeneticFeature.objects.filter(pk=membership.pk).exists())
+                    connection.check_constraints()  # Restored NO ACTION fails only at the deferred check.
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, name)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected)
+
+    def test_each_missing_or_ambiguous_lookup_fails_before_any_ddl_in_both_directions(self):
+        operation, state = self.fk_operation()
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected = self.fk_actions()
+            for apply in (operation.database_forwards, operation.database_backwards):
+                for field, target, key, name, _, _ in self.fk_specs:
+                    for case, sql in (
+                        ('missing', f'ALTER TABLE release_epigenetic_feature DROP CONSTRAINT {name}'),
+                        ('ambiguous', f'ALTER TABLE release_epigenetic_feature ADD CONSTRAINT duplicate_fk FOREIGN KEY ({field}_id) '
+                         f'REFERENCES {target._meta.db_table} ({key}) DEFERRABLE INITIALLY DEFERRED'),
+                    ):
+                        with self.subTest(direction=apply.__name__, field=field, case=case), transaction.atomic():
+                            cursor.execute(sql)
+                            before = self.fk_actions()
+                            editor.deferred_sql.append('SELECT 1')
+                            try:
+                                with patch.object(editor, 'execute', wraps=editor.execute) as execute:
+                                    with self.assertRaisesMessage(RuntimeError, 'Expected exactly one FK'):
+                                        apply('genetics', editor, state, state)
+                                    execute.assert_not_called()
+                                self.assertEqual(editor.deferred_sql, ['SELECT 1'])
+                            finally:
+                                editor.deferred_sql.clear()
+                            self.assertEqual(self.fk_actions(), before)
+                            transaction.set_rollback(True)
+                operation.database_backwards('genetics', editor, state, state)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected)
+
+    def test_exact_relation_and_single_column_lookup_ignores_decoys_and_quotes_discovered_names(self):
+        operation, state = self.fk_operation()
+        with transaction.atomic(), connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected, decoys = self.fk_actions(), {}
+            for field, target, key, name, _, _ in self.fk_specs:
+                quoted = '"' + f'generated "{field}" FK'.replace('"', '""') + '"'
+                cursor.execute(f'ALTER TABLE release_epigenetic_feature RENAME CONSTRAINT {name} TO {quoted}')
+                cursor.execute(f'ALTER TABLE {target._meta.db_table} ADD COLUMN decoy_key uuid UNIQUE')
+                cursor.execute(f'ALTER TABLE {target._meta.db_table} ADD CONSTRAINT decoy_pair_{field} UNIQUE ({key}, decoy_key)')
+                other_table, other_key = ('data_release', 'release_id') if field == 'epigenetic_feature' else ('epigenetic_feature', 'epigenetic_feature_id')
+                other_source = 'epigenetic_feature_id' if field == 'release' else 'release_id'
+                for kind, source, table, column in (
+                    ('source', other_source, target._meta.db_table, key),
+                    ('target', field + '_id', target._meta.db_table, 'decoy_key'),
+                    ('relation', field + '_id', other_table, other_key),
+                    ('composite', f'{field}_id, {other_source}', target._meta.db_table, f'{key}, decoy_key'),
+                ):
+                    decoy = f'decoy_epi_membership_{kind}_{field}'
+                    cursor.execute(f'ALTER TABLE release_epigenetic_feature ADD CONSTRAINT {decoy} FOREIGN KEY ({source}) '
+                                   f'REFERENCES {table} ({column}) DEFERRABLE INITIALLY DEFERRED')
+                    decoys[decoy] = ('a', 'a', True, True)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected | decoys)
+            for field, _, _, name, _, _ in self.fk_specs:
+                quoted = '"' + f'reverse "{field}" FK'.replace('"', '""') + '"'
+                cursor.execute(f'ALTER TABLE release_epigenetic_feature RENAME CONSTRAINT {name} TO {quoted}')
+            operation.database_backwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), {name: ('a', 'a', True, True) for name in expected} | decoys)
+            transaction.set_rollback(True)
+
+    def test_full_migration_reversal_and_reapplication_preserve_parents_and_exact_catalog(self):
+        migration = import_module('genetics.migrations.0012_release_epigenetic_feature').Migration('0012_release_epigenetic_feature', 'genetics')
+        prior = MigrationLoader(connection).project_state([('genetics', '0011_release_variant')])
+        membership, parents = self.linked_membership()
+        connection.check_constraints()
+        actions, columns = self.fk_actions(), self.physical_columns()
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, 'release_epigenetic_feature')
+        with connection.schema_editor() as editor:
+            migration.unapply(prior, editor)
+        with connection.cursor() as cursor:
+            self.assertNotIn('release_epigenetic_feature', connection.introspection.table_names(cursor))
+        for parent in parents.values():
+            self.assertTrue(type(parent).objects.filter(pk=parent.pk).exists())
+        with connection.schema_editor() as editor:
+            migration.apply(prior.clone(), editor)
+        self.assertEqual(domain.ReleaseEpigeneticFeature.objects.count(), 0)
+        self.assertEqual((self.fk_actions(), self.physical_columns()), (actions, columns))
+        with connection.cursor() as cursor:
+            self.assertEqual(connection.introspection.get_constraints(cursor, 'release_epigenetic_feature'), constraints)
+        membership.save(force_insert=True)
+        self.assertEqual(domain.ReleaseEpigeneticFeature.objects.get(pk=membership.pk), membership)
+
+    def test_schema_only_migration_dependency_and_exact_native_composite_state(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0012_release_epigenetic_feature')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0011_release_variant')])
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel', 'RunPython', 'RunPython'])
+        self.assertEqual(migration.operations[0].name, 'ReleaseEpigeneticFeature')
+        self.assertTrue(all(operation.reversible for operation in migration.operations))
+        historical = MigrationLoader(connection).project_state([('genetics', '0012_release_epigenetic_feature')]).apps.get_model('genetics', 'ReleaseEpigeneticFeature')
+        current = domain.ReleaseEpigeneticFeature
+        self.assertEqual(historical._meta.db_table, current._meta.db_table)
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in current._meta.local_fields})
+        self.assertEqual(historical._meta.pk.field_names, ('release_id', 'epigenetic_feature_id'))
+        self.assertEqual(historical._meta.indexes, current._meta.indexes)
+        self.assertEqual(historical._meta.constraints, current._meta.constraints)
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
+
+
 class ReleaseVariantTests(TestCase):
     fk_specs = (
         ('release', domain.DataRelease, 'release_id', 'fk_release_variant_release', CASCADE, 'c'),
