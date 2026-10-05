@@ -30,6 +30,112 @@ from services.models import (
 )
 
 
+class DataReleaseTests(TestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+
+    def release(self, **changes):
+        return domain.DataRelease(**(dict(
+            name='Synthetic release', version='1.0', status='draft', reference_assembly='GRCh38',
+        ) | changes))
+
+    def test_all_nine_sql_columns_have_exact_types_nullability_and_unique_constraint(self):
+        columns = {
+            'release_id': ('uuid', None, 'NO'), 'name': ('character varying', 128, 'NO'),
+            'version': ('character varying', 64, 'NO'), 'status': ('character varying', 32, 'NO'),
+            'reference_assembly': ('character varying', 32, 'NO'), 'description': ('text', None, 'YES'),
+            'manifest_checksum': ('character', 64, 'YES'), 'frozen_at': ('timestamp with time zone', None, 'YES'),
+            'created_at': ('timestamp with time zone', None, 'NO'),
+        }
+        model = domain.DataRelease
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('data_release', 'release_id'))
+        self.assertEqual({field.column for field in model._meta.local_fields}, set(columns))
+        self.assertIsInstance(model._meta.pk.get_default(), uuid.UUID)
+        for field in model._meta.local_fields:
+            _, length, nullable = columns[field.column]
+            self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+            if length is not None:
+                self.assertEqual(field.max_length, length)
+        self.assertFalse(model._meta.get_field('status').choices)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable '
+                           "FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'data_release'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'data_release')
+        self.assertTrue(any(info['primary_key'] and info['columns'] == ['release_id']
+                            for info in constraints.values()))
+        unique = constraints['uq_data_release_name_version']
+        self.assertTrue(unique['unique'])
+        self.assertEqual(unique['columns'], ['name', 'version'])
+
+    def test_nullable_metadata_round_trip_and_orm_and_transaction_defaults(self):
+        release = self.release()
+        release.full_clean()
+        release.save()
+        release.refresh_from_db()
+        self.assertIsInstance(release.pk, uuid.UUID)
+        self.assertTrue(timezone.is_aware(release.created_at))
+        for field in ('description', 'manifest_checksum', 'frozen_at'):
+            self.assertIsNone(getattr(release, field))
+        optional = dict(description='Synthetic manifest', manifest_checksum='a' * 64, frozen_at=timezone.now())
+        for field, value in optional.items():
+            setattr(release, field, value)
+        release.full_clean()
+        release.save()
+        release.refresh_from_db()
+        for field, value in optional.items():
+            self.assertEqual(getattr(release, field), value)
+        created = domain.DataRelease._meta.get_field('created_at')
+        self.assertIs(created.default, timezone.now)
+        self.assertIsInstance(created.db_default, TransactionNow)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, column_default FROM information_schema.columns '
+                           "WHERE table_schema = current_schema() AND table_name = 'data_release'")
+            self.assertEqual(dict(cursor.fetchall()), {
+                field.column: 'CURRENT_TIMESTAMP' if field.name == 'created_at' else None
+                for field in domain.DataRelease._meta.local_fields
+            })
+            cursor.execute('INSERT INTO data_release (release_id, name, version, status, reference_assembly) '
+                           'VALUES (%s, %s, %s, %s, %s) '
+                           'RETURNING description, manifest_checksum, frozen_at, created_at, transaction_timestamp()',
+                           [uuid.uuid4(), 'Synthetic SQL release', '1.0', 'draft', 'GRCh38'])
+            description, checksum, frozen_at, created_at, database_now = cursor.fetchone()
+        self.assertEqual((description, checksum, frozen_at), (None, None, None))
+        self.assertTrue(timezone.is_aware(created_at))
+        self.assertEqual(created_at, database_now)
+
+    def test_database_not_null_and_composite_uniqueness(self):
+        self.release().save()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.release().save()
+        self.release(version='2.0').save()
+        self.release(name='Another synthetic release').save()
+        self.assertEqual(domain.DataRelease.objects.count(), 3)
+        for field in ('name', 'version', 'status', 'reference_assembly', 'created_at'):
+            with self.subTest(field=field), self.assertRaises(IntegrityError), transaction.atomic():
+                self.release(**(dict(name=f'Null {field}', version='null-case') | {field: None})).save()
+
+    def test_schema_only_migration_dependency_state_and_fixed_char_deconstruction(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0003_data_release_analysis_release')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0002_analysis')])
+        self.assertEqual([type(op).__name__ for op in migration.operations], ['CreateModel', 'AddField', 'AddIndex'])
+        state = MigrationLoader(connection).project_state([('genetics', '0003_data_release_analysis_release')])
+        for name in ('DataRelease', 'Analysis'):
+            historical, current = state.apps.get_model('genetics', name), getattr(domain, name)
+            self.assertEqual(historical._meta.db_table, current._meta.db_table)
+            self.assertEqual({f.name: f.deconstruct()[1:] for f in historical._meta.local_fields},
+                             {f.name: f.deconstruct()[1:] for f in current._meta.local_fields})
+            self.assertEqual(historical._meta.indexes, current._meta.indexes)
+            self.assertEqual(historical._meta.constraints, current._meta.constraints)
+        field = domain.DataRelease._meta.get_field('manifest_checksum')
+        _, path, args, kwargs = field.deconstruct()
+        self.assertEqual(path, 'genetics.models.FixedCharField')
+        rebuilt = domain.FixedCharField(*args, **kwargs)
+        self.assertEqual(rebuilt.deconstruct()[1:], field.deconstruct()[1:])
+        self.assertEqual(rebuilt.db_type(connection), 'char(64)')
+
+
 class AnalysisTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -72,15 +178,37 @@ class AnalysisTests(TestCase):
         )
         analysis.refresh_from_db()
         self.assertIsInstance(analysis.pk, uuid.UUID)
-        for field in ('participant_id', 'sample_id', 'service_request_id', 'container_digest',
+        for field in ('participant_id', 'sample_id', 'release_id', 'service_request_id', 'container_digest',
                       'reference_assembly', 'parameters', 'started_at', 'finished_at'):
             self.assertIsNone(getattr(analysis, field))
         self.assertTrue(timezone.is_aware(analysis.created_at))
 
-    def test_fourteen_column_slice_has_exact_types_foreign_keys_and_sample_index(self):
+    def test_release_reference_is_optional_and_protected(self):
+        release = domain.DataRelease.objects.create(
+            name='Synthetic release', version='1.0', status='draft', reference_assembly='GRCh38',
+        )
+        analysis = self.analysis(participant=None, sample=None, service_request=None, release=release)
+        analysis.save()
+        analysis.refresh_from_db()
+        self.assertEqual(analysis.release_id, release.pk)
+        with self.assertRaises(ProtectedError) as error:
+            release.delete()
+        self.assertIn(analysis, error.exception.protected_objects)
+        with self.assertRaises(ProtectedError):
+            domain.DataRelease.objects.filter(pk=release.pk).delete()
+        self.assertTrue(domain.DataRelease.objects.filter(pk=release.pk).exists())
+        self.assertEqual(domain.Analysis.objects.get(pk=analysis.pk).release_id, release.pk)
+        analysis.release = None
+        analysis.save(update_fields=['release'])
+        analysis.refresh_from_db()
+        self.assertIsNone(analysis.release_id)
+        release.delete()  # Unreferenced releases are not subject to additional lifecycle rules.
+
+    def test_all_fifteen_sql_columns_have_exact_types_foreign_keys_and_indexes(self):
         columns = {
             'analysis_id': ('uuid', None, 'NO'), 'participant_id': ('uuid', None, 'YES'),
-            'sample_id': ('uuid', None, 'YES'), 'service_request_id': ('uuid', None, 'YES'),
+            'sample_id': ('uuid', None, 'YES'), 'release_id': ('uuid', None, 'YES'),
+            'service_request_id': ('uuid', None, 'YES'),
             'module': ('character varying', 64, 'NO'), 'pipeline_name': ('character varying', 128, 'NO'),
             'pipeline_version': ('character varying', 64, 'NO'), 'container_digest': ('character varying', 255, 'YES'),
             'reference_assembly': ('character varying', 32, 'YES'), 'parameters': ('jsonb', None, 'YES'),
@@ -102,14 +230,20 @@ class AnalysisTests(TestCase):
             constraints = connection.introspection.get_constraints(cursor, 'analysis')
         self.assertTrue(any(info['primary_key'] and info['columns'] == ['analysis_id']
                             for info in constraints.values()))
-        for field, table in (('participant', 'participant'), ('sample', 'sample'), ('service_request', 'service_request')):
+        for field, table, key in (
+            ('participant', 'participant', 'participant_id'), ('sample', 'sample', 'sample_id'),
+            ('service_request', 'service_request', 'service_request_id'), ('release', 'data_release', 'release_id'),
+        ):
             relation = domain.Analysis._meta.get_field(field)
             self.assertEqual(relation.remote_field.on_delete, PROTECT)
-            self.assertTrue(any(info['foreign_key'] == (table, f'{table}_id') and info['columns'] == [relation.column]
+            self.assertTrue(any(info['foreign_key'] == (table, key) and info['columns'] == [relation.column]
                                 for info in constraints.values()))
-        self.assertEqual({i.name: i.fields for i in domain.Analysis._meta.indexes}, {'idx_analysis_sample': ['sample']})
-        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']},
-                         {'idx_analysis_sample': ['sample_id']})  # release_id/index are deliberately absent until GDB04b.
+        self.assertEqual({i.name: i.fields for i in domain.Analysis._meta.indexes}, {
+            'idx_analysis_sample': ['sample'], 'idx_analysis_release_module': ['release', 'module'],
+        })
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']}, {
+            'idx_analysis_sample': ['sample_id'], 'idx_analysis_release_module': ['release_id', 'module'],
+        })
 
     def test_created_at_has_orm_and_postgresql_defaults(self):
         field = domain.Analysis._meta.get_field('created_at')
@@ -147,7 +281,7 @@ class AnalysisTests(TestCase):
 
     def test_database_not_null_and_foreign_key_constraints(self):
         changes = [(field, None) for field in ('module', 'pipeline_name', 'pipeline_version', 'status', 'created_at')]
-        changes += [(field, uuid.uuid4()) for field in ('participant_id', 'sample_id', 'service_request_id')]
+        changes += [(field, uuid.uuid4()) for field in ('participant_id', 'sample_id', 'release_id', 'service_request_id')]
         for field, value in changes:
             with self.subTest(field=field), self.assertRaises(IntegrityError), transaction.atomic():
                 domain.Analysis.objects.bulk_create([self.analysis(**{field: value})])
@@ -255,7 +389,7 @@ class AnalysisTests(TestCase):
         self.assertEqual(set(migration.dependencies), {('genetics', '0001_initial'),
                          ('participants', '0003_participant_metadata_support'), ('services', '0004_sample')})
         self.assertEqual([type(op).__name__ for op in migration.operations], ['CreateModel'])
-        historical = MigrationLoader(connection).project_state([('genetics', '0002_analysis')]).apps.get_model('genetics', 'Analysis')
+        historical = MigrationLoader(connection).project_state([('genetics', '0003_data_release_analysis_release')]).apps.get_model('genetics', 'Analysis')
         self.assertEqual({f.name: f.deconstruct()[1:] for f in historical._meta.local_fields},
                          {f.name: f.deconstruct()[1:] for f in domain.Analysis._meta.local_fields})
         self.assertEqual(historical._meta.indexes, domain.Analysis._meta.indexes)

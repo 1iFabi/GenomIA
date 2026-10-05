@@ -7,8 +7,33 @@ from django.contrib.postgres.functions import TransactionNow
 from django.utils import timezone
 
 
+class FixedCharField(models.CharField):
+    """Keep fixed-width SQL CHAR instead of Django's default VARCHAR."""
+
+    def db_type(self, connection):
+        return f'char({self.max_length})'
+
+
+class DataRelease(models.Model):
+    """Versioned release provenance without ingest or publication behavior."""
+
+    release_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=128)
+    version = models.CharField(max_length=64)
+    status = models.CharField(max_length=32)
+    reference_assembly = models.CharField(max_length=32)
+    description = models.TextField(null=True, blank=True)
+    manifest_checksum = FixedCharField(max_length=64, null=True, blank=True)
+    frozen_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'data_release'
+        constraints = [models.UniqueConstraint(fields=['name', 'version'], name='uq_data_release_name_version')]
+
+
 class Analysis(models.Model):
-    """Pipeline provenance; GDB04b must add release_id and its module index."""
+    """Pipeline provenance with optional participant, sample, request and release links."""
 
     analysis_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     participant = models.ForeignKey(
@@ -17,6 +42,10 @@ class Analysis(models.Model):
     )
     sample = models.ForeignKey(
         'services.Sample', on_delete=models.PROTECT, db_column='sample_id',
+        null=True, blank=True, db_index=False, related_name='analyses',
+    )
+    release = models.ForeignKey(
+        'genetics.DataRelease', on_delete=models.PROTECT, db_column='release_id',
         null=True, blank=True, db_index=False, related_name='analyses',
     )
     service_request = models.ForeignKey(
@@ -36,7 +65,10 @@ class Analysis(models.Model):
 
     class Meta:
         db_table = 'analysis'
-        indexes = [models.Index(fields=['sample'], name='idx_analysis_sample')]
+        indexes = [
+            models.Index(fields=['sample'], name='idx_analysis_sample'),
+            models.Index(fields=['release', 'module'], name='idx_analysis_release_module'),
+        ]
 
     def _validate_relationships(self, using, update_fields=None):
         from participants.models import Participant
