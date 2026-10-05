@@ -1,10 +1,18 @@
 import json
+import uuid
 from datetime import timedelta
+from importlib import import_module, reload
 from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
-from django.db import connection
+from django.contrib.postgres.functions import TransactionNow
+from django.core.exceptions import ValidationError
+from django.core.management import call_command
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.loader import MigrationLoader
+from django.db.models.deletion import PROTECT, ProtectedError
+from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -12,13 +20,248 @@ from rest_framework.test import APITestCase
 from accounts.jwt_utils import encode_jwt
 from accounts.models import AppUser
 from accounts.roles import grant_admin_role, grant_analyst_role, grant_reception_role
+from genetics import models as domain
 from genetics.models import SNP, UserSNP
 from genetics.upload_views import UploadGeneticFileAPIView
 from profiles.models import Profile, ServiceStatus
 from services.models import (
-    Purchase, PurchaseStatus, ServiceRequest, ServiceStatus as RequestStatus,
+    Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
 )
+
+
+class AnalysisTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from participants.models import Participant
+        cls.user = User.objects.create_user(username='analysis-owner')
+        cls.other_user = User.objects.create_user(username='analysis-other')
+        cls.participant = Participant.objects.create(user=cls.user, participant_code='analysis-owner')
+        cls.other_participant = Participant.objects.create(user=cls.other_user, participant_code='analysis-other')
+        cls.request = ServiceRequest.objects.create(
+            purchase=Purchase.objects.create(owner=cls.user.app_user), participant=cls.participant,
+            status=RequestStatus.objects.get(code='WAITING_SAMPLE'),
+        )
+        cls.other_request = ServiceRequest.objects.create(
+            purchase=Purchase.objects.create(owner=cls.other_user.app_user), participant=cls.other_participant,
+            status=cls.request.status,
+        )
+        cls.sample = Sample.objects.create(service_request=cls.request, participant=cls.participant,
+                                           sample_code='analysis-input', sample_type='saliva')
+        cls.other_sample = Sample.objects.create(service_request=cls.other_request, participant=cls.other_participant,
+                                                 sample_code='analysis-other-input', sample_type='saliva')
+
+    def analysis(self, **changes):
+        return domain.Analysis(**(dict(
+            participant=self.participant, sample=self.sample, service_request=self.request,
+            module='ancestry', pipeline_name='synthetic-pipeline', pipeline_version='1.0', status='queued',
+        ) | changes))
+
+    def assert_invalid(self, analysis, field):
+        for action in (analysis.clean, analysis.save):
+            with self.subTest(action=action.__name__), self.assertRaises(ValidationError) as error:
+                action()
+            self.assertIn(field, error.exception.message_dict)
+            self.assertNotIn(self.sample.sample_code, str(error.exception))
+            self.assertNotIn(self.user.username, str(error.exception))
+
+    def test_release_level_analysis_keeps_optional_provenance_empty(self):
+        analysis = domain.Analysis.objects.create(
+            module='ancestry', pipeline_name='synthetic-pipeline',
+            pipeline_version='1.0', status='queued',
+        )
+        analysis.refresh_from_db()
+        self.assertIsInstance(analysis.pk, uuid.UUID)
+        for field in ('participant_id', 'sample_id', 'service_request_id', 'container_digest',
+                      'reference_assembly', 'parameters', 'started_at', 'finished_at'):
+            self.assertIsNone(getattr(analysis, field))
+        self.assertTrue(timezone.is_aware(analysis.created_at))
+
+    def test_fourteen_column_slice_has_exact_types_foreign_keys_and_sample_index(self):
+        columns = {
+            'analysis_id': ('uuid', None, 'NO'), 'participant_id': ('uuid', None, 'YES'),
+            'sample_id': ('uuid', None, 'YES'), 'service_request_id': ('uuid', None, 'YES'),
+            'module': ('character varying', 64, 'NO'), 'pipeline_name': ('character varying', 128, 'NO'),
+            'pipeline_version': ('character varying', 64, 'NO'), 'container_digest': ('character varying', 255, 'YES'),
+            'reference_assembly': ('character varying', 32, 'YES'), 'parameters': ('jsonb', None, 'YES'),
+            'status': ('character varying', 32, 'NO'), 'started_at': ('timestamp with time zone', None, 'YES'),
+            'finished_at': ('timestamp with time zone', None, 'YES'), 'created_at': ('timestamp with time zone', None, 'NO'),
+        }
+        self.assertEqual((domain.Analysis._meta.db_table, domain.Analysis._meta.pk.name), ('analysis', 'analysis_id'))
+        self.assertEqual({f.column for f in domain.Analysis._meta.local_fields}, set(columns))
+        for field in domain.Analysis._meta.local_fields:
+            _, length, nullable = columns[field.column]
+            self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+            if length:
+                self.assertEqual(field.max_length, length)
+        self.assertFalse(domain.Analysis._meta.get_field('status').choices)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable '
+                           "FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'analysis'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'analysis')
+        self.assertTrue(any(info['primary_key'] and info['columns'] == ['analysis_id']
+                            for info in constraints.values()))
+        for field, table in (('participant', 'participant'), ('sample', 'sample'), ('service_request', 'service_request')):
+            relation = domain.Analysis._meta.get_field(field)
+            self.assertEqual(relation.remote_field.on_delete, PROTECT)
+            self.assertTrue(any(info['foreign_key'] == (table, f'{table}_id') and info['columns'] == [relation.column]
+                                for info in constraints.values()))
+        self.assertEqual({i.name: i.fields for i in domain.Analysis._meta.indexes}, {'idx_analysis_sample': ['sample']})
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']},
+                         {'idx_analysis_sample': ['sample_id']})  # release_id/index are deliberately absent until GDB04b.
+
+    def test_created_at_has_orm_and_postgresql_defaults(self):
+        field = domain.Analysis._meta.get_field('created_at')
+        self.assertIs(field.default, timezone.now)
+        with self.subTest(default='model'):
+            self.assertIsInstance(field.db_default, TransactionNow)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_default FROM information_schema.columns '
+                           "WHERE table_schema = current_schema() AND table_name = 'analysis' AND column_name = 'created_at'")
+            with self.subTest(default='physical_column'):
+                self.assertEqual(cursor.fetchone()[0], 'CURRENT_TIMESTAMP')
+            cursor.execute('INSERT INTO analysis (analysis_id, module, pipeline_name, pipeline_version, status) '
+                           'VALUES (%s, %s, %s, %s, %s) RETURNING created_at, transaction_timestamp()',
+                           [uuid.uuid4(), 'ancestry', 'synthetic-sql', '1.0', 'queued'])
+            created_at, database_now = cursor.fetchone()
+        self.assertTrue(timezone.is_aware(created_at))
+        self.assertEqual(created_at, database_now)
+
+    def test_nullable_links_and_optional_execution_metadata_round_trip(self):
+        optional = dict(container_digest='sha256:synthetic', reference_assembly='GRCh38',
+                        parameters={'software': {'version': '1.0'}, 'inputs': ['synthetic']},
+                        started_at=timezone.now(), finished_at=timezone.now())
+        for links in ({}, {'participant': self.participant}, {'sample': self.sample}, {'service_request': self.request}):
+            analysis = self.analysis(**(dict(participant=None, sample=None, service_request=None) | links | optional))
+            analysis.full_clean()
+            analysis.save()
+            analysis.refresh_from_db()
+            for field, value in optional.items():
+                self.assertEqual(getattr(analysis, field), value)
+            self.assertNotIn(self.user.username, str(analysis))
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status.code, 'WAITING_SAMPLE')
+        self.assertFalse(ServiceStatusLog.objects.exists())
+        self.assertFalse(UserSNP.objects.exists())
+
+    def test_database_not_null_and_foreign_key_constraints(self):
+        changes = [(field, None) for field in ('module', 'pipeline_name', 'pipeline_version', 'status', 'created_at')]
+        changes += [(field, uuid.uuid4()) for field in ('participant_id', 'sample_id', 'service_request_id')]
+        for field, value in changes:
+            with self.subTest(field=field), self.assertRaises(IntegrityError), transaction.atomic():
+                domain.Analysis.objects.bulk_create([self.analysis(**{field: value})])
+                connection.check_constraints()
+
+    def test_create_and_save_reject_missing_references_and_mismatched_participants(self):
+        for changes, field in (
+            ({'participant_id': uuid.uuid4()}, 'participant'), ({'sample_id': uuid.uuid4()}, 'sample'),
+            ({'service_request_id': uuid.uuid4()}, 'service_request'),
+            ({'participant': self.other_participant}, 'sample'), ({'sample': self.other_sample}, 'sample'),
+            ({'service_request': self.other_request}, 'service_request'),
+        ):
+            with self.subTest(changes=changes):
+                analysis = self.analysis(**changes)
+                self.assert_invalid(analysis, field)
+                values = {f.attname: getattr(analysis, f.attname) for f in analysis._meta.local_fields}
+                with self.assertRaises(ValidationError):
+                    domain.Analysis.objects.create(**values)
+                self.assertFalse(domain.Analysis.objects.filter(pk=analysis.pk).exists())
+
+    def test_revalidates_live_sample_request_and_owner_even_with_cached_relations(self):
+        from participants.models import Participant
+        saved = self.analysis()
+        saved.save()
+        replacement = User.objects.create_user(username='analysis-replacement')
+        for model, pk, field, invalid, original in (
+            (Sample, self.sample.pk, 'participant', self.other_participant, self.participant),
+            (ServiceRequest, self.request.pk, 'participant', None, self.participant),
+            (ServiceRequest, self.request.pk, 'participant', self.other_participant, self.participant),
+            (Purchase, self.request.purchase_id, 'owner', self.other_user.app_user, self.user.app_user),
+            (Participant, self.participant.pk, 'user', replacement, self.user),
+        ):
+            with self.subTest(model=model.__name__, field=field):
+                model.objects.filter(pk=pk).update(**{field: invalid})
+                for analysis in (self.analysis(), saved):
+                    self.assert_invalid(analysis, 'sample')
+                with self.assertRaises(ValidationError):
+                    saved.save(update_fields=['status'])
+                model.objects.filter(pk=pk).update(**{field: original})
+        self.assertEqual(domain.Analysis.objects.count(), 1)
+
+    def test_optional_request_also_requires_matching_live_participant_and_owner(self):
+        request = ServiceRequest.objects.create(purchase=Purchase.objects.create(owner=self.user.app_user),
+                                               participant=self.participant, status=self.request.status)
+        analysis = self.analysis(service_request=request)
+        analysis.save()  # Another request is valid if the participant and owner agree.
+        for field, value in (('participant', None), ('participant', self.other_participant)):
+            ServiceRequest.objects.filter(pk=request.pk).update(**{field: value})
+            self.assert_invalid(analysis, 'service_request')
+        ServiceRequest.objects.filter(pk=request.pk).update(participant=self.participant)
+        Purchase.objects.filter(pk=request.purchase_id).update(owner=self.other_user.app_user)
+        self.assert_invalid(analysis, 'service_request')
+
+    def test_partial_save_validates_persisted_links_not_stale_or_cleared_instance_links(self):
+        analysis = self.analysis()
+        analysis.save()
+        for field, foreign, original in (
+            ('participant', self.other_participant, self.participant), ('sample', self.other_sample, self.sample),
+            ('service_request', self.other_request, self.request),
+        ):
+            with self.subTest(field=field):
+                domain.Analysis.objects.filter(pk=analysis.pk).update(**{field: foreign})
+                setattr(analysis, field, None)
+                analysis.status = 'must-not-save'
+                with self.assertRaises(ValidationError):
+                    analysis.save(update_fields=['status'])
+                self.assertEqual(domain.Analysis.objects.get(pk=analysis.pk).status, 'queued')
+                domain.Analysis.objects.filter(pk=analysis.pk).update(**{field: original})
+                analysis.refresh_from_db()
+        domain.Analysis.objects.filter(pk=analysis.pk).update(participant=None)
+        analysis.refresh_from_db()
+        analysis.sample = None
+        analysis.participant = self.other_participant
+        with self.assertRaises(ValidationError):
+            analysis.save(update_fields=['participant'])  # The persisted sample still belongs to the original owner.
+
+    def test_missing_joined_identities_cannot_match_each_other_as_null(self):
+        for field, target in (('sample', self.sample), ('service_request', self.request)):
+            with self.subTest(field=field), transaction.atomic():
+                try:
+                    missing = uuid.uuid4()
+                    Sample.objects.filter(pk=self.sample.pk).update(participant_id=missing)
+                    ServiceRequest.objects.filter(pk=self.request.pk).update(participant_id=missing)
+                    Purchase.objects.filter(pk=self.request.purchase_id).update(owner_id=uuid.uuid4())
+                    analysis = self.analysis(participant=None, sample=None, service_request=None)
+                    setattr(analysis, field, target)
+                    self.assert_invalid(analysis, field)
+                finally:
+                    transaction.set_rollback(True)  # Never retain deliberately broken deferred FKs.
+
+    def test_protects_every_link_and_rejects_bulk_inserted_mismatched_provenance_on_save(self):
+        analysis = self.analysis()
+        analysis.save()
+        for target in (self.participant, self.sample, self.request):
+            with self.assertRaises(ProtectedError) as error:
+                target.delete()
+            self.assertIn(analysis, error.exception.protected_objects)
+        dirty = self.analysis(participant=self.other_participant)
+        domain.Analysis.objects.bulk_create([dirty])
+        self.assert_invalid(dirty, 'sample')
+
+    def test_migration_is_schema_only_matches_model_and_checks_only_isolated_database(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0002_analysis')).Migration
+        self.assertEqual(set(migration.dependencies), {('genetics', '0001_initial'),
+                         ('participants', '0003_participant_metadata_support'), ('services', '0004_sample')})
+        self.assertEqual([type(op).__name__ for op in migration.operations], ['CreateModel'])
+        historical = MigrationLoader(connection).project_state([('genetics', '0002_analysis')]).apps.get_model('genetics', 'Analysis')
+        self.assertEqual({f.name: f.deconstruct()[1:] for f in historical._meta.local_fields},
+                         {f.name: f.deconstruct()[1:] for f in domain.Analysis._meta.local_fields})
+        self.assertEqual(historical._meta.indexes, domain.Analysis._meta.indexes)
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
 
 
 class GeneticsTests(APITestCase):

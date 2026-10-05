@@ -1,5 +1,100 @@
-from django.db import models
+import uuid
+
+from django.db import models, router
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.contrib.postgres.functions import TransactionNow
+from django.utils import timezone
+
+
+class Analysis(models.Model):
+    """Pipeline provenance; GDB04b must add release_id and its module index."""
+
+    analysis_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    participant = models.ForeignKey(
+        'participants.Participant', on_delete=models.PROTECT, db_column='participant_id',
+        null=True, blank=True, db_index=False, related_name='analyses',
+    )
+    sample = models.ForeignKey(
+        'services.Sample', on_delete=models.PROTECT, db_column='sample_id',
+        null=True, blank=True, db_index=False, related_name='analyses',
+    )
+    service_request = models.ForeignKey(
+        'services.ServiceRequest', on_delete=models.PROTECT, db_column='service_request_id',
+        null=True, blank=True, db_index=False, related_name='analyses',
+    )
+    module = models.CharField(max_length=64)
+    pipeline_name = models.CharField(max_length=128)
+    pipeline_version = models.CharField(max_length=64)
+    container_digest = models.CharField(max_length=255, null=True, blank=True)
+    reference_assembly = models.CharField(max_length=32, null=True, blank=True)
+    parameters = models.JSONField(null=True, blank=True)
+    status = models.CharField(max_length=32)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'analysis'
+        indexes = [models.Index(fields=['sample'], name='idx_analysis_sample')]
+
+    def _validate_relationships(self, using, update_fields=None):
+        from participants.models import Participant
+        from services.models import Sample, ServiceRequest
+
+        fields = ('participant', 'sample', 'service_request')
+        ids = {f'{field}_id': getattr(self, f'{field}_id') for field in fields}
+        # Validate the combined row actually written by a partial save.
+        if update_fields is not None:
+            persisted = type(self).objects.using(using).filter(pk=self.pk).values(*ids).first()
+            if persisted:
+                for field in fields:
+                    if {field, f'{field}_id'}.isdisjoint(update_fields):
+                        ids[f'{field}_id'] = persisted[f'{field}_id']
+        identity = None
+        if ids['participant_id'] is not None:
+            user_id = Participant.objects.using(using).filter(pk=ids['participant_id']).values_list(
+                'user_id', flat=True,
+            ).first()
+            if user_id is None:
+                raise ValidationError({'participant': 'An existing participant is required.'})
+            identity = (ids['participant_id'], user_id)
+        if ids['sample_id'] is not None:
+            sample = Sample.objects.using(using).filter(pk=ids['sample_id']).values(
+                'participant_id', 'participant__user_id', 'service_request__participant_id',
+                'service_request__purchase__owner__django_user_id',
+            ).first()
+            if sample is None or (
+                sample['participant_id'] != sample['service_request__participant_id']
+                or sample['participant__user_id'] != sample['service_request__purchase__owner__django_user_id']
+                or identity is not None and identity != (sample['participant_id'], sample['participant__user_id'])
+            ):
+                raise ValidationError({'sample': 'Sample, service participant and purchase owner must match.'})
+            identity = (sample['participant_id'], sample['participant__user_id'])
+        if ids['service_request_id'] is not None:
+            request = ServiceRequest.objects.using(using).filter(pk=ids['service_request_id']).values(
+                'participant_id', 'participant__user_id', 'purchase__owner__django_user_id',
+            ).first()
+            if request is None or (
+                request['participant_id'] is None
+                or request['participant__user_id'] != request['purchase__owner__django_user_id']
+                or identity is not None and identity != (request['participant_id'], request['participant__user_id'])
+            ):
+                raise ValidationError({'service_request': 'Service participant and purchase owner must match.'})
+
+    def clean(self):
+        super().clean()
+        self._validate_relationships(router.db_for_write(type(self), instance=self))
+
+    def save(self, *args, **kwargs):
+        # PROTECT intentionally differs from SQL SET NULL to retain provenance.
+        # bulk_create/QuerySet.update bypass the cross-table ownership checks.
+        using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            update_fields = kwargs['update_fields'] = frozenset(update_fields)
+        self._validate_relationships(using, update_fields)
+        return super().save(*args, **kwargs)
 
 
 class SNP(models.Model):
