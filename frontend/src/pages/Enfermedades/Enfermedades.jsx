@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
+import { useSession } from '../../hooks/useSession';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import '../../styles/cards.css';
 import './Enfermedades.css';
@@ -116,7 +117,7 @@ function DemoModuleCard({ definition, display }) {
 }
 
 const Enfermedades = () => {
-  const [user, setUser] = useState(null);
+  const { user } = useSession();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
@@ -124,10 +125,6 @@ const Enfermedades = () => {
   const displays = results.status === 'ready' && results.service ? readRiskDisplays(results.data) : null;
   const resultStatus = getRiskResultStatus(results, displays);
   const failed = ['permission', 'error', 'invalid'].includes(resultStatus);
-
-  useEffect(() => {
-    fetchUser();
-  }, []);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -139,12 +136,6 @@ const Enfermedades = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  const fetchUser = async () => {
-    const response = await apiRequest(API_ENDPOINTS.ME, { method: 'GET' });
-    if (response.ok && response.data)
-      setUser(response.data.user || response.data);
-  };
 
   const handleLogout = async () => {
     try {

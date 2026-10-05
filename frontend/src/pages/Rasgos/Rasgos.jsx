@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
+import { useSession } from '../../hooks/useSession';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import '../../styles/cards.css';
 import './Rasgos.css';
@@ -73,7 +74,7 @@ const getTraitsResult = (results) => {
 };
 
 const Rasgos = () => {
-  const [user, setUser] = useState(null);
+  const { user } = useSession();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 1024 : false);
   const navigate = useNavigate();
@@ -90,14 +91,6 @@ const Rasgos = () => {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      const response = await apiRequest(API_ENDPOINTS.ME, { method: 'GET' });
-      if (response.data) setUser(response.data.user || response.data);
-    };
-    void fetchUser();
   }, []);
 
   const handleLogout = async () => {

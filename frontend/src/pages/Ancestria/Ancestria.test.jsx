@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cwd } from 'node:process';
-import { act, createElement } from 'react';
+import React, { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -21,6 +21,8 @@ import { Expand as ExpandIcon, Shrink as ShrinkIcon } from 'lucide-react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_ENDPOINTS, apiRequest } from '../../config/api';
+import { AuthProvider } from '../../contexts/AuthContext';
+import ProtectedRoute from '../../components/ProtectedRoute';
 import Ancestria from './Ancestria';
 
 const apiImplementation = vi.hoisted(() => ({ request: null }));
@@ -35,8 +37,9 @@ vi.mock('../../config/api', async (importOriginal) => {
 });
 
 vi.mock('../../components/Sidebar/Sidebar', () => ({
-  default: ({ items, iconOverrides }) => (
+  default: ({ items, iconOverrides, user }) => (
     <nav aria-label="Dashboard navigation" data-has-icon-overrides={Boolean(iconOverrides)}>
+      <span data-testid="shared-user">{user?.name}</span>
       {items.map((item) => <a key={item.href} href={item.href}>{item.label}</a>)}
       {iconOverrides?.categoryItems?.map((Icon, index) => (
         <Icon key={index} data-testid={`ancestria-sidebar-icon-${index}`} aria-hidden="true" />
@@ -379,15 +382,21 @@ const openDrawer = async () => {
   return toggle;
 };
 
-const renderPage = async () => {
-  container = document.createElement('div');
-  document.body.appendChild(container);
-  root = createRoot(container);
+const renderPage = async ({ protectedRoute = false } = {}) => {
+  if (!root) {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  }
 
   await act(async () => {
     root.render(
-      <MemoryRouter>
-        <Ancestria />
+      <MemoryRouter initialEntries={['/dashboard/ancestria']}>
+        <AuthProvider>
+          {protectedRoute ? (
+            <React.StrictMode><ProtectedRoute><Ancestria /></ProtectedRoute></React.StrictMode>
+          ) : <Ancestria />}
+        </AuthProvider>
       </MemoryRouter>
     );
   });
@@ -427,6 +436,15 @@ afterEach(async () => {
 });
 
 describe('Ancestria insight rail', () => {
+  it('reuses the StrictMode guard profile and retains it after the result page remounts', async () => {
+    mockApi({ profile: reply({ user: { name: 'Ada', service_status: 'COMPLETED' } }) });
+    await renderPage({ protectedRoute: true });
+    expect(container.querySelector('[data-testid="shared-user"]').textContent).toBe('Ada');
+    await renderPage();
+    expect(container.querySelector('[data-testid="shared-user"]').textContent).toBe('Ada');
+    expect(fetch.mock.calls.filter(([url]) => url === API_ENDPOINTS.ME)).toHaveLength(1);
+  });
+
   it('resolves the same ancestry fixture from the future genoma package', () => {
     const fixturePath = resolve(cwd(), '../backend/sequoh/genoma/fixtures/synthetic_genomics_v2.json');
     // Keep the current fixture above importable; fail explicitly before reading the future path.

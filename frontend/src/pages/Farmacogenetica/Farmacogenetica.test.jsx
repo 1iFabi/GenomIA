@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cwd } from 'node:process';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Link, MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
+import { AuthProvider } from '../../contexts/AuthContext';
+import ProtectedRoute from '../../components/ProtectedRoute';
 import Farmacogenetica from './Farmacogenetica';
 
 const pageStyles = readFileSync(resolve(cwd(), 'src/pages/Farmacogenetica/Farmacogenetica.css'), 'utf8');
@@ -53,10 +55,15 @@ let originalInnerWidth;
 function LocationMarker() {
   return <output aria-label="Current route">{useLocation().pathname}</output>;
 }
-const renderPage = async () => {
+const renderPage = async ({ protectedRoute = false } = {}) => {
   await act(async () => root.render(
     <MemoryRouter initialEntries={['/dashboard/farmacogenetica']}>
-      <Farmacogenetica /><LocationMarker />
+      <AuthProvider>
+        {protectedRoute ? (
+          <React.StrictMode><ProtectedRoute><Farmacogenetica /></ProtectedRoute></React.StrictMode>
+        ) : <Farmacogenetica />}
+        <LocationMarker />
+      </AuthProvider>
     </MemoryRouter>
   ));
 };
@@ -119,7 +126,15 @@ describe('normalized pharmacogenetics results', () => {
     expect(getStatus().textContent).toContain('disponibles');
   });
 
-  it('uses the normalized hook and requests only the independent ME profile', async () => {
+  it('reuses the StrictMode guard profile and retains it after the result page remounts', async () => {
+    await renderPage({ protectedRoute: true });
+    expect(container.querySelector('nav').textContent).toContain('Demo account');
+    await renderPage();
+    expect(container.querySelector('nav').textContent).toContain('Demo account');
+    expect(apiRequest).toHaveBeenCalledExactlyOnceWith(API_ENDPOINTS.ME, { method: 'GET' });
+  });
+
+  it('uses the normalized hook and requests only the shared ME profile', async () => {
     await renderPage();
     expect(useLatestGenomicsResults).toHaveBeenCalled();
     expect(apiRequest.mock.calls.map(([url]) => url)).toEqual([API_ENDPOINTS.ME]);

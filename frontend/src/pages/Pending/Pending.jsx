@@ -1,24 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import Wait from "../../components/Wait";
-import { clearToken, API_ENDPOINTS, apiRequest } from "../../config/api";
+import { clearToken } from "../../config/api";
+import { useSession } from "../../hooks/useSession";
 import "./Pending.css";
 
 export default function Pending() {
-  const [user, setUser] = useState(null);
+  const { user } = useSession();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const response = await apiRequest(API_ENDPOINTS.ME, { method: 'GET' });
-      if (!mounted) return;
-      if (response.ok) {
-        setUser(response.data.user ?? response.data);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
 
   const handleLogout = () => {
     clearToken();

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import PostloginUser from './PostloginUser';
 
-vi.mock('./Dashboard', () => ({ default: () => <div data-testid="user-home" /> }));
+vi.mock('./Dashboard', () => ({ default: ({ user }) => <div data-testid="user-home">{user?.id}</div> }));
 vi.mock('../Ancestria/Ancestria', () => ({ default: () => <div data-testid="ancestria" /> }));
 vi.mock('../Rasgos/Rasgos', () => ({ default: () => <div data-testid="rasgos" /> }));
 vi.mock('../Enfermedades/Enfermedades', () => ({ default: () => <div data-testid="enfermedades" /> }));
@@ -36,6 +36,19 @@ afterEach(async () => {
 });
 
 describe('user result routes', () => {
+  it('passes updated guard user data through instead of retaining its initial snapshot', async () => {
+    const view = await renderRoute('/dashboard');
+    expect(view.querySelector('[data-testid="user-home"]').textContent).toBe('1');
+    await act(async () => root.render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route path="/dashboard/*" element={<PostloginUser user={{ id: 2 }} />} />
+        </Routes>
+      </MemoryRouter>
+    ));
+    expect(view.querySelector('[data-testid="user-home"]').textContent).toBe('2');
+  });
+
   it.each(['biomarcadores', 'biometricas'])('does not register the retired %s route', async (path) => {
     const view = await renderRoute(`/dashboard/${path}`);
     expect(view.querySelector(`[data-testid="${path}"]`)).toBeNull();

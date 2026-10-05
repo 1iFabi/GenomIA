@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cwd } from 'node:process';
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Link, MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
+import { AuthProvider } from '../../contexts/AuthContext';
+import ProtectedRoute from '../../components/ProtectedRoute';
 import Enfermedades from './Enfermedades';
 const pageStyles = readFileSync(resolve(cwd(), 'src/pages/Enfermedades/Enfermedades.css'), 'utf8');
 
@@ -65,10 +67,15 @@ let originalInnerWidth;
 function LocationMarker() {
   return <output aria-label="Current route">{useLocation().pathname}</output>;
 }
-const renderPage = async () => {
+const renderPage = async ({ protectedRoute = false } = {}) => {
   await act(async () => root.render(
     <MemoryRouter initialEntries={['/dashboard/enfermedades']}>
-      <Enfermedades /><LocationMarker />
+      <AuthProvider>
+        {protectedRoute ? (
+          <React.StrictMode><ProtectedRoute><Enfermedades /></ProtectedRoute></React.StrictMode>
+        ) : <Enfermedades />}
+        <LocationMarker />
+      </AuthProvider>
     </MemoryRouter>
   ));
 };
@@ -129,6 +136,14 @@ describe('normalized risk-module results', () => {
     }
     expect(state.data).toEqual(rawData);
     expect(container.textContent).not.toMatch(/%|Legacy|predisposición|prioridad|probabilidad/i);
+  });
+
+  it('reuses the StrictMode guard profile and retains it after the result page remounts', async () => {
+    await renderPage({ protectedRoute: true });
+    expect(container.querySelector('nav').textContent).toContain('Demo account');
+    await renderPage();
+    expect(container.querySelector('nav').textContent).toContain('Demo account');
+    expect(apiRequest).toHaveBeenCalledExactlyOnceWith(API_ENDPOINTS.ME, { method: 'GET' });
   });
 
   it('never requests the legacy disease endpoint', async () => {

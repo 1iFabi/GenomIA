@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Menu, X, Zap } from 'lucide-react';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
+import { useSession } from '../../hooks/useSession';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import SectionHeader from '../../components/SectionHeader/SectionHeader';
 import './Farmacogenetica.css';
@@ -71,27 +72,13 @@ const getPharmacogeneticsResult = (results) => {
 };
 
 const Farmacogenetica = () => {
-  const [user, setUser] = useState(null);
+  const { user } = useSession();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
   const results = useLatestGenomicsResults();
   const { status, display } = getPharmacogeneticsResult(results);
   const failed = ['permission', 'error', 'invalid'].includes(status);
-
-  useEffect(() => {
-    let active = true;
-    const fetchUser = async () => {
-      try {
-        const response = await apiRequest(API_ENDPOINTS.ME, { method: 'GET' });
-        if (active && response.ok && response.data) setUser(response.data.user || response.data);
-      } catch {
-        // A profile failure must not block the independent results display.
-      }
-    };
-    void fetchUser();
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     const checkMobile = () => {

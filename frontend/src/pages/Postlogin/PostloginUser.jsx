@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, Routes, Route } from 'react-router-dom';
 import Dashboard from './Dashboard';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
@@ -7,8 +7,7 @@ import Rasgos from '../Rasgos/Rasgos';
 import Enfermedades from '../Enfermedades/Enfermedades';
 import Farmacogenetica from '../Farmacogenetica/Farmacogenetica';
 
-const PostloginUser = ({ user: initialUser }) => {
-  const [user] = useState(initialUser);
+const PostloginUser = ({ user }) => {
   const navigate = useNavigate();
 
   const handleLogout = async () => {

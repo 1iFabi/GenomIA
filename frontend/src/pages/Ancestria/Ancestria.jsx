@@ -26,6 +26,7 @@ import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import SectionHeader from '../../components/SectionHeader/SectionHeader';
 import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
+import { useSession } from '../../hooks/useSession';
 import SpinningCoin from '../../components/SpinningCoin/SpinningCoin';
 import TacticalGlobe3D from '../../components/TacticalGlobe3D/TacticalGlobe3D';
 import './Ancestria.css';
@@ -472,7 +473,7 @@ const ancestryStateMessages = {
 
 
 const Ancestria = () => {
-  const [user, setUser] = useState(null);
+  const { user } = useSession();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const results = useLatestGenomicsResults();
@@ -542,8 +543,6 @@ const Ancestria = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchUser();
-    
     const checkMobile = () => {
       const mobile = window.innerWidth <= 1024;
       setIsMobile(mobile);
@@ -554,17 +553,6 @@ const Ancestria = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  const fetchUser = async () => {
-    try {
-      const response = await apiRequest(API_ENDPOINTS.ME, { method: 'GET' });
-      if (response.ok && response.data) {
-        setUser(response.data.user || response.data);
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-    }
-  };
 
   const handleLogout = async () => {
     try {
