@@ -24,9 +24,11 @@ from .email_utils import (
 from .jwt_utils import encode_jwt, decode_jwt
 from .authentication import JWTAuthentication
 from profiles.models import Profile, ServiceStatus
-from services.legacy_profile import get_legacy_service_projection
+from services.legacy_profile import (
+    get_legacy_service_projection, get_paid_legacy_service_projections,
+)
 from services.models import Purchase
-from genetics.models import SNP
+from genetics.models import SNP, UserSNP
 from .models import AppUser, RevokedToken, Role, WelcomeStatus
 from .email_validation import is_valid_registration_name, validate_registration_email
 from .username_validation import normalize_registration_username
@@ -440,7 +442,9 @@ class DashboardAPIView(APIView):
                 "total_users": User.objects.filter(is_active=True).count(),
                 "processed_reports": UserSNP.objects.values('user').distinct().count() if UserSNP.objects.exists() else 0,
                 "variants_count": SNP.objects.count() if SNP.objects.exists() else 0,
-                "analysis_count": User.objects.filter(profile__service_status=ServiceStatus.COMPLETED).count(),
+                # Keep the legacy dashboard cohort: all users with a Profile, regardless
+                # of role/activity. A paid service overrides only its own Profile row.
+                "analysis_count": _dashboard_analysis_count(),
                 "user_growth": "+12%",
                 "report_growth": "+8%",
                 "analysis_growth": "+18%",
@@ -947,6 +951,13 @@ class ManageAnalystRoleAPIView(CSRFDoubleSubmitMixin, APIView):
         return Response(response_data)
 
 
+def _dashboard_analysis_count():
+    profiles = dict(Profile.objects.values_list('user_id', 'service_status'))
+    paid = get_paid_legacy_service_projections(profiles)
+    return sum((paid[user_id].service_status if user_id in paid else legacy)
+               == ServiceStatus.COMPLETED for user_id, legacy in profiles.items())
+
+
 class GetUsersAPIView(APIView):
     """Endpoint para obtener lista de usuarios (solo staff)."""
     authentication_classes = [JWTAuthentication]
@@ -965,6 +976,8 @@ class GetUsersAPIView(APIView):
                 .filter(user__is_active=True, user__app_user__role__code=Role.Code.CLIENTE)
             )
             from profiles.utils import ensure_sample_code
+            profiles = list(profiles)
+            paid = get_paid_legacy_service_projections(profile.user_id for profile in profiles)
             users_list = []
             for profile in profiles:
                 if not profile.sample_code:
@@ -974,7 +987,8 @@ class GetUsersAPIView(APIView):
                 users_list.append({
                     "id": profile.user.id,
                     "sample_code": profile.sample_code,
-                    "service_status": profile.service_status,
+                    "service_status": (paid[profile.user_id].service_status
+                                       if profile.user_id in paid else profile.service_status),
                 })
             return Response(users_list)
 
@@ -982,21 +996,20 @@ class GetUsersAPIView(APIView):
         users = list(User.objects.filter(is_active=True).values(
             "id", "username", "email", "first_name", "last_name", "is_staff", "is_superuser"
         ))
+        user_ids = [user['id'] for user in users]
         roles_by_user = dict(AppUser.objects.filter(
-            django_user_id__in=[user['id'] for user in users]
+            django_user_id__in=user_ids
         ).values_list('django_user_id', 'role__code'))
+        profiles = {profile.user_id: profile for profile in Profile.objects.filter(user_id__in=user_ids)}
+        paid = get_paid_legacy_service_projections(user_ids)
         users_list = []
         for user in users:
             user_dict = dict(user)
-            try:
-                profile = Profile.objects.get(user_id=user["id"])
-                user_dict["rut"] = getattr(profile, "rut", None)
-                user_dict["sample_code"] = getattr(profile, "sample_code", None)
-                user_dict["service_status"] = getattr(profile, "service_status", None)
-            except Profile.DoesNotExist:
-                user_dict["rut"] = None
-                user_dict["sample_code"] = None
-                user_dict["service_status"] = None
+            profile = profiles.get(user['id'])
+            user_dict["rut"] = getattr(profile, "rut", None)
+            user_dict["sample_code"] = getattr(profile, "sample_code", None)
+            user_dict["service_status"] = (paid[user['id']].service_status
+                                           if user['id'] in paid else getattr(profile, "service_status", None))
 
             role_code = roles_by_user.get(user['id'])
             user_dict['roles'] = [role_code] if role_code else []
@@ -1018,17 +1031,17 @@ class AdminStatsAPIView(APIView):
         if not is_admin_or_analyst(request.user):
             return Response({"error": "No tienes permisos"}, status=status.HTTP_403_FORBIDDEN)
         
-        from profiles.models import Profile, ServiceStatus
-
         clients = User.objects.filter(is_active=True, app_user__role__code=Role.Code.CLIENTE)
         try:
-            total_users = clients.count()
-            analysis_count = clients.filter(profile__service_status=ServiceStatus.COMPLETED).count()
-            pending_reports = Profile.objects.filter(
-                user__is_active=True,
-                user__app_user__role__code=Role.Code.CLIENTE,
-                service_status=ServiceStatus.PENDING,
-            ).count()
+            client_ids = list(clients.values_list('id', flat=True))
+            profiles = dict(Profile.objects.filter(user_id__in=client_ids)
+                            .values_list('user_id', 'service_status'))
+            paid = get_paid_legacy_service_projections(client_ids)
+            projected = [paid[user_id].service_status if user_id in paid
+                         else profiles.get(user_id) for user_id in client_ids]
+            total_users = len(client_ids)
+            analysis_count = projected.count(ServiceStatus.COMPLETED)
+            pending_reports = projected.count(ServiceStatus.PENDING)
             
             # Contar variantes en la BD
             variants_count = SNP.objects.count()
