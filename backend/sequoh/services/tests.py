@@ -65,20 +65,30 @@ if __name__ == '__main__':
         sys.exit(bool(failures))
 
 import uuid
+import json
+from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from importlib import import_module
 from threading import Barrier
 from types import SimpleNamespace
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, connections, transaction
 from django.db.migrations.loader import MigrationLoader
 from django.db.models.deletion import PROTECT, ProtectedError
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
+from rest_framework.test import APITestCase
 
+from accounts.jwt_utils import encode_jwt
+from accounts.models import AppUser, Role
+from accounts.roles import grant_admin_role, grant_reception_role
+from participants.models import Participant
 from services import models as domain
 
 
@@ -152,6 +162,7 @@ class PurchaseSchemaTests(TestCase):
         paid_at = timezone.now()
         second = domain.Purchase.objects.create(
             owner=self.owner, status=domain.PurchaseStatus.objects.get(code='PAID'), purchased_at=paid_at,
+            created_at=first.created_at + timedelta(microseconds=1),
         )
         self.assertNotEqual(first.pk, second.pk)
         self.assertEqual(list(domain.Purchase.objects.filter(owner=self.owner)), [second, first])
@@ -396,3 +407,246 @@ class ServiceRequestSchemaTests(TestCase):
                 self.assertEqual(domain.ServiceRequest.objects.filter(purchase_id=purchase_id).count(), 1)
             finally:
                 pool.submit(remove_purchase, purchase_id, user_id).result()
+
+
+class ManualPurchaseFlowTests(APITestCase):
+    def setUp(self):
+        users = get_user_model().objects
+        self.admin = users.create_user(username='payment-admin')
+        grant_admin_role(self.admin)
+        self.reception = users.create_user(username='payment-reception')
+        grant_reception_role(self.reception)
+        self.owner = users.create_user(username='payment-client')
+        self.other = users.create_user(username='payment-other-client')
+        self.client.cookies['csrftoken'] = 'matching-csrf'
+
+    def as_actor(self, user):
+        self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
+
+    def post_json(self, path, data):
+        self.client.cookies['csrftoken'] = 'matching-csrf'
+        return self.client.post(
+            path, data=json.dumps(data), content_type='application/json',
+            HTTP_X_CSRFTOKEN='matching-csrf',
+        )
+
+    def test_staff_creates_pending_purchase_for_selected_client(self):
+        self.as_actor(self.admin)
+        response = self.post_json('/api/services/purchases/', {'userId': self.owner.pk})
+        self.assertEqual(response.status_code, 201)
+        purchase = domain.Purchase.objects.get(pk=response.data['purchaseId'])
+        self.assertEqual(purchase.owner, self.owner.app_user)
+        self.assertEqual(purchase.status.code, 'PENDING')
+        self.assertIsNone(purchase.purchased_at)
+
+    def test_pay_is_atomic_and_repeating_returns_original_request_and_history(self):
+        self.as_actor(self.reception)
+        participant = Participant.objects.create(user=self.owner, participant_code='payment-owned')
+        purchase = domain.Purchase.objects.create(
+            owner=self.owner.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        )
+        path = f'/api/services/purchases/{purchase.pk}/pay/'
+        first = self.post_json(path, {})
+        self.assertEqual(first.status_code, 200)
+        purchase.refresh_from_db()
+        self.assertEqual(purchase.status.code, 'PAID')
+        service = domain.ServiceRequest.objects.get(purchase=purchase)
+        self.assertEqual(service.participant, participant)
+        self.assertEqual(service.status.code, 'WAITING_SAMPLE')
+        history = domain.ServiceStatusLog.objects.get(request=service)
+        self.assertEqual(history.status, service.status)
+        self.assertEqual(history.actor, self.reception.app_user)
+        second = self.post_json(path, {})
+        self.assertEqual(second.status_code, 200, second.data)
+        self.assertEqual(second.data, first.data)
+        self.assertEqual(domain.ServiceRequest.objects.filter(purchase=purchase).count(), 1)
+        self.assertEqual(domain.ServiceStatusLog.objects.filter(request=service).count(), 1)
+        purchase.refresh_from_db()
+        self.assertEqual(first.data['purchasedAt'], purchase.purchased_at.isoformat().replace('+00:00', 'Z'))
+
+    def test_only_explicit_staff_can_create_or_pay_with_valid_csrf(self):
+        staff = get_user_model().objects.create_user(
+            username='payment-flag-only', is_staff=True, is_superuser=True,
+        )
+        staff.groups.add(Group.objects.get_or_create(name='ADMIN')[0])
+        analyst = get_user_model().objects.create_user(username='payment-analyst')
+        AppUser.objects.filter(django_user=analyst).update(role=Role.objects.get(code='ANALISTA'))
+        unmapped = get_user_model().objects.bulk_create(
+            [get_user_model()(username='payment-unmapped')],
+        )[0]
+        purchase = domain.Purchase.objects.create(
+            owner=self.owner.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        )
+        for actor in (self.owner, staff, analyst, unmapped):
+            self.as_actor(actor)
+            for path, payload in (
+                ('/api/services/purchases/', {'userId': self.owner.pk}),
+                (f'/api/services/purchases/{purchase.pk}/pay/', {}),
+            ):
+                with self.subTest(actor=actor.username, path=path):
+                    response = self.post_json(path, payload)
+                    self.assertEqual(response.status_code, 403, response.data)
+                    self.assertEqual(domain.Purchase.objects.count(), 1)
+                    self.assertEqual(domain.ServiceRequest.objects.count(), 0)
+                    self.assertEqual(domain.ServiceStatusLog.objects.count(), 0)
+        purchase.refresh_from_db()
+        self.assertEqual(purchase.status.code, 'PENDING')
+        self.assertIsNone(purchase.purchased_at)
+
+    def test_creation_rejects_spoofed_fields_bad_ids_and_ineligible_targets(self):
+        self.as_actor(self.reception)
+        for payload in ({}, {'userId': True}, {'userId': '1'}, {'userId': 1.0},
+                        {'userId': 0}, {'userId': -2}, {'userId': []},
+                        {'user_id': self.owner.pk},
+                        {'userId': self.owner.pk, 'owner': str(self.other.app_user.pk)},
+                        {'userId': self.owner.pk, 'status': 'PAID'},
+                        {'userId': self.owner.pk, 'actor': str(self.reception.app_user.pk)},
+                        {'userId': self.owner.pk, 'purchasedAt': timezone.now().isoformat()}):
+            with self.subTest(payload=payload):
+                response = self.post_json('/api/services/purchases/', payload)
+                self.assertEqual(response.status_code, 400, response.data)
+        inactive = get_user_model().objects.create_user(username='payment-inactive', is_active=False)
+        unmapped = get_user_model().objects.bulk_create(
+            [get_user_model()(username='payment-target-unmapped')],
+        )[0]
+        analyst = get_user_model().objects.create_user(username='payment-target-analyst')
+        AppUser.objects.filter(django_user=analyst).update(role=Role.objects.get(code='ANALISTA'))
+        for user_id in (self.admin.pk, self.reception.pk, analyst.pk, inactive.pk,
+                        unmapped.pk, 999999999):
+            response = self.post_json('/api/services/purchases/', {'userId': user_id})
+            self.assertEqual(response.status_code, 404, response.data)
+            self.assertEqual(response.data, {'error': 'Client not found'})
+        self.assertEqual(domain.Purchase.objects.count(), 0)
+        self.assertEqual(domain.ServiceRequest.objects.count(), 0)
+        self.assertEqual(domain.ServiceStatusLog.objects.count(), 0)
+        first = self.post_json('/api/services/purchases/', {'userId': self.owner.pk})
+        second = self.post_json('/api/services/purchases/', {'userId': self.owner.pk})
+        self.assertEqual((first.status_code, second.status_code), (201, 201))
+        self.assertNotEqual(first.data['purchaseId'], second.data['purchaseId'])
+        self.assertEqual(domain.Purchase.objects.filter(owner=self.owner.app_user).count(), 2)
+
+    def test_payment_rejects_unknown_state_body_and_no_longer_client_owner(self):
+        self.as_actor(self.admin)
+        statuses = ('PENDING', 'CANCELLED', 'REFUNDED', None)
+        purchases = [domain.Purchase.objects.create(
+            owner=self.owner.app_user,
+            status=domain.PurchaseStatus.objects.get(code=code) if code else None,
+        ) for code in statuses]
+        path = f'/api/services/purchases/{purchases[0].pk}/pay/'
+        for payload in ({'actor': str(self.admin.app_user.pk)},
+                        {'owner': str(self.other.app_user.pk)}, {'status': 'PAID'},
+                        {'purchasedAt': timezone.now().isoformat()}, {'userId': self.other.pk}):
+            self.assertEqual(self.post_json(path, payload).status_code, 400)
+        for purchase in purchases[1:]:
+            response = self.post_json(f'/api/services/purchases/{purchase.pk}/pay/', {})
+            self.assertEqual(response.status_code, 409, response.data)
+        response = self.post_json(f'/api/services/purchases/{uuid.uuid4()}/pay/', {})
+        self.assertEqual(response.status_code, 404, response.data)
+        AppUser.objects.filter(pk=self.owner.app_user.pk).update(role=Role.objects.get(code='ANALISTA'))
+        response = self.post_json(path, {})
+        self.assertEqual(response.status_code, 404, response.data)
+        self.assertEqual(domain.ServiceRequest.objects.count(), 0)
+        self.assertEqual(domain.ServiceStatusLog.objects.count(), 0)
+        for purchase in purchases:
+            purchase.refresh_from_db()
+            self.assertIsNone(purchase.purchased_at)
+        self.assertEqual(domain.Purchase.objects.filter(status__code='PAID').count(), 0)
+
+    def test_payment_links_only_owner_participant_and_allows_multiple_services(self):
+        self.as_actor(self.admin)
+        owned = Participant.objects.create(user=self.owner, participant_code='pay-owned')
+        other = Participant.objects.create(user=self.other, participant_code='pay-other')
+        requests = []
+        for user, expected in ((self.owner, owned), (self.other, other), (self.owner, owned)):
+            created = self.post_json('/api/services/purchases/', {'userId': user.pk})
+            self.assertEqual(created.status_code, 201, created.data)
+            paid = self.post_json(f"/api/services/purchases/{created.data['purchaseId']}/pay/", {})
+            self.assertEqual(paid.status_code, 200, paid.data)
+            request = domain.ServiceRequest.objects.get(pk=paid.data['serviceRequestId'])
+            self.assertEqual(request.participant, expected)
+            self.assertEqual(request.purchase.owner.django_user_id, expected.user_id)
+            requests.append(request.pk)
+        self.assertEqual(len(set(requests)), 3)
+        self.assertEqual(domain.ServiceStatusLog.objects.count(), 3)
+
+    def test_payment_uses_purchase_row_lock_and_rolls_back_failed_history(self):
+        self.as_actor(self.admin)
+        purchase = domain.Purchase.objects.create(
+            owner=self.owner.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        )
+        path = f'/api/services/purchases/{purchase.pk}/pay/'
+        savepoints = len(connection.savepoint_ids)
+
+        def fail_log(*args, **kwargs):
+            self.assertTrue(connection.in_atomic_block)
+            self.assertGreater(len(connection.savepoint_ids), savepoints)
+            raise RuntimeError('simulated history write failure')
+
+        with CaptureQueriesContext(connection) as queries:
+            with patch('services.views.ServiceStatusLog.objects.create', side_effect=fail_log):
+                with self.assertRaisesMessage(RuntimeError, 'simulated history write failure'):
+                    self.post_json(path, {})
+        self.assertTrue(any('FOR UPDATE' in q['sql'] and '"purchase"' in q['sql']
+                            for q in queries.captured_queries))
+        purchase.refresh_from_db()
+        self.assertEqual(purchase.status.code, 'PENDING')
+        self.assertIsNone(purchase.purchased_at)
+        self.assertEqual(domain.ServiceRequest.objects.count(), 0)
+        self.assertEqual(domain.ServiceStatusLog.objects.count(), 0)
+        self.assertEqual(self.post_json(path, {}).status_code, 200)
+
+    def test_pay_denies_inactive_owner_without_writes(self):
+        self.as_actor(self.reception)
+        target = get_user_model().objects.create_user(username='pay-inactive-owner')
+        purchase = domain.Purchase.objects.create(
+            owner=target.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        )
+        target.is_active = False
+        target.save(update_fields=['is_active'])
+        response = self.post_json(f'/api/services/purchases/{purchase.pk}/pay/', {})
+        self.assertEqual(response.status_code, 404, response.data)
+        purchase.refresh_from_db()
+        self.assertEqual(purchase.status.code, 'PENDING')
+        self.assertIsNone(purchase.purchased_at)
+        self.assertFalse(domain.ServiceRequest.objects.exists())
+        self.assertFalse(domain.ServiceStatusLog.objects.exists())
+
+    def test_no_participant_remains_optional_and_paid_without_request_conflicts(self):
+        self.as_actor(self.admin)
+        purchase = domain.Purchase.objects.create(
+            owner=self.owner.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        )
+        path = f'/api/services/purchases/{purchase.pk}/pay/'
+        paid = self.post_json(path, {})
+        self.assertEqual(paid.status_code, 200, paid.data)
+        service = domain.ServiceRequest.objects.get(purchase=purchase)
+        self.assertIsNone(service.participant_id)
+        domain.ServiceStatusLog.objects.filter(request=service).delete()
+        response = self.post_json(path, {})
+        self.assertEqual(response.status_code, 409, response.data)
+        self.assertEqual(domain.ServiceRequest.objects.filter(purchase=purchase).count(), 1)
+        self.assertFalse(domain.ServiceStatusLog.objects.exists())
+
+    def test_uniqueness_conflict_returns_409_without_partial_payment(self):
+        self.as_actor(self.reception)
+        purchase = domain.Purchase.objects.create(
+            owner=self.owner.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        )
+        with patch('services.views.ServiceRequest.objects.create', side_effect=IntegrityError):
+            response = self.post_json(f'/api/services/purchases/{purchase.pk}/pay/', {})
+        self.assertEqual(response.status_code, 409, response.data)
+        purchase.refresh_from_db()
+        self.assertEqual(purchase.status.code, 'PENDING')
+        self.assertIsNone(purchase.purchased_at)
+        self.assertFalse(domain.ServiceRequest.objects.exists())
+        self.assertFalse(domain.ServiceStatusLog.objects.exists())
+
+    def test_missing_csrf_blocks_authenticated_write(self):
+        self.as_actor(self.admin)
+        self.client.cookies['csrftoken'] = 'different-csrf'
+        response = self.client.post(
+            '/api/services/purchases/', data=json.dumps({'userId': self.owner.pk}),
+            content_type='application/json', HTTP_X_CSRFTOKEN='matching-csrf',
+        )
+        self.assertEqual(response.status_code, 403, response.data)
+        self.assertEqual(domain.Purchase.objects.count(), 0)
