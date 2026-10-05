@@ -1090,6 +1090,86 @@ class SelfServiceProjectionTests(TestCase):
         self.assertEqual(client.get('/api/auth/service/status/').data['user_id'], user.pk)
 
 
+class UserAdminStatusTests(TestCase):
+    def test_list_and_profile_inline_show_newest_paid_status_not_stale_profile(self):
+        operator = User.objects.create_superuser(username='status-super', password='test-only')
+        target = User.objects.create_user(username='status-target')
+        profile = Profile.objects.create(user=target, phone='old phone', service_status='COMPLETED')
+        waiting = RequestStatus.objects.get(code='WAITING_SAMPLE')
+        paid = PurchaseStatus.objects.get(code='PAID')
+        older = Purchase.objects.create(
+            owner=target.app_user, status=paid, purchased_at=timezone.now() - timedelta(days=1),
+        )
+        newer = Purchase.objects.create(owner=target.app_user, status=paid, purchased_at=timezone.now())
+        completed = RequestStatus.objects.get(code='COMPLETED')
+        for purchase, state in ((older, completed), (newer, waiting)):
+            started = timezone.now()
+            service = ServiceRequest.objects.create(
+                purchase=purchase, status=state, started_at=started,
+                completed_at=started + timedelta(seconds=1) if state == completed else None,
+            )
+            ServiceStatusLog.objects.create(request=service, status=waiting, actor=operator.app_user)
+            if state == completed:
+                ServiceStatusLog.objects.create(request=service, status=completed, actor=operator.app_user)
+        Purchase.objects.create(owner=target.app_user, status=PurchaseStatus.objects.get(code='PENDING'))
+        self.client.force_login(operator)
+
+        listing = self.client.get(reverse('admin:auth_user_changelist'))
+        self.assertEqual(listing.status_code, 200)
+        admin = listing.context['cl'].model_admin
+        self.assertIn('get_service_status', admin.list_display)
+        self.assertEqual(admin.get_service_status(target), 'PENDING')
+        detail = self.client.get(reverse('admin:auth_user_change', args=[target.pk]))
+        self.assertEqual(detail.status_code, 200)
+        inline = next(inline for inline in detail.context['inline_admin_formsets']
+                      if inline.formset.model is Profile)
+        self.assertIn('projected_service_status', inline.readonly_fields)
+        self.assertNotIn('service_status', inline.formset.forms[0].fields)
+        self.assertNotIn('service_updated_at', inline.formset.forms[0].fields)
+        self.assertContains(detail, 'PENDING')
+
+        payload = {
+            'username': target.username, 'first_name': '', 'last_name': '',
+            'email': '', 'is_active': 'on', '_save': 'Save',
+            'date_joined_0': target.date_joined.strftime('%Y-%m-%d'),
+            'date_joined_1': target.date_joined.strftime('%H:%M:%S'),
+        }
+        for inline in detail.context['inline_admin_formsets']:
+            forms = inline.formset
+            for name, value in forms.management_form.initial.items():
+                payload[f'{forms.prefix}-{name}'] = value
+            for index, form in enumerate(forms.initial_forms):
+                prefix = f'{forms.prefix}-{index}'
+                payload[f'{prefix}-id'] = str(form.instance.pk)
+                if isinstance(form.instance, Profile):
+                    payload[f'{prefix}-phone'] = 'new phone'
+                    payload[f'{prefix}-service_status'] = 'NO_PURCHASED'
+                    payload[f'{prefix}-service_updated_at'] = '2000-01-01 00:00:00'
+                if isinstance(form.instance, AppUser):
+                    payload[f'{prefix}-user_id'] = str(form.instance.pk)
+                    payload[f'{prefix}-role'] = str(Role.objects.get(code='ADMIN').pk)
+        saved = self.client.post(reverse('admin:auth_user_change', args=[target.pk]), payload)
+        self.assertEqual(saved.status_code, 302, saved.context if saved.status_code != 302 else None)
+        profile.refresh_from_db()
+        self.assertEqual((profile.phone, profile.service_status), ('new phone', 'COMPLETED'))
+        self.assertEqual(AppUser.objects.get(django_user=target).role.code, 'ADMIN')
+
+    def test_no_paid_profile_and_missing_profile_fallback_in_list(self):
+        operator = User.objects.create_superuser(username='fallback-super', password='test-only')
+        legacy = User.objects.create_user(username='fallback-legacy')
+        Profile.objects.create(user=legacy, service_status='COMPLETED')
+        absent = User.objects.create_user(username='fallback-absent')
+        Purchase.objects.create(owner=legacy.app_user, status=PurchaseStatus.objects.get(code='PENDING'))
+        self.client.force_login(operator)
+        listing = self.client.get(reverse('admin:auth_user_changelist'))
+        self.assertEqual(listing.status_code, 200)
+        admin = listing.context['cl'].model_admin
+        self.assertEqual(admin.get_service_status(legacy), 'COMPLETED')
+        self.assertEqual(admin.get_service_status(absent), 'NO_PURCHASED')
+        self.assertContains(self.client.get(reverse('admin:auth_user_change', args=[legacy.pk])),
+                            'COMPLETED')
+
+
 class FunctionalRoleDjangoAdminTests(TestCase):
     def test_add_user_form_defers_role_edit_until_mapping_exists(self):
         superuser = User.objects.create_superuser(username='django-super', password='test-only')
