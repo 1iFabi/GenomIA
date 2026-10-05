@@ -1,8 +1,12 @@
 import json
+import os
 import uuid
+from io import StringIO
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from decimal import Decimal
 from importlib import import_module, reload
+from threading import Barrier
 from unittest.mock import patch
 
 from django.conf import settings
@@ -10,7 +14,8 @@ from django.contrib.auth.models import Group, User
 from django.contrib.postgres.functions import TransactionNow
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.db import DataError, IntegrityError, connection, models, transaction
+from django.core.management.base import CommandError
+from django.db import DataError, IntegrityError, connection, connections, models, transaction
 from django.db.migrations.loader import MigrationLoader
 from django.db.models.deletion import CASCADE, PROTECT, RESTRICT, SET_NULL, ProtectedError, RestrictedError
 from django.test import TestCase, TransactionTestCase
@@ -29,6 +34,583 @@ from services.models import (
     Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
 )
+
+
+class SyntheticGenomicsImportTests(TestCase):
+    modules = {
+        'global_ancestry', 'local_ancestry', 'polygenic_risk',
+        'monogenic_risk', 'traits', 'pharmacogenetics',
+    }
+
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        environment = patch.dict(os.environ, {
+            'ENVIRONMENT': 'development', 'RENDER': '',
+            'RENDER_EXTERNAL_HOSTNAME': '', 'DATABASE_URL': '',
+        })
+        environment.start()
+        self.addCleanup(environment.stop)
+        debug = self.settings(DEBUG=True)
+        debug.enable()
+        self.addCleanup(debug.disable)
+        self.user = User.objects.create_user(username=f'synthetic-target-{uuid.uuid4().hex}')
+        self.other = User.objects.create_user(username=f'synthetic-other-{uuid.uuid4().hex}')
+
+    def import_demo(self, user=None):
+        output = StringIO()
+        call_command('import_synthetic_genomics', '--user-id', str((user or self.user).pk), stdout=output)
+        return output.getvalue()
+
+    def legacy_state(self):
+        return [list(model.objects.order_by('pk').values()) for model in (
+            User, AppUser, Profile, SNP, UserSNP, domain.Genotype, domain.Variant,
+            domain.Population, domain.EpigeneticFeature, domain.Artifact,
+        )]
+
+    def import_state(self):
+        from participants.models import Participant
+
+        return self.legacy_state() + [list(model.objects.order_by('pk').values()) for model in (
+            Participant, PurchaseStatus, RequestStatus, Purchase, ServiceRequest, ServiceStatusLog,
+            Sample, domain.DataRelease, domain.Analysis, domain.AnalysisResult,
+        )]
+
+    def assert_rejected_without_changes(self, message='Inconsistent|duplicate'):
+        before = self.import_state()
+        with CaptureQueriesContext(connection) as queries:
+            with self.assertRaisesRegex(CommandError, message):
+                self.import_demo()
+        self.assertFalse(any(query['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))
+                             for query in queries.captured_queries))
+        self.assertEqual(self.import_state(), before)
+
+    def test_seeds_owned_pending_nonclinical_placeholders_without_legacy_changes(self):
+        from participants.models import Participant
+
+        before = self.legacy_state()
+        output = self.import_demo()
+        participant = Participant.objects.get(user=self.user)
+        purchase = Purchase.objects.get(owner=self.user.app_user)
+        request = ServiceRequest.objects.get(purchase=purchase)
+        sample = Sample.objects.get(service_request=request)
+        self.assertFalse(ServiceStatusLog.objects.exists())
+        self.assertEqual(purchase.status.code, 'PAID')
+        self.assertIsNotNone(purchase.purchased_at)
+        self.assertEqual((request.participant, sample.participant), (participant, participant))
+        self.assertEqual(request.status.code, 'WAITING_SAMPLE')
+        self.assertIsNone(request.completed_at)
+        self.assertTrue(sample.metadata['synthetic'])
+        self.assertEqual(sample.sample_type, 'synthetic')
+        self.assertTrue(sample.sample_code.startswith('SYNTHETIC-'))
+        self.assertEqual(participant.consent_status, 'pending')
+        self.assertEqual(participant.enrollment_status, 'pending')
+        self.assertIsNone(participant.consent_version)
+        self.assertIsNone(participant.consented_at)
+        self.assertEqual(domain.AnalysisResult.objects.count(), 6)
+        self.assertEqual(set(domain.AnalysisResult.objects.values_list('module', flat=True)), self.modules)
+        for result in domain.AnalysisResult.objects.all():
+            self.assertEqual((result.participant, result.sample), (participant, sample))
+            self.assertTrue(result.payload['synthetic'])
+            self.assertTrue(result.payload['non_clinical'])
+            self.assertFalse(result.payload['clinically_reviewed'])
+            self.assertIn('non-clinical', result.payload['disclaimer'])
+        self.assertIn('SYNTHETIC', output)
+        self.assertIn('non-clinical', output)
+        self.assertFalse(Purchase.objects.filter(owner=self.other.app_user).exists())
+        self.assertFalse(Participant.objects.filter(user=self.other).exists())
+        self.assertEqual(self.legacy_state(), before)
+        self.assertNotIn(self.user.username, participant.participant_code)
+        self.assertTrue(participant.participant_code.startswith('SYNTHETIC-'))
+        self.assertEqual(domain.Analysis.objects.count(), 6)
+        release = domain.DataRelease.objects.get()
+        self.assertEqual((release.name, release.version, release.status, release.reference_assembly),
+                         ('gdb-04f1-synthetic-genomics', '1', 'synthetic', 'not-applicable'))
+        self.assertIn('non-clinical', release.description)
+        self.assertEqual(len(release.manifest_checksum), 64)
+        self.assertIsNone(release.frozen_at)
+        for result in domain.AnalysisResult.objects.all():
+            analysis = result.analysis
+            self.assertEqual((analysis.participant, analysis.sample, analysis.service_request, analysis.release),
+                             (participant, sample, request, release))
+            self.assertEqual((analysis.module, analysis.pipeline_version, analysis.status),
+                             (result.module, '1', 'synthetic_placeholder'))
+            self.assertIsNone(analysis.started_at)
+            self.assertIsNone(analysis.finished_at)
+            self.assertTrue(analysis.parameters['synthetic'])
+            self.assertEqual(result.release, release)
+            self.assertEqual(result.result_type, 'synthetic_placeholder')
+            self.assertEqual(result.value_code, 'SYNTHETIC_NOT_EVALUATED')
+            self.assertIn('SYNTHETIC', result.value_text)
+            self.assertEqual(result.payload['module'], result.module)
+            self.assertEqual(result.payload['demo_version'], '1')
+            self.assertEqual(result.payload['state'], 'not_evaluated')
+            self.assertEqual(result.payload['rows'], [{
+                'label': result.payload['label'], 'state': 'not_evaluated', 'value': None,
+            }])
+            for field in ('variant_id', 'epigenetic_feature_id', 'population_id', 'reference_assembly',
+                          'contig', 'start_pos', 'end_pos', 'haplotype', 'value_numeric', 'unit',
+                          'percentile', 'confidence'):
+                self.assertIsNone(getattr(result, field), field)
+            self.assertEqual((result.created_at, analysis.created_at), (purchase.created_at,) * 2)
+        self.assertEqual((request.started_at, sample.created_at, purchase.purchased_at),
+                         (purchase.created_at,) * 3)
+        from services.legacy_profile import get_legacy_service_projection
+        projection = get_legacy_service_projection(self.user)
+        # No history is fabricated to satisfy the unchanged fail-closed legacy projection.
+        self.assertEqual(projection.service_status, ServiceStatus.NO_PURCHASED)
+        self.assertFalse(projection.can_view_results)
+
+    def test_demo_never_attributes_a_user_action_or_owns_independent_status_history(self):
+        output = self.import_demo()
+        request = ServiceRequest.objects.get(purchase__owner=self.user.app_user)
+        self.assertFalse(ServiceStatusLog.objects.exists())
+        self.assertEqual(request.status.code, 'WAITING_SAMPLE')
+        self.assertIsNone(request.completed_at)
+        self.assertIn('SYNTHETIC', output)
+        self.assertIn('Simulated PAID', output)
+        self.assertIn('non-clinical', output)
+        ServiceStatusLog.objects.create(
+            request=request, status=request.status, actor=self.other.app_user,
+            comment='Independently recorded history, not owned by the demo importer.',
+        )
+        before = self.import_state()
+        with CaptureQueriesContext(connection) as queries:
+            self.assertIn('already imported', self.import_demo())
+        self.assertFalse(any(query['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))
+                             for query in queries.captured_queries))
+        self.assertEqual(self.import_state(), before)
+
+    def test_retry_identifiers_and_participant_code_are_scoped_to_the_opaque_app_user_uuid(self):
+        from genetics.synthetic_import import DEMO_NAME, DEMO_VERSION
+        from participants.models import Participant
+
+        self.import_demo()
+        participant = Participant.objects.get(user=self.user)
+        purchase = Purchase.objects.get(owner=self.user.app_user)
+        request = ServiceRequest.objects.get(purchase=purchase)
+        sample = Sample.objects.get(service_request=request)
+        kinds = ['import', 'participant', 'purchase', 'request', 'sample'] + [
+            f'{kind}:{module}' for module in self.modules for kind in ('analysis', 'result')
+        ]
+        expected = {kind: uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            f'genomia:{DEMO_NAME}:{DEMO_VERSION}:app-user:{self.user.app_user.user_id}:{kind}',
+        ) for kind in kinds}
+        actual = {
+            'import': uuid.UUID(sample.metadata['import_id']), 'participant': participant.pk,
+            'purchase': purchase.pk, 'request': request.pk, 'sample': sample.pk,
+        } | {f'analysis:{row.module}': row.pk for row in domain.Analysis.objects.all()} | {
+            f'result:{row.module}': row.pk for row in domain.AnalysisResult.objects.all()
+        }
+        self.assertEqual(actual, expected)
+        self.assertEqual(participant.participant_code, f'SYNTHETIC-{expected["participant"].hex}')
+        self.assertEqual(sample.sample_code, f'SYNTHETIC-DEMO-V{DEMO_VERSION}-{expected["sample"].hex}')
+        before = self.import_state()
+        self.assertIn('already imported', self.import_demo())
+        self.assertEqual(self.import_state(), before)
+
+    def test_safe_local_database_url_is_accepted_only_after_actual_server_verification(self):
+        from dj_database_url import parse
+
+        for index, host in enumerate(('127.0.0.1', 'localhost', '[::1]')):
+            database_url = f'postgresql://{host}/{connection.settings_dict["NAME"]}'
+            resolved = parse(database_url)
+            config = {key: resolved[key] for key in ('ENGINE', 'HOST', 'NAME')}
+            with self.subTest(host=host), patch.dict(os.environ, {'DATABASE_URL': database_url}), \
+                    patch.dict(connection.settings_dict, config):
+                with CaptureQueriesContext(connection) as queries:
+                    self.assertIn('created' if index == 0 else 'already imported', self.import_demo())
+                self.assertTrue(queries.captured_queries[0]['sql'].startswith('SELECT current_database()'))
+                before = self.import_state()
+                with CaptureQueriesContext(connection) as queries:
+                    self.assertIn('already imported', self.import_demo())
+                self.assertFalse(any(query['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))
+                                     for query in queries.captured_queries))
+                self.assertEqual(self.import_state(), before)
+        self.assertEqual(domain.AnalysisResult.objects.count(), 6)
+
+    def test_remote_or_maintenance_database_urls_are_rejected_before_database_access(self):
+        from dj_database_url import parse
+
+        database = connection.settings_dict['NAME']
+        before = self.import_state()
+        for database_url in (
+            f'postgresql://db.example.test/{database}', f'postgresql://192.0.2.1/{database}',
+            f'postgresql://[2001:db8::1]/{database}', 'postgresql://127.0.0.1/postgres',
+            'postgresql://localhost/template0', 'postgresql://[::1]/template1',
+        ):
+            resolved = parse(database_url)
+            config = {key: resolved[key] for key in ('ENGINE', 'HOST', 'NAME')}
+            with self.subTest(database_url=database_url), patch.dict(os.environ, {'DATABASE_URL': database_url}), \
+                    patch.dict(connection.settings_dict, config), self.assertNumQueries(0):
+                with self.assertRaisesRegex(CommandError, 'local development'):
+                    self.import_demo()
+        self.assertEqual(self.import_state(), before)
+
+    def test_requires_explicit_positive_django_user_id_and_has_no_file_or_owner_options(self):
+        before = self.import_state()
+        for arguments in ((), ('--user-id', '0'), ('--user-id', '-1'), ('--user-id', '01'),
+                          ('--user-id', '+1'), ('--user-id', '1.0'), ('--user-id', 'true'),
+                          ('--user-id', ' 1'), ('--user-id', '١'), ('--user-id', str(2**63)),
+                          ('--user-id', str(self.user.pk), '--file', 'arbitrary.json'),
+                          ('--user-id', str(self.user.pk), '--owner', str(self.other.app_user.pk)),
+                          ('--user-id', str(self.other.app_user.pk))):
+            with self.subTest(arguments=arguments), self.assertNumQueries(0):
+                with self.assertRaises(CommandError):
+                    call_command('import_synthetic_genomics', *arguments, stdout=StringIO())
+        for value in (None, True, False, 0, -1, 1.0, str(self.user.pk), 2**63):
+            with self.subTest(keyword=value), self.assertNumQueries(0):
+                with self.assertRaises(CommandError):
+                    call_command('import_synthetic_genomics', user_id=value, stdout=StringIO())
+        self.assertEqual(self.import_state(), before)
+
+    def test_rejects_every_environment_except_explicit_exact_development_before_database_access(self):
+        for environment in (None, '', 'production', 'staging', 'test', 'dev', 'Development', ' development '):
+            with self.subTest(environment=environment), patch.dict(os.environ):
+                if environment is None:
+                    os.environ.pop('ENVIRONMENT', None)
+                else:
+                    os.environ['ENVIRONMENT'] = environment
+                with self.assertNumQueries(0), self.assertRaisesRegex(CommandError, 'local development'):
+                    self.import_demo()
+
+    def test_requires_exact_debug_true_and_rejects_deployment_signals_before_database_access(self):
+        for debug in (False, None, 1, 'True'):
+            with self.subTest(debug=debug), self.settings(DEBUG=debug), self.assertNumQueries(0):
+                with self.assertRaisesRegex(CommandError, 'local development'):
+                    self.import_demo()
+        for key in ('RENDER', 'RENDER_EXTERNAL_HOSTNAME'):
+            with self.subTest(signal=key), patch.dict(os.environ, {key: 'deployment-present'}):
+                with self.assertNumQueries(0), self.assertRaisesRegex(CommandError, 'local development'):
+                    self.import_demo()
+
+    def test_requires_postgresql_exact_loopback_host_and_nonmaintenance_database_without_overrides(self):
+        invalid = [
+            {'ENGINE': 'django.db.backends.sqlite3'}, {'HOST': ''}, {'HOST': None},
+            {'HOST': '/var/run/postgresql'}, {'HOST': 'db.example.test'}, {'HOST': 'localhost.example.test'},
+            {'HOST': '127.0.0.1,remote.example.test'}, {'HOST': '192.0.2.1'},
+            {'HOST': '0.0.0.0'}, {'HOST': '[::1]'}, {'NAME': ''}, {'NAME': 'postgres'},
+            {'NAME': 'template0'}, {'NAME': 'template1'},
+        ] + [{'OPTIONS': {key: 'override'}} for key in ('service', 'host', 'hostaddr', 'dbname', 'database')]
+        for config in invalid:
+            with self.subTest(config=config), patch.dict(connection.settings_dict, config):
+                with self.assertNumQueries(0), self.assertRaisesRegex(CommandError, 'local development'):
+                    self.import_demo()
+        for host in ('127.0.0.1', '::1', 'localhost'):
+            with self.subTest(host=host), patch.dict(connection.settings_dict, {'HOST': host}):
+                self.import_demo()
+        self.assertEqual(domain.AnalysisResult.objects.count(), 6)
+
+    def test_configured_database_routers_are_rejected_before_access_to_any_database(self):
+        # A default-connection guard must not authorize ORM routing to another alias.
+        with self.settings(DATABASE_ROUTERS=[object()]), self.assertNumQueries(0):
+            with self.assertRaisesRegex(CommandError, 'local development'):
+                self.import_demo()
+
+    def test_actual_server_identity_must_be_loopback_and_match_the_configured_database(self):
+        before = self.import_state()
+        database_url = f'postgresql://localhost/{connection.settings_dict["NAME"]}'
+        for database, address in (
+            (connection.settings_dict['NAME'], '192.0.2.10'),
+            (connection.settings_dict['NAME'], None),
+            (connection.settings_dict['NAME'], 'invalid-address'),
+            ('unexpected_database', '127.0.0.1'),
+            ('postgres', '127.0.0.1'), ('template0', '127.0.0.1'), ('template1', '127.0.0.1'),
+        ):
+            with self.subTest(database=database, address=address), \
+                    patch.dict(os.environ, {'DATABASE_URL': database_url}), \
+                    patch.object(connection, 'cursor') as cursor:
+                cursor.return_value.__enter__.return_value.fetchone.return_value = (database, address)
+                with self.assertRaisesRegex(CommandError, 'local development'):
+                    self.import_demo()
+                executed = cursor.return_value.__enter__.return_value.execute.call_args_list
+                self.assertEqual(len(executed), 1)
+                self.assertTrue(executed[0].args[0].startswith('SELECT current_database()'))
+        self.assertEqual(self.import_state(), before)
+
+    def test_requires_existing_active_client_mapping_and_never_creates_accounts(self):
+        inactive = User.objects.create_user(username='synthetic-inactive', is_active=False)
+        unmapped = User.objects.bulk_create([User(username='synthetic-unmapped')])[0]
+        privileged = []
+        for suffix, grant in (('admin', grant_admin_role), ('analyst', grant_analyst_role),
+                              ('reception', grant_reception_role)):
+            user = User.objects.create_user(username=f'synthetic-{suffix}')
+            grant(user)
+            privileged.append(user)
+        before = self.import_state()
+        for identifier in (inactive.pk, unmapped.pk, *(user.pk for user in privileged), 2**31 - 1):
+            with self.subTest(user_id=identifier), self.assertRaisesRegex(CommandError, 'existing active client'):
+                call_command('import_synthetic_genomics', '--user-id', str(identifier), stdout=StringIO())
+        self.assertEqual(self.import_state(), before)
+        self.assertFalse(AppUser.objects.filter(django_user=unmapped).exists())
+
+    def test_reuses_existing_participant_and_preserves_all_consent_and_enrollment_fields(self):
+        from participants.models import Participant
+
+        for consent in ('pending', 'withdrawn', 'granted'):
+            with self.subTest(consent=consent), transaction.atomic():
+                participant = Participant.objects.create(
+                    user=self.user, participant_code='existing-pseudonymous-participant',
+                    consent_status=consent, enrollment_status='inactive',
+                    consent_version='existing-v1' if consent == 'granted' else None,
+                    consented_at=timezone.now() if consent == 'granted' else None,
+                    metadata={'existing': 'non-identifying'},
+                )
+                before = list(Participant.objects.values())
+                self.import_demo()
+                self.import_demo()
+                self.assertEqual(list(Participant.objects.values()), before)
+                self.assertEqual(Sample.objects.get().participant, participant)
+                transaction.set_rollback(True)
+
+    def test_existing_nonobject_participant_metadata_is_preserved_not_interpreted_as_import_provenance(self):
+        from participants.models import Participant
+
+        participant = Participant.objects.create(
+            user=self.user, participant_code='existing-nonobject-metadata', metadata=['existing'],
+        )
+        before = list(Participant.objects.values())
+        self.import_demo()
+        self.import_demo()
+        self.assertEqual(list(Participant.objects.values()), before)
+        self.assertEqual(Sample.objects.get().participant, participant)
+
+    def test_legacy_rows_and_raw_report_counters_are_preserved_without_publishing_placeholders(self):
+        grant_admin_role(self.other)
+        snp = SNP.objects.create(rsid='rs-synthetic-legacy', genotipo='unknown', fenotipo='Legacy row')
+        UserSNP.objects.create(user=self.user, snp=snp)
+        UserSNP.objects.create(user=self.other, snp=snp)
+        Profile.objects.create(
+            user=self.user, service_status=ServiceStatus.COMPLETED, sample_code='LEGACY-SYNTHETIC',
+            report_filename='legacy.txt', report_uploaded_at=timezone.now(),
+        )
+        before = self.legacy_state()
+        self.import_demo()
+        self.assertEqual(self.legacy_state(), before)
+        self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(self.other.pk)})
+        response = self.client.get(f'/api/ingest/user-report-status/{self.user.pk}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {
+            'user_id': self.user.pk, 'has_report': False, 'snp_count': 1,
+            'service_status': ServiceStatus.NO_PURCHASED, 'report_filename': None, 'report_date': None,
+        })
+        self.assertEqual(UserSNP.objects.filter(user=self.other).count(), 1)
+
+    def test_retry_is_a_read_only_noop_preserving_all_rows_timestamps_and_keys(self):
+        first = self.import_demo()
+        before = self.import_state()
+        with CaptureQueriesContext(connection) as queries:
+            second = self.import_demo()
+        self.assertFalse(any(query['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))
+                             for query in queries.captured_queries))
+        self.assertIn('created', first)
+        self.assertIn('already imported', second)
+        self.assertEqual(self.import_state(), before)
+        self.assertEqual(domain.Analysis.objects.count(), 6)
+        self.assertEqual(domain.AnalysisResult.objects.count(), 6)
+        self.assertEqual(Purchase.objects.count(), 1)
+        self.assertEqual(ServiceStatusLog.objects.count(), 0)
+
+    def test_each_explicit_target_has_an_independent_owned_chain_and_shared_versioned_release(self):
+        self.import_demo()
+        first = list(domain.AnalysisResult.objects.order_by('pk').values())
+        self.import_demo(self.other)
+        self.assertEqual(list(domain.AnalysisResult.objects.filter(
+            participant__user=self.user,
+        ).order_by('pk').values()), first)
+        self.assertEqual(domain.DataRelease.objects.count(), 1)
+        for user in (self.user, self.other):
+            sample = Sample.objects.get(participant__user=user)
+            self.assertEqual(sample.service_request.purchase.owner.django_user, user)
+            results = domain.AnalysisResult.objects.filter(sample=sample)
+            self.assertEqual(results.count(), 6)
+            self.assertEqual(set(results.values_list('module', flat=True)), self.modules)
+        self.assertEqual(domain.AnalysisResult.objects.count(), 12)
+
+    def test_partial_result_import_is_rejected_without_silent_repair(self):
+        self.import_demo()
+        domain.AnalysisResult.objects.filter(pk=domain.AnalysisResult.objects.first().pk).delete()
+        self.assert_rejected_without_changes()
+
+    def test_purchase_only_and_synthetic_participant_only_partial_imports_are_not_resumed(self):
+        from participants.models import Participant
+
+        with transaction.atomic():
+            self.import_demo()
+            purchase_id = Purchase.objects.get().pk
+            seeded_participant = Participant.objects.get(user=self.user)
+            transaction.set_rollback(True)
+        with transaction.atomic():
+            Purchase.objects.create(pk=purchase_id, owner=self.user.app_user,
+                                    status=PurchaseStatus.objects.get(code='PAID'), purchased_at=timezone.now())
+            self.assert_rejected_without_changes()
+            transaction.set_rollback(True)
+        Participant.objects.create(
+            pk=seeded_participant.pk, user=self.user, participant_code=seeded_participant.participant_code,
+            metadata=seeded_participant.metadata,
+        )
+        self.assert_rejected_without_changes()
+
+    def test_rejects_inconsistent_links_markers_payload_values_and_provenance_without_writes(self):
+        self.import_demo()
+        result = domain.AnalysisResult.objects.first()
+        analysis = result.analysis
+        sample = result.sample
+        request = sample.service_request
+        purchase = request.purchase
+        release = result.release
+        scenarios = (
+            (Purchase, purchase.pk, {'owner': self.other.app_user}),
+            (Purchase, purchase.pk, {'status': PurchaseStatus.objects.get(code='PENDING')}),
+            (Purchase, purchase.pk, {'purchased_at': None}),
+            (ServiceRequest, request.pk, {'participant': None}),
+            (ServiceRequest, request.pk, {'status': RequestStatus.objects.get(code='COMPLETED')}),
+            (ServiceRequest, request.pk, {'completed_at': timezone.now()}),
+            (Sample, sample.pk, {'metadata': {'synthetic': False}}),
+            (Sample, sample.pk, {'material': 'biological material'}),
+            (domain.Analysis, analysis.pk, {'participant': None}),
+            (domain.Analysis, analysis.pk, {'module': 'incorrect'}),
+            (domain.Analysis, analysis.pk, {'parameters': {}}),
+            (domain.Analysis, analysis.pk, {'status': 'completed'}),
+            (domain.AnalysisResult, result.pk, {'sample': None}),
+            (domain.AnalysisResult, result.pk, {'release': None}),
+            (domain.AnalysisResult, result.pk, {'payload': result.payload | {'clinically_reviewed': True}}),
+            (domain.AnalysisResult, result.pk, {'value_numeric': Decimal('1')}),
+            (domain.AnalysisResult, result.pk, {'module': 'incorrect'}),
+            (domain.AnalysisResult, result.pk, {'haplotype': 1}),
+            (domain.DataRelease, release.pk, {'manifest_checksum': '0' * 64}),
+            (domain.DataRelease, release.pk, {'description': 'clinically reviewed'}),
+            (domain.DataRelease, release.pk, {'status': 'published'}),
+        )
+        for model, pk, changes in scenarios:
+            with self.subTest(model=model.__name__, changes=changes), transaction.atomic():
+                model.objects.filter(pk=pk).update(**changes)
+                self.assert_rejected_without_changes()
+                transaction.set_rollback(True)
+
+    def test_duplicate_results_analyses_and_samples_are_rejected_not_deduplicated(self):
+        self.import_demo()
+        for model in (domain.AnalysisResult, domain.Analysis, Sample):
+            with self.subTest(duplicate=model.__name__), transaction.atomic():
+                duplicate = model.objects.first()
+                duplicate.pk = uuid.uuid4()
+                if model is Sample:
+                    duplicate.sample_code += '-duplicate'
+                duplicate.save(force_insert=True)
+                self.assert_rejected_without_changes()
+                transaction.set_rollback(True)
+
+    def test_detached_duplicate_partial_sample_with_wrong_import_token_is_not_ignored(self):
+        self.import_demo()
+        sample = Sample.objects.get()
+        request = ServiceRequest.objects.create(
+            purchase=Purchase.objects.create(
+                owner=self.user.app_user, status=PurchaseStatus.objects.get(code='PAID'),
+                purchased_at=timezone.now(),
+            ),
+            participant=sample.participant, status=RequestStatus.objects.get(code='WAITING_SAMPLE'),
+        )
+        Sample.objects.create(
+            service_request=request, participant=sample.participant, sample_type='synthetic',
+            sample_code='SYNTHETIC-DETACHED-DUPLICATE',
+            metadata=sample.metadata | {'import_id': str(uuid.uuid4())},
+        )
+        self.assert_rejected_without_changes()
+
+    def test_missing_required_catalogs_fail_without_creating_or_repairing_them(self):
+        for model, code in ((PurchaseStatus, 'PAID'), (RequestStatus, 'WAITING_SAMPLE')):
+            with self.subTest(catalog=code), transaction.atomic():
+                model.objects.filter(code=code).update(code='UNAVAILABLE')
+                self.assert_rejected_without_changes('catalog')
+                transaction.set_rollback(True)
+
+    def test_late_failure_rolls_back_every_created_row_including_participant_and_release(self):
+        from participants.models import Participant
+
+        before = self.import_state()
+        save = domain.AnalysisResult.save
+        written = []
+
+        def fail_after_third_save(instance, *args, **kwargs):
+            self.assertTrue(connection.in_atomic_block)
+            save(instance, *args, **kwargs)
+            written.append(instance.pk)
+            if len(written) == 3:
+                self.assertEqual(Participant.objects.filter(user=self.user).count(), 1)
+                self.assertEqual(Purchase.objects.count(), 1)
+                self.assertEqual(Sample.objects.count(), 1)
+                self.assertEqual(domain.AnalysisResult.objects.count(), 3)
+                raise RuntimeError('injected synthetic result failure')
+
+        with patch.object(domain.AnalysisResult, 'save', autospec=True, side_effect=fail_after_third_save):
+            with self.assertRaisesRegex(RuntimeError, 'injected synthetic result failure'):
+                self.import_demo()
+        self.assertEqual(len(written), 3)
+        self.assertEqual(self.import_state(), before)
+        self.import_demo()
+        self.assertEqual(domain.AnalysisResult.objects.count(), 6)
+
+    def test_concurrent_retries_create_one_chain_and_close_worker_connections(self):
+        from participants.models import Participant
+
+        gate = Barrier(2)
+
+        def create_target():
+            try:
+                self.assertTrue(connections['default'].settings_dict['NAME'].startswith('gdb_test_'))
+                return User.objects.create_user(username=f'synthetic-concurrent-{uuid.uuid4().hex}').pk
+            finally:
+                connections.close_all()
+
+        def import_target(user_id):
+            try:
+                gate.wait(timeout=10)
+                output = StringIO()
+                call_command('import_synthetic_genomics', '--user-id', str(user_id), stdout=output)
+                return output.getvalue()
+            finally:
+                connections.close_all()
+
+        def remove_target(user_id):
+            try:
+                release_ids = list(domain.Analysis.objects.filter(
+                    participant__user_id=user_id,
+                ).values_list('release_id', flat=True))
+                domain.AnalysisResult.objects.filter(participant__user_id=user_id).delete()
+                domain.Analysis.objects.filter(participant__user_id=user_id).delete()
+                Sample.objects.filter(participant__user_id=user_id).delete()
+                ServiceRequest.objects.filter(purchase__owner__django_user_id=user_id).delete()
+                Purchase.objects.filter(owner__django_user_id=user_id).delete()
+                Participant.objects.filter(user_id=user_id).delete()
+                domain.DataRelease.objects.filter(pk__in=release_ids).delete()
+                User.objects.filter(pk=user_id).delete()
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            user_id = pool.submit(create_target).result(timeout=10)
+            try:
+                outputs = list(pool.map(import_target, [user_id, user_id]))
+                self.assertEqual(sum('already imported' in output for output in outputs), 1)
+                self.assertEqual(sum('created' in output for output in outputs), 1)
+                self.assertEqual(Participant.objects.filter(user_id=user_id).count(), 1)
+                self.assertEqual(Purchase.objects.filter(owner__django_user_id=user_id).count(), 1)
+                self.assertFalse(ServiceStatusLog.objects.filter(
+                    request__purchase__owner__django_user_id=user_id,
+                ).exists())
+                self.assertEqual(Sample.objects.filter(participant__user_id=user_id).count(), 1)
+                self.assertEqual(domain.AnalysisResult.objects.filter(participant__user_id=user_id).count(), 6)
+            finally:
+                pool.submit(remove_target, user_id).result(timeout=10)
+        self.assertFalse(User.objects.filter(pk=user_id).exists())
+
+    def test_command_and_bundle_import_without_queries_and_have_no_migration_drift(self):
+        with self.assertNumQueries(0):
+            reload(import_module('genetics.synthetic_import'))
+            reload(import_module('genetics.management.commands.import_synthetic_genomics'))
+        output = StringIO()
+        call_command('makemigrations', check=True, dry_run=True, stdout=output)
+        self.assertIn('No changes detected', output.getvalue())
 
 
 class ArtifactSchemaTests(TestCase):
