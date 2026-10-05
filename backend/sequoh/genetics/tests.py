@@ -309,6 +309,361 @@ class ArtifactMigrationTests(TransactionTestCase):
                 transaction.set_rollback(True)
 
 
+class AnalysisResultSchemaTests(TestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        from participants.models import Participant
+
+        self.user = User.objects.create_user(username=f'result-{uuid.uuid4().hex}')
+        self.participant = Participant.objects.create(
+            user=self.user, participant_code=f'result-{uuid.uuid4().hex}',
+        )
+        self.isolated_participant = Participant.objects.create(
+            user=User.objects.create_user(username=f'result-isolated-{uuid.uuid4().hex}'),
+            participant_code=f'result-isolated-{uuid.uuid4().hex}',
+        )
+        self.purchase = Purchase.objects.create(owner=self.user.app_user)
+        self.request = ServiceRequest.objects.create(
+            purchase=self.purchase, participant=self.participant,
+            status=RequestStatus.objects.get(code='WAITING_SAMPLE'),
+        )
+        self.sample = Sample.objects.create(
+            service_request=self.request, participant=self.participant,
+            sample_code=f'result-{uuid.uuid4().hex}', sample_type='synthetic',
+        )
+        self.release = domain.DataRelease.objects.create(
+            name=uuid.uuid4().hex, version='v1', status='unlisted', reference_assembly='synthetic',
+        )
+        self.analysis = domain.Analysis.objects.create(
+            module='synthetic', pipeline_name='result-pipeline', pipeline_version='v1', status='unlisted',
+        )
+        self.variant = domain.Variant.objects.create(variant_type='synthetic')
+        self.epigenetic_feature = domain.EpigeneticFeature.objects.create(
+            feature_type='synthetic', reference_assembly='synthetic', contig='chr1', start_pos=1, end_pos=1,
+        )
+        self.population = domain.Population.objects.create(
+            code=uuid.uuid4().hex, name='Synthetic population',
+        )
+
+    def result(self, **changes):
+        self.assertTrue(hasattr(domain, 'AnalysisResult'), 'AnalysisResult schema model is missing.')
+        values = {'analysis': self.analysis, 'module': 'synthetic', 'result_type': 'summary'}
+        return domain.AnalysisResult(**(values | changes))
+
+    def insert_raw(self, **values):
+        columns = ['result_id', 'analysis_id', 'module', 'result_type', *values]
+        parameters = [uuid.uuid4(), self.analysis.pk, 'synthetic', 'summary', *values.values()]
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"INSERT INTO analysis_result ({', '.join(columns)}) "
+                f"VALUES ({', '.join(['%s'] * len(columns))})",
+                parameters,
+            )
+
+    def assert_check_rejects(self, fields, constraint_name):
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            self.insert_raw(**fields)
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint_name)
+
+    def test_exact_physical_columns_precision_indexes_checks_and_fk_actions(self):
+        self.assertTrue(hasattr(domain, 'AnalysisResult'), 'AnalysisResult schema model is missing.')
+        columns = {
+            'result_id': ('uuid', None, None, None, 'NO', None),
+            'analysis_id': ('uuid', None, None, None, 'NO', None),
+            'participant_id': ('uuid', None, None, None, 'YES', None),
+            'sample_id': ('uuid', None, None, None, 'YES', None),
+            'release_id': ('uuid', None, None, None, 'YES', None),
+            'variant_id': ('uuid', None, None, None, 'YES', None),
+            'epigenetic_feature_id': ('uuid', None, None, None, 'YES', None),
+            'population_id': ('uuid', None, None, None, 'YES', None),
+            'module': ('character varying', 64, None, None, 'NO', None),
+            'result_type': ('character varying', 96, None, None, 'NO', None),
+            'reference_assembly': ('character varying', 32, None, None, 'YES', None),
+            'contig': ('character varying', 64, None, None, 'YES', None),
+            'start_pos': ('bigint', None, 64, 0, 'YES', None),
+            'end_pos': ('bigint', None, 64, 0, 'YES', None),
+            'haplotype': ('smallint', None, 16, 0, 'YES', None),
+            'value_numeric': ('numeric', None, 20, 10, 'YES', None),
+            'value_text': ('text', None, None, None, 'YES', None),
+            'value_code': ('character varying', 128, None, None, 'YES', None),
+            'unit': ('character varying', 64, None, None, 'YES', None),
+            'percentile': ('numeric', None, 7, 4, 'YES', None),
+            'confidence': ('numeric', None, 7, 6, 'YES', None),
+            'payload': ('jsonb', None, None, None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, None, None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        check_names = {
+            'analysis_result_start_pos_gte_1', 'analysis_result_end_pos_gte_start',
+            'analysis_result_haplotype_gte_0', 'analysis_result_percentile_0_100',
+            'analysis_result_confidence_0_1',
+        }
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale, '
+                'is_nullable, column_default FROM information_schema.columns '
+                'WHERE table_schema = current_schema() AND table_name = %s ORDER BY ordinal_position',
+                ['analysis_result'],
+            )
+            physical_columns = cursor.fetchall()
+            constraints = connection.introspection.get_constraints(cursor, 'analysis_result')
+            cursor.execute(
+                'SELECT indexname, indexdef FROM pg_indexes '
+                'WHERE schemaname = current_schema() AND tablename = %s', ['analysis_result'],
+            )
+            index_definitions = dict(cursor.fetchall())
+            cursor.execute(
+                'SELECT conname, confdeltype, confupdtype, condeferrable, condeferred '
+                'FROM pg_constraint WHERE conrelid = %s::regclass AND contype = %s',
+                ['analysis_result', 'f'],
+            )
+            fk_actions = {row[0]: row[1:] for row in cursor.fetchall()}
+        self.assertEqual(physical_columns, [(name, *spec) for name, spec in columns.items()])
+        model = domain.AnalysisResult
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('analysis_result', 'result_id'))
+        self.assertEqual([field.column for field in model._meta.local_fields], list(columns))
+        self.assertEqual(
+            {field.name for field in model._meta.local_fields},
+            {'result_id', 'analysis', 'participant', 'sample', 'release', 'variant', 'epigenetic_feature',
+             'population', 'module', 'result_type', 'reference_assembly', 'contig', 'start_pos', 'end_pos',
+             'haplotype', 'value_numeric', 'value_text', 'value_code', 'unit', 'percentile', 'confidence',
+             'payload', 'created_at'},
+        )
+        for field in model._meta.local_fields:
+            self.assertEqual(field.null, columns[field.column][4] == 'YES')
+            if field.column != 'result_id':
+                self.assertEqual(field.blank, field.null)
+        self.assertEqual(
+            [(model._meta.get_field(name).max_digits, model._meta.get_field(name).decimal_places)
+             for name in ('value_numeric', 'percentile', 'confidence')],
+            [(20, 10), (7, 4), (7, 6)],
+        )
+        self.assertEqual(
+            {index.name: index.fields for index in model._meta.indexes},
+            {
+                'idx_result_participant_module': ['participant', 'module'],
+                'idx_result_analysis': ['analysis'],
+                'idx_result_interval': ['reference_assembly', 'contig', 'start_pos', 'end_pos'],
+            },
+        )
+        self.assertEqual(set(index_definitions), {
+            'analysis_result_pkey', 'idx_result_participant_module', 'idx_result_analysis', 'idx_result_interval',
+        })
+        for name, columns_sql in (
+            ('idx_result_participant_module', '(participant_id, module)'),
+            ('idx_result_analysis', '(analysis_id)'),
+            ('idx_result_interval', '(reference_assembly, contig, start_pos, end_pos)'),
+        ):
+            self.assertIn(columns_sql, index_definitions[name])
+        self.assertEqual({constraint.name for constraint in model._meta.constraints}, check_names)
+        fk_names = {
+            'fk_result_analysis', 'fk_result_participant', 'fk_result_sample', 'fk_result_release',
+            'fk_result_variant', 'fk_result_epigenetic_feature', 'fk_result_population',
+        }
+        self.assertEqual(set(constraints), {'analysis_result_pkey', *check_names, *fk_names,
+                                            'idx_result_participant_module', 'idx_result_analysis',
+                                            'idx_result_interval'})
+        targets = {
+            'fk_result_analysis': ('analysis_id', ('analysis', 'analysis_id')),
+            'fk_result_participant': ('participant_id', ('participant', 'participant_id')),
+            'fk_result_sample': ('sample_id', ('sample', 'sample_id')),
+            'fk_result_release': ('release_id', ('data_release', 'release_id')),
+            'fk_result_variant': ('variant_id', ('variant', 'variant_id')),
+            'fk_result_epigenetic_feature': ('epigenetic_feature_id', ('epigenetic_feature', 'epigenetic_feature_id')),
+            'fk_result_population': ('population_id', ('population', 'population_id')),
+        }
+        self.assertEqual(
+            {name: (info['columns'], info['foreign_key']) for name, info in constraints.items()
+             if info['foreign_key']},
+            {name: ([column], target) for name, (column, target) in targets.items()},
+        )
+        self.assertEqual(fk_actions, {
+            'fk_result_analysis': ('r', 'c', False, False),
+            **{name: ('n', 'c', False, False) for name in fk_names - {'fk_result_analysis'}},
+        })
+        relations = (
+            ('analysis', domain.Analysis, 'analysis_id', PROTECT, False),
+            ('participant', self.participant.__class__, 'participant_id', SET_NULL, True),
+            ('sample', Sample, 'sample_id', SET_NULL, True),
+            ('release', domain.DataRelease, 'release_id', SET_NULL, True),
+            ('variant', domain.Variant, 'variant_id', SET_NULL, True),
+            ('epigenetic_feature', domain.EpigeneticFeature, 'epigenetic_feature_id', SET_NULL, True),
+            ('population', domain.Population, 'population_id', SET_NULL, True),
+        )
+        for relation, target, column, on_delete, nullable in relations:
+            field = model._meta.get_field(relation)
+            self.assertIs(field.remote_field.model, target)
+            self.assertIs(field.remote_field.on_delete, on_delete)
+            self.assertEqual((field.column, field.target_field.name, field.null, field.db_index, field.db_constraint),
+                             (column, column, nullable, False, True))
+
+    def test_database_defaults_nullable_values_and_unpaired_interval_are_preserved(self):
+        self.assertTrue(hasattr(domain, 'AnalysisResult'), 'AnalysisResult schema model is missing.')
+        result = self.result()
+        self.assertIsInstance(result.pk, uuid.UUID)
+        created = result.created_at
+        self.assertIsInstance(domain.AnalysisResult._meta.get_field('result_id').default, type(uuid.uuid4))
+        self.assertIs(domain.AnalysisResult._meta.get_field('created_at').default, timezone.now)
+        self.assertTrue(timezone.is_aware(created))
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'INSERT INTO analysis_result (result_id, analysis_id, module, result_type) '
+                'VALUES (%s, %s, %s, %s) RETURNING participant_id, sample_id, release_id, variant_id, '
+                'epigenetic_feature_id, population_id, reference_assembly, contig, start_pos, end_pos, '
+                'haplotype, value_numeric, value_text, value_code, unit, percentile, confidence, payload, '
+                'created_at, transaction_timestamp(), pg_typeof(payload)',
+                [uuid.uuid4(), self.analysis.pk, 'synthetic', 'nullable'],
+            )
+            row = cursor.fetchone()
+        self.assertEqual(row[:18], (None,) * 18)
+        self.assertEqual(row[18], row[19])
+        self.assertEqual(row[20], 'jsonb')
+        self.insert_raw(start_pos=None, end_pos=5, percentile=Decimal('100.0000'), confidence=Decimal('1.000000'))
+        values = self.result(
+            reference_assembly='synthetic', contig='chr1', start_pos=None, end_pos=5, haplotype=0,
+            value_numeric=Decimal('12.3400000000'), value_text='synthetic', value_code='SYN',
+            unit='unit', percentile=Decimal('100.0000'), confidence=Decimal('1.000000'), payload={'synthetic': True},
+        )
+        values.save()
+        values.refresh_from_db()
+        self.assertEqual(values.payload, {'synthetic': True})
+        self.assertEqual(values.end_pos, 5)
+
+    def test_only_declared_position_haplotype_percentile_and_confidence_checks_apply(self):
+        self.assertTrue(hasattr(domain, 'AnalysisResult'), 'AnalysisResult schema model is missing.')
+        for fields, constraint in (
+            ({'start_pos': 0}, 'analysis_result_start_pos_gte_1'),
+            ({'start_pos': 1, 'end_pos': 0}, 'analysis_result_end_pos_gte_start'),
+            ({'haplotype': -1}, 'analysis_result_haplotype_gte_0'),
+            ({'percentile': Decimal('-0.0001')}, 'analysis_result_percentile_0_100'),
+            ({'percentile': Decimal('100.0001')}, 'analysis_result_percentile_0_100'),
+            ({'confidence': Decimal('-0.000001')}, 'analysis_result_confidence_0_1'),
+            ({'confidence': Decimal('1.000001')}, 'analysis_result_confidence_0_1'),
+        ):
+            self.assert_check_rejects(fields, constraint)
+
+    def test_raw_parent_key_updates_cascade_across_all_seven_foreign_keys(self):
+        self.assertTrue(hasattr(domain, 'AnalysisResult'), 'AnalysisResult schema model is missing.')
+        result = self.result(
+            participant=self.isolated_participant, sample=self.sample, release=self.release, variant=self.variant,
+            epigenetic_feature=self.epigenetic_feature, population=self.population,
+        )
+        result.save()
+        parents = (
+            ('analysis', self.analysis, domain.Analysis, 'analysis_id'),
+            ('participant', self.isolated_participant, self.isolated_participant.__class__, 'participant_id'),
+            ('sample', self.sample, Sample, 'sample_id'),
+            ('release', self.release, domain.DataRelease, 'release_id'),
+            ('variant', self.variant, domain.Variant, 'variant_id'),
+            ('epigenetic_feature', self.epigenetic_feature, domain.EpigeneticFeature, 'epigenetic_feature_id'),
+            ('population', self.population, domain.Population, 'population_id'),
+        )
+        with connection.cursor() as cursor:
+            for relation, parent, model, key in parents:
+                new_id = uuid.uuid4()
+                table = connection.ops.quote_name(model._meta.db_table)
+                column = connection.ops.quote_name(key)
+                cursor.execute(f'UPDATE {table} SET {column} = %s WHERE {column} = %s', [new_id, parent.pk])
+                parent.pk = new_id
+                result.refresh_from_db()
+                self.assertEqual(getattr(result, relation + '_id'), new_id)
+
+    def test_optional_raw_parent_deletes_set_null_but_analysis_delete_is_restricted(self):
+        self.assertTrue(hasattr(domain, 'AnalysisResult'), 'AnalysisResult schema model is missing.')
+        result = self.result(
+            participant=self.isolated_participant, sample=self.sample, release=self.release, variant=self.variant,
+            epigenetic_feature=self.epigenetic_feature, population=self.population,
+        )
+        result.save()
+        optional = (
+            ('participant', 'participant', 'participant_id', self.isolated_participant.pk),
+            ('sample', 'sample', 'sample_id', self.sample.pk),
+            ('release', 'data_release', 'release_id', self.release.pk),
+            ('variant', 'variant', 'variant_id', self.variant.pk),
+            ('epigenetic_feature', 'epigenetic_feature', 'epigenetic_feature_id', self.epigenetic_feature.pk),
+            ('population', 'population', 'population_id', self.population.pk),
+        )
+        for relation, table, key, value in optional:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f'DELETE FROM {connection.ops.quote_name(table)} WHERE {connection.ops.quote_name(key)} = %s',
+                    [value],
+                )
+            result.refresh_from_db()
+            self.assertIsNone(getattr(result, relation + '_id'))
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('DELETE FROM analysis WHERE analysis_id = %s', [self.analysis.pk])
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'fk_result_analysis')
+        with self.assertRaises(ProtectedError):
+            self.analysis.delete()
+        self.assertTrue(domain.AnalysisResult.objects.filter(pk=result.pk).exists())
+
+    def test_migration_state_matches_model_and_has_no_dependency_cycle(self):
+        self.assertTrue(hasattr(domain, 'AnalysisResult'), 'AnalysisResult schema model is missing.')
+        migration = import_module('genetics.migrations.0015_analysis_result').Migration
+        self.assertIn(('genetics', '0014_artifact'), migration.dependencies)
+        loader = MigrationLoader(connection)
+        state = loader.project_state([('genetics', '0015_analysis_result')])
+        historical = state.apps.get_model('genetics', 'AnalysisResult')
+        self.assertEqual(
+            {field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+            {field.name: field.deconstruct()[1:] for field in domain.AnalysisResult._meta.local_fields},
+        )
+        self.assertEqual(historical._meta.indexes, domain.AnalysisResult._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.AnalysisResult._meta.constraints)
+        self.assertIn(('genetics', '0014_artifact'), loader.graph.forwards_plan(('genetics', '0015_analysis_result')))
+
+
+class AnalysisResultMigrationTests(TransactionTestCase):
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT conname, confdeltype, confupdtype, condeferrable, condeferred '
+                'FROM pg_constraint WHERE conrelid = %s::regclass AND contype = %s',
+                ['analysis_result', 'f'],
+            )
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def test_fk_reverse_and_forward_have_exact_physical_actions(self):
+        self.assertTrue(hasattr(domain, 'AnalysisResult'), 'AnalysisResult schema model is missing.')
+        migration = import_module('genetics.migrations.0015_analysis_result')
+        editor = connection.SchemaEditorClass(connection)
+        with transaction.atomic():
+            migration.restore_analysis_result_fks(None, editor)
+            self.assertEqual(self.fk_actions(), {
+                name: ('a', 'a', True, True) for name in (
+                    'fk_result_analysis', 'fk_result_participant', 'fk_result_sample', 'fk_result_release',
+                    'fk_result_variant', 'fk_result_epigenetic_feature', 'fk_result_population',
+                )
+            })
+            migration.replace_analysis_result_fks(None, editor, physical=True)
+            self.assertEqual(self.fk_actions(), {
+                'fk_result_analysis': ('r', 'c', False, False),
+                **{name: ('n', 'c', False, False) for name in (
+                    'fk_result_participant', 'fk_result_sample', 'fk_result_release', 'fk_result_variant',
+                    'fk_result_epigenetic_feature', 'fk_result_population',
+                )},
+            })
+        self.assertIs(
+            migration.Migration.operations[-1].reverse_code, migration.restore_analysis_result_fks,
+        )
+
+    def test_fk_resolution_failure_does_not_partially_replace_constraints(self):
+        self.assertTrue(hasattr(domain, 'AnalysisResult'), 'AnalysisResult schema model is missing.')
+        migration = import_module('genetics.migrations.0015_analysis_result')
+        editor = connection.SchemaEditorClass(connection)
+        with transaction.atomic():
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE analysis_result DROP CONSTRAINT fk_result_sample')
+                before = self.fk_actions()
+                with self.assertRaisesRegex(RuntimeError, 'analysis_result.sample_id -> sample.sample_id'):
+                    migration.replace_analysis_result_fks(None, editor, physical=True)
+                self.assertEqual(self.fk_actions(), before)
+            finally:
+                transaction.set_rollback(True)
+
+
 class GenotypeTests(TestCase):
     def setUp(self):
         self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))

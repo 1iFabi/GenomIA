@@ -492,6 +492,81 @@ class Analysis(models.Model):
         return super().save(*args, **kwargs)
 
 
+class AnalysisResult(models.Model):
+    """Module-specific result values with nullable links to their source entities."""
+
+    result_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    analysis = models.ForeignKey(
+        'genetics.Analysis', on_delete=models.PROTECT, db_column='analysis_id',
+        db_index=False, related_name='results',
+    )
+    participant = models.ForeignKey(
+        'participants.Participant', on_delete=models.SET_NULL, db_column='participant_id',
+        null=True, blank=True, db_index=False, related_name='analysis_results',
+    )
+    sample = models.ForeignKey(
+        'services.Sample', on_delete=models.SET_NULL, db_column='sample_id',
+        null=True, blank=True, db_index=False, related_name='analysis_results',
+    )
+    release = models.ForeignKey(
+        'genetics.DataRelease', on_delete=models.SET_NULL, db_column='release_id',
+        null=True, blank=True, db_index=False, related_name='analysis_results',
+    )
+    variant = models.ForeignKey(
+        'genetics.Variant', on_delete=models.SET_NULL, db_column='variant_id',
+        null=True, blank=True, db_index=False, related_name='analysis_results',
+    )
+    epigenetic_feature = models.ForeignKey(
+        'genetics.EpigeneticFeature', on_delete=models.SET_NULL, db_column='epigenetic_feature_id',
+        null=True, blank=True, db_index=False, related_name='analysis_results',
+    )
+    population = models.ForeignKey(
+        'genetics.Population', on_delete=models.SET_NULL, db_column='population_id',
+        null=True, blank=True, db_index=False, related_name='analysis_results',
+    )
+    module = models.CharField(max_length=64)
+    result_type = models.CharField(max_length=96)
+    reference_assembly = models.CharField(max_length=32, null=True, blank=True)
+    contig = models.CharField(max_length=64, null=True, blank=True)
+    start_pos = models.BigIntegerField(null=True, blank=True)
+    end_pos = models.BigIntegerField(null=True, blank=True)
+    haplotype = models.SmallIntegerField(null=True, blank=True)
+    value_numeric = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    value_text = models.TextField(null=True, blank=True)
+    value_code = models.CharField(max_length=128, null=True, blank=True)
+    unit = models.CharField(max_length=64, null=True, blank=True)
+    percentile = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    confidence = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
+    payload = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'analysis_result'
+        indexes = [
+            models.Index(fields=['participant', 'module'], name='idx_result_participant_module'),
+            models.Index(fields=['analysis'], name='idx_result_analysis'),
+            models.Index(
+                fields=['reference_assembly', 'contig', 'start_pos', 'end_pos'], name='idx_result_interval',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(start_pos__gte=1), name='analysis_result_start_pos_gte_1'),
+            models.CheckConstraint(
+                condition=models.Q(end_pos__gte=models.F('start_pos')),
+                name='analysis_result_end_pos_gte_start',
+            ),
+            models.CheckConstraint(condition=models.Q(haplotype__gte=0), name='analysis_result_haplotype_gte_0'),
+            models.CheckConstraint(
+                condition=models.Q(percentile__gte=0, percentile__lte=100),
+                name='analysis_result_percentile_0_100',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(confidence__gte=0, confidence__lte=1),
+                name='analysis_result_confidence_0_1',
+            ),
+        ]
+
+
 class SNP(models.Model):
     """
     Modelo para almacenar información de SNPs (Single Nucleotide Polymorphisms)
