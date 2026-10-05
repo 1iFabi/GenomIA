@@ -135,3 +135,61 @@ class RevokedToken(models.Model):
 
     def __str__(self):
         return f"RevokedToken(jti={self.jti[:8]}...)"
+
+
+class Role(models.Model):
+    """Functional GenomIA role, distinct from Django staff/admin flags."""
+
+    class Code(models.TextChoices):
+        CLIENTE = 'CLIENTE', 'Client'
+        ADMIN = 'ADMIN', 'Administrator'
+        ANALISTA = 'ANALISTA', 'Analyst'
+        RECEPCION = 'RECEPCION', 'Reception'
+
+    role_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=50, choices=Code.choices, unique=True)
+    name = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'role'
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(code__in=['CLIENTE', 'ADMIN', 'ANALISTA', 'RECEPCION']),
+                name='role_functional_code_valid',
+            ),
+        ]
+
+
+class AppUser(models.Model):
+    """Optional domain mapping for a Django-authenticated user; never an auth source."""
+
+    user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    django_user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='app_user',
+    )
+    role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name='app_users')
+    oidc_issuer = models.TextField(null=True, blank=True)
+    oidc_subject = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        db_table = 'app_user'
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(oidc_issuer__isnull=True, oidc_subject__isnull=True)
+                    | (
+                        models.Q(oidc_issuer__isnull=False, oidc_subject__isnull=False)
+                        & ~models.Q(oidc_issuer='')
+                        & ~models.Q(oidc_subject='')
+                    )
+                ),
+                name='app_user_oidc_pair_complete',
+            ),
+            models.UniqueConstraint(
+                fields=['oidc_issuer', 'oidc_subject'],
+                name='app_user_oidc_identity_unique',
+            ),
+        ]

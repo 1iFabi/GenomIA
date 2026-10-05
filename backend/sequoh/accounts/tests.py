@@ -1,9 +1,14 @@
 import json
 from unittest.mock import patch
 
+from django.apps import apps
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase, override_settings
+import uuid
 from rest_framework.test import APIClient
 
 from .jwt_utils import encode_jwt, decode_jwt
@@ -278,3 +283,129 @@ class AuthHttpOnlyCookieTests(TestCase):
 
         self.assertEqual(me.status_code, 200)
         self.assertEqual(me.data["user"]["username"], "ana_handle")
+
+
+class AppUserMappingTests(TestCase):
+    """Additive domain accounts: Django User remains the authentication source."""
+
+    def models(self):
+        return apps.get_model('accounts', 'Role'), apps.get_model('accounts', 'AppUser')
+
+    def test_schema_tables_uuid_keys_and_separate_django_user_link(self):
+        Role, AppUser = self.models()
+        self.assertEqual(Role._meta.db_table, 'role')
+        self.assertEqual(AppUser._meta.db_table, 'app_user')
+        self.assertEqual(Role._meta.pk.name, 'role_id')
+        self.assertEqual(AppUser._meta.pk.name, 'user_id')
+        self.assertEqual(AppUser._meta.get_field('django_user').remote_field.model, get_user_model())
+        self.assertEqual(AppUser._meta.get_field('django_user').one_to_one, True)
+        self.assertEqual(
+            {field.name for field in AppUser._meta.local_fields},
+            {'user_id', 'django_user', 'role', 'oidc_issuer', 'oidc_subject'},
+        )
+        with connection.cursor() as cursor:
+            tables = connection.introspection.table_names(cursor)
+            self.assertIn('role', tables)
+            self.assertIn('app_user', tables)
+            constraints = connection.introspection.get_constraints(cursor, 'app_user')
+        self.assertTrue(any(
+            details['primary_key'] and details['columns'] == ['user_id']
+            for details in constraints.values()
+        ))
+
+    def test_local_users_are_not_automatically_mapped(self):
+        _, AppUser = self.models()
+        user = get_user_model().objects.create_user(username='unmapped')
+        self.assertFalse(AppUser.objects.filter(django_user=user).exists())
+
+    def test_two_local_users_can_share_one_role_without_oidc(self):
+        Role, AppUser = self.models()
+        role = Role.objects.create(code='CLIENTE', name='Client')
+        first = get_user_model().objects.create_user(username='local-1')
+        second = get_user_model().objects.create_user(username='local-2')
+
+        mappings = [AppUser.objects.create(django_user=user, role=role) for user in (first, second)]
+
+        for user, mapping in zip((first, second), mappings):
+            self.assertIsInstance(mapping.pk, uuid.UUID)
+            self.assertEqual(mapping.pk, mapping.user_id)
+            self.assertIsInstance(mapping.django_user_id, int)
+            self.assertEqual(user.app_user, mapping)
+            self.assertEqual(mapping.role, role)
+            self.assertIsNone(mapping.oidc_issuer)
+            self.assertIsNone(mapping.oidc_subject)
+        self.assertNotEqual(mappings[0].pk, mappings[1].pk)
+
+    def test_role_codes_are_unique_and_restricted_to_functional_roles(self):
+        Role, _ = self.models()
+        self.assertEqual(
+            set(Role.Code.values), {'CLIENTE', 'ADMIN', 'ANALISTA', 'RECEPCION'},
+        )
+        role = Role.objects.create(code='CLIENTE', name='Client')
+        self.assertIsInstance(role.pk, uuid.UUID)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Role.objects.create(code='CLIENTE', name='Another client')
+        invalid = Role(code='ROOT', name='Unrecognized')
+        with self.assertRaises(ValidationError):
+            invalid.full_clean()
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Role.objects.create(code='ROOT', name='Unrecognized')
+
+    def test_user_link_and_role_are_required_and_one_to_one(self):
+        Role, AppUser = self.models()
+        role = Role.objects.create(code='CLIENTE', name='Client')
+        user = get_user_model().objects.create_user(username='local-1')
+        AppUser.objects.create(django_user=user, role=role)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                AppUser.objects.create(django_user=user, role=role)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                AppUser.objects.create(role=role)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                AppUser.objects.create(django_user=get_user_model().objects.create_user(username='local-2'))
+
+    def test_oidc_identity_rejects_partial_or_empty_values_on_insert_and_update(self):
+        Role, AppUser = self.models()
+        role = Role.objects.create(code='CLIENTE', name='Client')
+        incomplete = [
+            (None, 'subject'), ('https://issuer.example', None),
+            ('', ''), ('', 'subject'), ('https://issuer.example', ''),
+        ]
+        for index, (issuer, subject) in enumerate(incomplete):
+            with self.subTest(issuer=issuer, subject=subject):
+                user = get_user_model().objects.create_user(username=f'partial-{index}')
+                with self.assertRaises(IntegrityError):
+                    with transaction.atomic():
+                        AppUser.objects.create(
+                            django_user=user, role=role,
+                            oidc_issuer=issuer, oidc_subject=subject,
+                        )
+        user = get_user_model().objects.create_user(username='local-update')
+        mapping = AppUser.objects.create(django_user=user, role=role)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                AppUser.objects.filter(pk=mapping.pk).update(oidc_subject='subject')
+
+    def test_oidc_identity_is_unique_per_issuer_when_present(self):
+        Role, AppUser = self.models()
+        role = Role.objects.create(code='CLIENTE', name='Client')
+        users = [get_user_model().objects.create_user(username=f'oidc-{index}') for index in range(3)]
+        AppUser.objects.create(
+            django_user=users[0], role=role,
+            oidc_issuer='https://issuer.example', oidc_subject='subject',
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                AppUser.objects.create(
+                    django_user=users[1], role=role,
+                    oidc_issuer='https://issuer.example', oidc_subject='subject',
+                )
+        other = AppUser.objects.create(
+            django_user=users[2], role=role,
+            oidc_issuer='https://other.example', oidc_subject='subject',
+        )
+        self.assertEqual(other.oidc_subject, 'subject')
