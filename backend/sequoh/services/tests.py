@@ -650,3 +650,237 @@ class ManualPurchaseFlowTests(APITestCase):
         )
         self.assertEqual(response.status_code, 403, response.data)
         self.assertEqual(domain.Purchase.objects.count(), 0)
+
+
+class SampleReceptionTests(APITestCase):
+    def setUp(self):
+        users = get_user_model().objects
+        self.admin = users.create_user(username='sample-admin')
+        grant_admin_role(self.admin)
+        self.reception = users.create_user(username='sample-reception')
+        grant_reception_role(self.reception)
+        self.owner = users.create_user(username='sample-owner')
+        self.other = users.create_user(username='sample-other')
+        self.purchase = domain.Purchase.objects.create(
+            owner=self.owner.app_user, status=domain.PurchaseStatus.objects.get(code='PAID'),
+            purchased_at=timezone.now(),
+        )
+        self.waiting = domain.ServiceStatus.objects.get(code='WAITING_SAMPLE')
+        self.service = domain.ServiceRequest.objects.create(purchase=self.purchase, status=self.waiting)
+        self.initial = domain.ServiceStatusLog.objects.create(
+            request=self.service, status=self.waiting, actor=self.admin.app_user,
+        )
+        self.as_actor(self.admin)
+        self.client.cookies['csrftoken'] = 'matching-csrf'
+
+    def as_actor(self, user):
+        if user is None:
+            self.client.cookies.pop(settings.AUTH_COOKIE_NAME, None)
+        else:
+            self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
+
+    def receive(self, service=None, payload=None):
+        service = service or self.service
+        self.client.cookies['csrftoken'] = 'matching-csrf'
+        return self.client.post(
+            f'/api/services/requests/{service.pk}/receive-sample/',
+            data=json.dumps({} if payload is None else payload), content_type='application/json',
+            HTTP_X_CSRFTOKEN='matching-csrf',
+        )
+
+    def assert_unchanged(self):
+        self.service.refresh_from_db()
+        self.assertEqual(self.service.status.code, 'WAITING_SAMPLE')
+        self.assertEqual(list(domain.ServiceStatusLog.objects.filter(request=self.service).values_list(
+            'pk', flat=True,
+        )), [self.initial.pk])
+
+    def test_explicit_paid_service_transitions_and_keeps_initial_history(self):
+        response = self.receive()
+        self.assertEqual(response.status_code, 200, getattr(response, 'data', None))
+        self.service.refresh_from_db()
+        self.assertEqual(self.service.status.code, 'SAMPLE_RECEIVED')
+        history = list(domain.ServiceStatusLog.objects.filter(request=self.service).order_by('changed_at'))
+        self.assertEqual([log.status.code for log in history], ['WAITING_SAMPLE', 'SAMPLE_RECEIVED'])
+        self.assertEqual(history[0].pk, self.initial.pk)
+        self.assertEqual(history[1].actor, self.admin.app_user)
+        self.assertEqual(response.data, {
+            'serviceRequestId': self.service.pk, 'status': 'SAMPLE_RECEIVED',
+            'statusLogId': history[1].pk,
+        })
+
+    def test_empty_body_is_accepted(self):
+        response = self.client.post(
+            f'/api/services/requests/{self.service.pk}/receive-sample/',
+            data='', content_type='application/json', HTTP_X_CSRFTOKEN='matching-csrf',
+        )
+        self.assertEqual(response.status_code, 200, getattr(response, 'data', None))
+        self.assertEqual(response.data['status'], 'SAMPLE_RECEIVED')
+
+    def test_reception_retry_uses_original_actor_and_log(self):
+        self.as_actor(self.reception)
+        first = self.receive()
+        self.assertEqual(first.status_code, 200, getattr(first, 'data', None))
+        self.as_actor(self.admin)
+        second = self.receive()
+        self.assertEqual(second.status_code, 200, second.data)
+        self.assertEqual(second.data, first.data)
+        self.assertEqual(domain.ServiceStatusLog.objects.filter(request=self.service).count(), 2)
+        log = domain.ServiceStatusLog.objects.get(pk=first.data['statusLogId'])
+        self.assertEqual(log.actor, self.reception.app_user)
+        self.assertEqual(log.status.code, 'SAMPLE_RECEIVED')
+
+    def test_waiting_service_without_payment_log_conflicts_without_writes(self):
+        self.initial.delete()
+        response = self.receive()
+        self.assertEqual(response.status_code, 409, getattr(response, 'data', None))
+        self.service.refresh_from_db()
+        self.assertEqual(self.service.status.code, 'WAITING_SAMPLE')
+        self.assertFalse(domain.ServiceStatusLog.objects.filter(request=self.service).exists())
+
+    def test_received_retry_without_payment_log_conflicts_without_writes(self):
+        first = self.receive()
+        self.assertEqual(first.status_code, 200, getattr(first, 'data', None))
+        self.initial.delete()
+        response = self.receive()
+        self.assertEqual(response.status_code, 409, getattr(response, 'data', None))
+        self.service.refresh_from_db()
+        self.assertEqual(self.service.status.code, 'SAMPLE_RECEIVED')
+        self.assertEqual(list(domain.ServiceStatusLog.objects.filter(request=self.service).values_list(
+            'pk', flat=True,
+        )), [first.data['statusLogId']])
+
+    def test_only_functional_staff_can_receive_even_with_django_flags(self):
+        flagged = get_user_model().objects.create_user(
+            username='sample-flagged', is_staff=True, is_superuser=True,
+        )
+        flagged.groups.add(Group.objects.get_or_create(name='RECEPCION')[0])
+        analyst = get_user_model().objects.create_user(username='sample-analyst')
+        AppUser.objects.filter(django_user=analyst).update(role=Role.objects.get(code='ANALISTA'))
+        unmapped = get_user_model().objects.bulk_create(
+            [get_user_model()(username='sample-unmapped')],
+        )[0]
+        for actor in (self.owner, self.other, analyst, flagged, unmapped, None):
+            with self.subTest(actor=actor):
+                self.as_actor(actor)
+                response = self.receive()
+                self.assertIn(response.status_code, (401, 403))
+                self.assert_unchanged()
+
+    def test_csrf_and_nonempty_or_forged_payloads_fail_without_writes(self):
+        self.client.cookies['csrftoken'] = 'different-csrf'
+        self.assertEqual(self.client.post(
+            f'/api/services/requests/{self.service.pk}/receive-sample/',
+            data='{}', content_type='application/json', HTTP_X_CSRFTOKEN='matching-csrf',
+        ).status_code, 403)
+        for payload in (
+            {'actor': str(self.reception.app_user.pk)}, {'owner': str(self.other.app_user.pk)},
+            {'userId': self.owner.pk}, {'status': 'PROCESSING'}, {'status': 'COMPLETED'},
+            {'status': 'SAMPLE_RECEIVED'}, {'action': 'receive'}, {'comment': 'note'},
+            [], None, 'SAMPLE_RECEIVED',
+        ):
+            with self.subTest(payload=payload):
+                self.client.cookies['csrftoken'] = 'matching-csrf'
+                response = self.client.post(
+                    f'/api/services/requests/{self.service.pk}/receive-sample/',
+                    data=json.dumps(payload), content_type='application/json',
+                    HTTP_X_CSRFTOKEN='matching-csrf',
+                )
+                self.assertEqual(response.status_code, 400, getattr(response, 'data', None))
+                self.assert_unchanged()
+
+    def test_missing_csrf_cookie_or_header_blocks_receive(self):
+        self.client.cookies.pop('csrftoken', None)
+        self.assertEqual(self.client.post(
+            f'/api/services/requests/{self.service.pk}/receive-sample/',
+            data='{}', content_type='application/json', HTTP_X_CSRFTOKEN='matching-csrf',
+        ).status_code, 403)
+        self.client.cookies['csrftoken'] = 'matching-csrf'
+        self.assertEqual(self.client.post(
+            f'/api/services/requests/{self.service.pk}/receive-sample/',
+            data='{}', content_type='application/json',
+        ).status_code, 403)
+        self.assert_unchanged()
+
+    def test_selects_only_one_of_two_paid_services_for_same_owner(self):
+        another_purchase = domain.Purchase.objects.create(
+            owner=self.owner.app_user, status=self.purchase.status, purchased_at=timezone.now(),
+        )
+        another = domain.ServiceRequest.objects.create(purchase=another_purchase, status=self.waiting)
+        another_initial = domain.ServiceStatusLog.objects.create(
+            request=another, status=self.waiting, actor=self.admin.app_user,
+        )
+        self.as_actor(self.reception)
+        result = self.receive(another)
+        self.assertEqual(result.status_code, 200, getattr(result, 'data', None))
+        self.assertEqual(result.data['serviceRequestId'], another.pk)
+        self.assert_unchanged()
+        another.refresh_from_db()
+        self.assertEqual(another.status.code, 'SAMPLE_RECEIVED')
+        self.assertEqual(domain.ServiceStatusLog.objects.filter(request=another).count(), 2)
+        self.assertTrue(domain.ServiceStatusLog.objects.filter(pk=another_initial.pk).exists())
+
+    def test_missing_or_ineligible_owner_returns_404(self):
+        self.assertEqual(self.receive(SimpleNamespace(pk=uuid.uuid4())).status_code, 404)
+        self.assertEqual(self.client.post(
+            '/api/services/requests/not-a-uuid/receive-sample/',
+            data='{}', content_type='application/json', HTTP_X_CSRFTOKEN='matching-csrf',
+        ).status_code, 404)
+        for change in ('inactive', 'analyst'):
+            with self.subTest(change=change):
+                if change == 'inactive':
+                    self.owner.is_active = False
+                    self.owner.save(update_fields=['is_active'])
+                else:
+                    self.owner.is_active = True
+                    self.owner.save(update_fields=['is_active'])
+                    AppUser.objects.filter(pk=self.owner.app_user.pk).update(
+                        role=Role.objects.get(code='ANALISTA'),
+                    )
+                self.assertEqual(self.receive().status_code, 404)
+                self.assert_unchanged()
+
+    def test_reassigned_purchase_cannot_receive_another_clients_participant(self):
+        participant = Participant.objects.create(user=self.other, participant_code='other-sample')
+        domain.ServiceRequest.objects.filter(pk=self.service.pk).update(participant=participant)
+        self.assertEqual(self.receive().status_code, 404)
+        self.assert_unchanged()
+
+    def test_unpaid_or_incomplete_purchase_returns_409(self):
+        for code in ('PENDING', 'CANCELLED', 'REFUNDED', None):
+            with self.subTest(code=code):
+                self.purchase.status = domain.PurchaseStatus.objects.get(code=code) if code else None
+                self.purchase.save(update_fields=['status'])
+                self.assertEqual(self.receive().status_code, 409)
+                self.assert_unchanged()
+        self.purchase.status = domain.PurchaseStatus.objects.get(code='PAID')
+        self.purchase.purchased_at = None
+        self.purchase.save(update_fields=['status', 'purchased_at'])
+        self.assertEqual(self.receive().status_code, 409)
+        self.assert_unchanged()
+
+    def test_out_of_order_states_and_missing_received_log_conflict(self):
+        for code in ('PROCESSING', 'COMPLETED', 'SAMPLE_RECEIVED'):
+            with self.subTest(code=code):
+                self.service.status = domain.ServiceStatus.objects.get(code=code)
+                self.service.save(update_fields=['status'])
+                self.assertEqual(self.receive().status_code, 409)
+                self.assertEqual(domain.ServiceStatusLog.objects.filter(request=self.service).count(), 1)
+                self.assertTrue(domain.ServiceStatusLog.objects.filter(pk=self.initial.pk).exists())
+
+    def test_lock_and_log_failure_roll_back_status_for_retry(self):
+        savepoints = len(connection.savepoint_ids)
+
+        def fail_log(*args, **kwargs):
+            self.assertTrue(connection.in_atomic_block)
+            self.assertGreater(len(connection.savepoint_ids), savepoints)
+            raise RuntimeError('simulated reception log failure')
+
+        with CaptureQueriesContext(connection) as queries:
+            with patch('services.views.ServiceStatusLog.objects.create', side_effect=fail_log):
+                with self.assertRaisesMessage(RuntimeError, 'simulated reception log failure'):
+                    self.receive()
+        self.assertTrue(any('FOR UPDATE' in q['sql'] and '"service_request"' in q['sql']
+                            for q in queries.captured_queries))
+        self.assert_unchanged()
+        self.assertEqual(self.receive().status_code, 200)
