@@ -69,6 +69,37 @@ class Participant(models.Model):
         ]
 
 
+class ParticipantMetadata(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, null=True, blank=True)
+    questionary = models.JSONField(null=True, blank=True)
+    version = models.IntegerField(null=True, blank=True)
+    description = models.CharField(max_length=255, null=True, blank=True)
+    type = models.CharField(max_length=50, default='form_or_consent', db_default='form_or_consent')
+
+    class Meta:
+        db_table = 'participant_metadata'
+
+
+class ParticipantMetadataLink(models.Model):
+    pk = models.CompositePrimaryKey('idm', 'idp')
+    idm = models.ForeignKey(
+        ParticipantMetadata, on_delete=models.PROTECT, db_column='idm',
+        db_index=False, related_name='participant_links',
+    )
+    idp = models.ForeignKey(
+        Participant, on_delete=models.PROTECT, db_column='idp',
+        db_index=False, related_name='metadata_links',
+    )
+    answer = models.JSONField(null=True, blank=True)
+    first_date = models.DateField(null=True, blank=True)
+    last_update = models.DateField(null=True, blank=True)
+    description = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        db_table = 'participant_2_meta'
+
+
 class Observation(models.Model):
     observation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     participant = models.ForeignKey(
