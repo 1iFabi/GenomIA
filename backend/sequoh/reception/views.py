@@ -14,6 +14,9 @@ from accounts.models import Role
 from accounts.roles import is_admin, is_reception
 from profiles.utils import ensure_sample_code
 from accounts.email_utils import send_email, build_branded_html
+from services.legacy_profile import (
+    get_legacy_service_projection, get_paid_legacy_service_projections,
+)
 
 
 def has_reception_access(user) -> bool:
@@ -21,11 +24,13 @@ def has_reception_access(user) -> bool:
     return is_admin(user) or is_reception(user)
 
 
-def serialize_reception_profile(profile: Profile) -> dict:
+def serialize_reception_profile(profile: Profile, *, service_status=None) -> dict:
     """Serializa datos permitidos para recepción (sin genéticos)."""
     user = profile.user
     sample_code = profile.sample_code or ensure_sample_code(profile)
     sample_status = profile.sample_status or SampleStatus.PENDING_COLLECTION
+    if service_status is None:
+        service_status = get_legacy_service_projection(user).service_status
 
     return {
         "user_id": user.id,
@@ -40,7 +45,7 @@ def serialize_reception_profile(profile: Profile) -> dict:
         "arrival_confirmed_at": profile.arrival_confirmed_at,
         "sample_taken_at": profile.sample_taken_at,
         "sample_sent_at": profile.sample_sent_at,
-        "service_status": profile.service_status,
+        "service_status": service_status,
     }
 
 
@@ -72,7 +77,14 @@ class ReceptionSearchAPIView(APIView):
         if sample_code:
             qs = qs.filter(sample_code__iexact=sample_code)
 
-        results = [serialize_reception_profile(p) for p in qs[:25]]
+        profiles = list(qs[:25])
+        paid = get_paid_legacy_service_projections(profile.user_id for profile in profiles)
+        results = [
+            serialize_reception_profile(
+                profile, service_status=paid[profile.user_id].service_status
+                if profile.user_id in paid else profile.service_status,
+            ) for profile in profiles
+        ]
         return Response({"results": results})
 
 
