@@ -81,6 +81,7 @@ if RENDER_EXTERNAL_HOSTNAME:
 INSTALLED_APPS = [
     'accounts',
     'profiles',
+    'participants',
     'reception',
     'genetics',
     'reports',
