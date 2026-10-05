@@ -10,6 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.authentication import JWTAuthentication
 from accounts.csrf import CSRFDoubleSubmitMixin
 from profiles.models import Profile, SampleStatus, ServiceStatus
+from accounts.models import Role
 from accounts.roles import is_admin, is_reception
 from profiles.utils import ensure_sample_code
 from accounts.email_utils import send_email, build_branded_html
@@ -59,8 +60,10 @@ class ReceptionSearchAPIView(APIView):
         if not query:
             return Response({"error": "Debes enviar rut, email o sample_code"}, status=status.HTTP_400_BAD_REQUEST)
 
-        qs = Profile.objects.select_related("user").filter(user__is_active=True, user__is_superuser=False)
-        qs = qs.exclude(user__groups__name__in=["ADMIN", "ANALISTA"])
+        qs = Profile.objects.select_related("user").filter(
+            user__is_active=True,
+            user__app_user__role__code=Role.Code.CLIENTE,
+        )
 
         if rut:
             qs = qs.filter(rut__iexact=rut)
@@ -91,7 +94,11 @@ class ReceptionArrivalAPIView(CSRFDoubleSubmitMixin, APIView):
             return Response({"error": "userId es obligatorio"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            profile = Profile.objects.select_related("user").get(user_id=user_id, user__is_active=True)
+            profile = Profile.objects.select_related("user").get(
+                user_id=user_id,
+                user__is_active=True,
+                user__app_user__role__code=Role.Code.CLIENTE,
+            )
         except Profile.DoesNotExist:
             return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -126,7 +133,11 @@ class ReceptionSampleCodeAPIView(CSRFDoubleSubmitMixin, APIView):
             return Response({"error": "userId es obligatorio"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            profile = Profile.objects.select_related("user").get(user_id=user_id, user__is_active=True)
+            profile = Profile.objects.select_related("user").get(
+                user_id=user_id,
+                user__is_active=True,
+                user__app_user__role__code=Role.Code.CLIENTE,
+            )
         except Profile.DoesNotExist:
             return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -190,7 +201,11 @@ class ReceptionSampleStatusAPIView(CSRFDoubleSubmitMixin, APIView):
             return Response({"error": "userId es obligatorio"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            profile = Profile.objects.select_related("user").get(user_id=user_id, user__is_active=True)
+            profile = Profile.objects.select_related("user").get(
+                user_id=user_id,
+                user__is_active=True,
+                user__app_user__role__code=Role.Code.CLIENTE,
+            )
         except Profile.DoesNotExist:
             return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
