@@ -48,6 +48,41 @@ class Variant(models.Model):
         indexes = [models.Index(fields=['variant_type'], name='idx_variant_type')]
 
 
+class VariantPlacement(models.Model):
+    """Assembly-specific placement and representation of a stable variant."""
+
+    placement_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        'genetics.Variant', on_delete=models.CASCADE, db_column='variant_id',
+        db_index=False, related_name='placements',
+    )
+    reference_assembly = models.CharField(max_length=32)
+    contig = models.CharField(max_length=64)
+    start_pos = models.BigIntegerField()
+    end_pos = models.BigIntegerField()
+    coordinate_system = models.CharField(max_length=32, default='1-based-inclusive', db_default='1-based-inclusive')
+    reference_allele = models.TextField(null=True, blank=True)
+    alternate_allele = models.TextField(null=True, blank=True)
+    strand = FixedCharField(max_length=1, null=True, blank=True)
+    sv_length = models.BigIntegerField(null=True, blank=True)
+    breakend = models.JSONField(null=True, blank=True)
+    is_canonical = models.BooleanField(default=False, db_default=False)
+    normalized = models.BooleanField(default=False, db_default=False)
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'variant_placement'
+        indexes = [
+            models.Index(fields=['reference_assembly', 'contig', 'start_pos', 'end_pos'], name='idx_variant_placement_region'),
+            models.Index(fields=['variant'], name='idx_variant_placement_variant'),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(start_pos__gte=1), name='variant_placement_start_gte_1'),
+            models.CheckConstraint(condition=models.Q(end_pos__gte=models.F('start_pos')), name='variant_placement_end_gte_start'),
+        ]
+
+
 class Analysis(models.Model):
     """Pipeline provenance with optional participant, sample, request and release links."""
 

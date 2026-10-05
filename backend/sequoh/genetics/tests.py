@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import DataError, IntegrityError, connection, transaction
 from django.db.migrations.loader import MigrationLoader
-from django.db.models.deletion import PROTECT, ProtectedError
+from django.db.models.deletion import CASCADE, PROTECT, ProtectedError
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -28,6 +28,278 @@ from services.models import (
     Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
 )
+
+
+class VariantPlacementTests(TestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        self.variant = domain.Variant.objects.create(variant_type='synthetic-placement')
+
+    def placement(self, **changes):
+        return domain.VariantPlacement(**(dict(
+            variant_id=self.variant.pk, reference_assembly='GRCh38', contig='1', start_pos=1, end_pos=1,
+        ) | changes))
+
+    def test_minimal_placement_has_orm_defaults_and_nullable_fields(self):
+        self.assertTrue(hasattr(domain, 'VariantPlacement'), 'Assembly-specific VariantPlacement is missing.')
+        placement = self.placement()
+        placement.full_clean()
+        placement.save()
+        placement.refresh_from_db()
+        self.assertIsInstance(placement.pk, uuid.UUID)
+        self.assertEqual(placement.pk.version, 4)
+        self.assertEqual(placement.variant, self.variant)
+        # SQL v01.5's triple-quoted literal would store quote characters, not the intended coordinate label.
+        self.assertEqual(placement.coordinate_system, '1-based-inclusive')
+        self.assertIs(placement.is_canonical, False)
+        self.assertIs(placement.normalized, False)
+        self.assertTrue(timezone.is_aware(placement.created_at))
+        for field in ('reference_allele', 'alternate_allele', 'strand', 'sv_length', 'breakend', 'metadata'):
+            self.assertIsNone(getattr(placement, field))
+
+    def test_exact_sixteen_physical_columns_defaults_keys_checks_and_indexes(self):
+        columns = {
+            'placement_id': ('uuid', None, 'NO', None),
+            'variant_id': ('uuid', None, 'NO', None),
+            'reference_assembly': ('character varying', 32, 'NO', None),
+            'contig': ('character varying', 64, 'NO', None),
+            'start_pos': ('bigint', None, 'NO', None),
+            'end_pos': ('bigint', None, 'NO', None),
+            'coordinate_system': ('character varying', 32, 'NO', "'1-based-inclusive'::character varying"),
+            'reference_allele': ('text', None, 'YES', None),
+            'alternate_allele': ('text', None, 'YES', None),
+            'strand': ('character', 1, 'YES', None),
+            'sv_length': ('bigint', None, 'YES', None),
+            'breakend': ('jsonb', None, 'YES', None),
+            'is_canonical': ('boolean', None, 'NO', 'false'),
+            'normalized': ('boolean', None, 'NO', 'false'),
+            'metadata': ('jsonb', None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        model = domain.VariantPlacement
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('variant_placement', 'placement_id'))
+        self.assertEqual({field.column for field in model._meta.local_fields}, set(columns))
+        self.assertIs(model._meta.pk.default, uuid.uuid4)
+        self.assertFalse(model._meta.pk.editable)
+        for field in model._meta.local_fields:
+            _, length, nullable, _ = columns[field.column]
+            self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+            if length is not None:
+                self.assertEqual(field.max_length, length)
+        coordinate = model._meta.get_field('coordinate_system')
+        self.assertEqual((coordinate.default, coordinate.db_default), ('1-based-inclusive', '1-based-inclusive'))
+        for name in ('is_canonical', 'normalized'):
+            field = model._meta.get_field(name)
+            self.assertIs(field.default, False)
+            self.assertIs(field.db_default, False)
+        created_at = model._meta.get_field('created_at')
+        self.assertIs(created_at.default, timezone.now)
+        self.assertIsInstance(created_at.db_default, TransactionNow)
+        relation = model._meta.get_field('variant')
+        self.assertIs(relation.remote_field.model, domain.Variant)
+        self.assertIs(relation.remote_field.on_delete, CASCADE)
+        self.assertFalse(relation.db_index)  # The explicitly named index replaces Django's automatic FK index.
+        self.assertEqual({index.name: index.fields for index in model._meta.indexes}, {
+            'idx_variant_placement_region': ['reference_assembly', 'contig', 'start_pos', 'end_pos'],
+            'idx_variant_placement_variant': ['variant'],
+        })
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable, column_default '
+                           'FROM information_schema.columns WHERE table_schema = current_schema() '
+                           "AND table_name = 'variant_placement'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'variant_placement')
+            cursor.execute('SELECT conname, confdeltype, confupdtype, condeferrable, condeferred FROM pg_constraint '
+                           "WHERE conrelid = 'variant_placement'::regclass AND contype = 'f'")
+            self.assertEqual(cursor.fetchall(), [('fk_variant_placement_variant', 'c', 'c', False, False)])
+        self.assertEqual([info['columns'] for info in constraints.values() if info['primary_key']], [['placement_id']])
+        self.assertEqual([(info['columns'], info['foreign_key']) for info in constraints.values() if info['foreign_key']],
+                         [(['variant_id'], ('variant', 'variant_id'))])
+        self.assertFalse(any(info['unique'] and not info['primary_key'] for info in constraints.values()))
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']}, {
+            'idx_variant_placement_region': ['reference_assembly', 'contig', 'start_pos', 'end_pos'],
+            'idx_variant_placement_variant': ['variant_id'],
+        })
+        checks = {
+            'variant_placement_start_gte_1': {'start_pos'},
+            'variant_placement_end_gte_start': {'end_pos', 'start_pos'},
+        }
+        self.assertEqual({constraint.name for constraint in model._meta.constraints}, set(checks))
+        self.assertEqual({name: set(info['columns']) for name, info in constraints.items() if info['check']}, checks)
+
+    def test_raw_sql_minimal_insert_uses_unquoted_coordinate_boolean_and_transaction_defaults(self):
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO variant_placement '
+                           '(placement_id, variant_id, reference_assembly, contig, start_pos, end_pos) '
+                           'VALUES (%s, %s, %s, %s, %s, %s) RETURNING coordinate_system, is_canonical, normalized, '
+                           'reference_allele, alternate_allele, strand, sv_length, breakend, metadata, '
+                           'created_at, transaction_timestamp()',
+                           [uuid.uuid4(), self.variant.pk, 'GRCh38', '1', 1, 1])
+            coordinate, canonical, normalized, *optional, created_at, database_now = cursor.fetchone()
+        self.assertEqual(coordinate, '1-based-inclusive')
+        self.assertIs(canonical, False)
+        self.assertIs(normalized, False)
+        self.assertEqual(optional, [None] * 6)
+        self.assertTrue(timezone.is_aware(created_at))
+        self.assertEqual(created_at, database_now)
+
+    def test_optional_values_signed_bigints_and_normalized_flags_have_no_biological_validation(self):
+        legacy = (SNP, UserSNP, domain.Analysis, domain.DataRelease, domain.Variant)
+        before = {model: model.objects.count() for model in legacy}
+        for normalized in (False, True):
+            values = dict(
+                reference_assembly='synthetic-assembly', contig='synthetic-contig',
+                start_pos=2**40, end_pos=2**40 + 2, coordinate_system='synthetic-coordinate-system',
+                reference_allele='not-DNA' * 50, alternate_allele='<synthetic>', strand='?', sv_length=-2**40,
+                breakend={'mate': {'contig': 'synthetic', 'position': 0}, 'orientation': ['unchecked']},
+                is_canonical=True, normalized=normalized, metadata={'details': {'tags': ['synthetic'], 'count': 2}},
+                created_at=timezone.now(),
+            )
+            placement = self.placement(**values)
+            placement.full_clean()
+            placement.save()
+            placement.refresh_from_db()
+            self.assertEqual({field: getattr(placement, field) for field in values}, values)
+        self.assertEqual(domain.VariantPlacement.objects.count(), 2)  # No uniqueness rule on placement or canonical flag.
+        self.assertEqual({model: model.objects.count() for model in legacy}, before)
+
+    def test_coordinates_reject_start_zero_and_end_before_start_in_orm_and_database(self):
+        valid = self.placement()
+        valid.save()  # Inclusive single-base placements at position one are valid.
+        for changes, constraint in (
+            ({'start_pos': 0}, 'variant_placement_start_gte_1'),
+            ({'start_pos': -1}, 'variant_placement_start_gte_1'),
+            ({'start_pos': 2, 'end_pos': 1}, 'variant_placement_end_gte_start'),
+        ):
+            with self.subTest(changes=changes):
+                placement = self.placement(**changes)
+                with self.assertRaises(ValidationError) as error:
+                    placement.full_clean()
+                self.assertIn(constraint, str(error.exception))
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    placement.save()
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint)
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    domain.VariantPlacement.objects.filter(pk=valid.pk).update(**changes)
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint)
+        valid.refresh_from_db()
+        self.assertEqual((valid.start_pos, valid.end_pos), (1, 1))
+        self.assertEqual(domain.VariantPlacement.objects.count(), 1)
+
+    def test_database_required_columns_primary_key_and_variant_reference_are_enforced(self):
+        values = dict(
+            placement_id=uuid.uuid4(), variant_id=self.variant.pk, reference_assembly='GRCh38', contig='1',
+            start_pos=1, end_pos=1, coordinate_system='1-based-inclusive', is_canonical=False,
+            normalized=False, created_at=timezone.now(),
+        )
+        columns = ', '.join(connection.ops.quote_name(field) for field in values)
+        placeholders = ', '.join(['%s'] * len(values))
+        for field in values:
+            with self.subTest(null_column=field):
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'INSERT INTO variant_placement ({columns}) VALUES ({placeholders})',
+                                       [None if name == field else value for name, value in values.items()])
+                self.assertEqual(error.exception.__cause__.diag.column_name, field)
+        orphan = self.placement(variant_id=uuid.uuid4())
+        with self.assertRaises(ValidationError) as error:
+            orphan.full_clean()
+        self.assertIn('variant', error.exception.message_dict)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            orphan.save()
+            self.fail('Placement FK must reject orphan references immediately.')
+        first = self.placement()
+        first.save()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            domain.VariantPlacement.objects.bulk_create([self.placement(placement_id=first.pk)])
+        self.assertEqual(domain.VariantPlacement.objects.count(), 1)
+
+    def test_database_and_orm_enforce_varchar_and_fixed_char_limits(self):
+        for field, length in (('reference_assembly', 32), ('contig', 64), ('coordinate_system', 32), ('strand', 1)):
+            with self.subTest(field=field):
+                boundary = self.placement(**{field: 'x' * length})
+                boundary.full_clean()
+                boundary.save()
+                boundary.refresh_from_db()
+                self.assertEqual(getattr(boundary, field), 'x' * length)
+                too_long = self.placement(**{field: 'x' * (length + 1)})
+                with self.assertRaises(ValidationError) as error:
+                    too_long.full_clean()
+                self.assertIn(field, error.exception.message_dict)
+                with self.assertRaises(DataError), transaction.atomic():
+                    too_long.save()
+
+    def test_raw_sql_variant_update_and_delete_cascade_only_its_placements(self):
+        placement = self.placement()
+        placement.save()
+        other = domain.Variant.objects.create(variant_type='synthetic-unrelated')
+        remaining = self.placement(variant_id=other.pk)
+        remaining.save()
+        new_id = uuid.uuid4()
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute('UPDATE variant SET variant_id = %s WHERE variant_id = %s', [new_id, self.variant.pk])
+            placement.refresh_from_db()
+            self.assertEqual(placement.variant_id, new_id)
+            cursor.execute('DELETE FROM variant WHERE variant_id = %s', [new_id])
+            self.assertEqual(list(domain.VariantPlacement.objects.values_list('pk', flat=True)), [remaining.pk])
+
+    def test_orm_variant_delete_cascades_only_its_placements(self):
+        for contig in ('1', '2'):
+            self.placement(contig=contig).save()
+        other = domain.Variant.objects.create(variant_type='synthetic-unrelated')
+        remaining = self.placement(variant_id=other.pk)
+        remaining.save()
+        self.assertEqual(self.variant.placements.count(), 2)
+        self.variant.delete()  # ORM cascade remains supported alongside the physical FK actions.
+        self.assertEqual(list(domain.VariantPlacement.objects.values_list('pk', flat=True)), [remaining.pk])
+        self.assertTrue(domain.Variant.objects.filter(pk=other.pk).exists())
+
+    def test_fk_migration_reverse_and_missing_or_ambiguous_lookup(self):
+        operation = import_module('genetics.migrations.0005_variant_placement').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0005_variant_placement')])
+        actions_sql = ('SELECT confdeltype, confupdtype, condeferrable, condeferred FROM pg_constraint '
+                       "WHERE conrelid = 'variant_placement'::regclass AND conname = 'fk_variant_placement_variant'")
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            operation.database_backwards('genetics', editor, state, state)
+            cursor.execute(actions_sql)
+            self.assertEqual(cursor.fetchall(), [('a', 'a', True, True)])
+            operation.database_forwards('genetics', editor, state, state)
+            cursor.execute(actions_sql)
+            self.assertEqual(cursor.fetchall(), [('c', 'c', False, False)])
+            for case, sql in (
+                ('missing', 'ALTER TABLE variant_placement DROP CONSTRAINT fk_variant_placement_variant'),
+                ('ambiguous', 'ALTER TABLE variant_placement ADD CONSTRAINT duplicate_variant_fk '
+                 'FOREIGN KEY (variant_id) REFERENCES variant (variant_id) DEFERRABLE INITIALLY DEFERRED'),
+            ):
+                with self.subTest(case=case), transaction.atomic():
+                    cursor.execute(sql)
+                    with self.assertRaisesMessage(RuntimeError, 'Expected exactly one FK'):
+                        operation.database_forwards('genetics', editor, state, state)
+                    transaction.set_rollback(True)  # Restore the isolated FK after each intentional lookup failure.
+
+    def test_schema_only_migration_dependency_state_and_fixed_char_deconstruction(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0005_variant_placement')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0004_variant')])
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel', 'RunPython'])
+        self.assertEqual(migration.operations[0].name, 'VariantPlacement')
+        historical = MigrationLoader(connection).project_state([('genetics', '0005_variant_placement')]).apps.get_model(
+            'genetics', 'VariantPlacement',
+        )
+        self.assertEqual(historical._meta.db_table, domain.VariantPlacement._meta.db_table)
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in domain.VariantPlacement._meta.local_fields})
+        self.assertEqual(historical._meta.indexes, domain.VariantPlacement._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.VariantPlacement._meta.constraints)
+        field = domain.VariantPlacement._meta.get_field('strand')
+        self.assertIsInstance(field, domain.FixedCharField)
+        _, path, args, kwargs = field.deconstruct()
+        self.assertEqual(path, 'genetics.models.FixedCharField')
+        rebuilt = domain.FixedCharField(*args, **kwargs)
+        self.assertEqual(rebuilt.deconstruct()[1:], field.deconstruct()[1:])
+        self.assertEqual(rebuilt.db_type(connection), 'char(1)')
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
 
 
 class VariantTests(TestCase):
