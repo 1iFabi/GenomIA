@@ -1,18 +1,22 @@
 import json
+from importlib import import_module
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
+from django.db.migrations.loader import MigrationLoader
 from django.test import TestCase, override_settings
 import uuid
 from rest_framework.test import APIClient
 
 from .jwt_utils import encode_jwt, decode_jwt
-from .models import RevokedToken
+from .models import AppUser, RevokedToken, Role
+from .signals import assign_new_user_client_role
 
 
 @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
@@ -285,6 +289,137 @@ class AuthHttpOnlyCookieTests(TestCase):
         self.assertEqual(me.data["user"]["username"], "ana_handle")
 
 
+class RoleBackfillMigrationTests(TestCase):
+    """Exercise RunPython against the pre-seed historical model state, without schema changes."""
+
+    def run_backfill(self):
+        migration = import_module('accounts.migrations.0004_seed_roles_backfill')
+        historical_apps = MigrationLoader(connection).project_state(
+            [('accounts', '0003_role_appuser')]
+        ).apps
+        with transaction.atomic():
+            migration.Migration.operations[0].code(
+                historical_apps, SimpleNamespace(connection=connection)
+            )
+
+    def legacy_user(self, username, **flags):
+        # Existing users predate the post_save hook; bulk_create skips signals.
+        return User.objects.bulk_create([User(username=username, **flags)])[0]
+
+    def test_seed_backfill_all_users_and_repeat_without_changing_explicit_mapping(self):
+        Role.objects.all().delete()
+        analyst = Role.objects.create(code='ANALISTA', name='Existing analyst')
+        legacy_groups = {code: Group.objects.create(name=code) for code in Role.Code.values}
+        other = Group.objects.create(name='OTHER')
+        users = {
+            code: self.legacy_user(code.lower()) for code in Role.Code.values
+        }
+        for code, user in users.items():
+            user.groups.add(legacy_groups[code])
+        unknown = self.legacy_user('unknown', is_staff=True)
+        unknown.groups.add(other)
+        superuser = self.legacy_user('superuser', is_staff=True, is_superuser=True)
+        explicit = self.legacy_user('explicit')
+        existing = AppUser.objects.create(django_user=explicit, role=analyst)
+
+        self.run_backfill()
+
+        self.assertEqual(set(Role.objects.values_list('code', flat=True)), set(Role.Code.values))
+        self.assertEqual(Role.objects.get(code='ANALISTA').name, 'Existing analyst')
+        for code, user in users.items():
+            self.assertEqual(AppUser.objects.get(django_user=user).role.code, code)
+        for user in (unknown, superuser):
+            self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'CLIENTE')
+        self.assertEqual(AppUser.objects.get(django_user=explicit).pk, existing.pk)
+        self.assertEqual(AppUser.objects.get(django_user=explicit).role_id, analyst.pk)
+        role_ids = dict(Role.objects.values_list('code', 'pk'))
+        mapping_ids = dict(AppUser.objects.values_list('django_user_id', 'pk'))
+
+        self.run_backfill()
+
+        self.assertEqual(dict(Role.objects.values_list('code', 'pk')), role_ids)
+        self.assertEqual(dict(AppUser.objects.values_list('django_user_id', 'pk')), mapping_ids)
+
+    def test_multiple_recognized_groups_abort_and_roll_back_all_seeds_and_mappings(self):
+        Role.objects.all().delete()
+        first = self.legacy_user('first')
+        conflicted = self.legacy_user('conflicted', is_superuser=True, is_staff=True)
+        conflicted.groups.add(Group.objects.create(name='ADMIN'))
+        conflicted.groups.add(Group.objects.create(name='RECEPCION'))
+
+        with self.assertRaisesRegex(RuntimeError, 'multiple recognized role Groups'):
+            self.run_backfill()
+
+        self.assertFalse(Role.objects.exists())
+        self.assertFalse(AppUser.objects.filter(django_user__in=[first, conflicted]).exists())
+
+    def test_existing_mapping_conflicting_with_one_group_reports_error_without_overwrite(self):
+        Role.objects.all().delete()
+        cliente = Role.objects.create(code='CLIENTE', name='Existing client')
+        first = self.legacy_user('first')
+        conflicted = self.legacy_user('conflicted')
+        existing = AppUser.objects.create(django_user=conflicted, role=cliente)
+        conflicted.groups.add(Group.objects.create(name='ADMIN'))
+
+        with self.assertRaisesRegex(RuntimeError, 'AppUser role.*conflicts with legacy Group'):
+            self.run_backfill()
+
+        self.assertEqual(set(Role.objects.values_list('code', flat=True)), {'CLIENTE'})
+        self.assertFalse(AppUser.objects.filter(django_user=first).exists())
+        existing.refresh_from_db()
+        self.assertEqual(existing.role_id, cliente.pk)
+
+    def test_multiple_groups_abort_even_for_user_with_an_existing_mapping(self):
+        mapped = self.legacy_user('mapped')
+        AppUser.objects.create(django_user=mapped, role=Role.objects.get(code='CLIENTE'))
+        mapped.groups.add(Group.objects.create(name='ADMIN'))
+        mapped.groups.add(Group.objects.create(name='ANALISTA'))
+
+        with self.assertRaisesRegex(RuntimeError, 'multiple recognized role Groups'):
+            self.run_backfill()
+        self.assertEqual(AppUser.objects.get(django_user=mapped).role.code, 'CLIENTE')
+
+
+class NewUserRoleAssignmentTests(TestCase):
+    def test_raw_created_user_does_not_query_role_or_app_user(self):
+        with patch('accounts.signals.Role.objects.using') as role_using, \
+                patch('accounts.signals.AppUser.objects.using') as mapping_using:
+            role_using.return_value.get_or_create.return_value = (object(), True)
+            assign_new_user_client_role(
+                sender=User, instance=User(pk=1234, username='fixture-user'),
+                created=True, raw=True, using='default',
+            )
+            role_using.assert_not_called()
+            mapping_using.assert_not_called()
+
+    def test_user_creation_paths_default_to_cliente_regardless_of_flags_or_group(self):
+        group = Group.objects.create(name='ADMIN')
+        ordinary = User.objects.create_user(username='registered')
+        staff = User.objects.create(username='django-admin', is_staff=True)
+        superuser = User.objects.create_superuser(username='django-superuser', password='test-only')
+        superuser.groups.add(group)
+        superuser.save(update_fields=['is_staff'])
+
+        for user in (ordinary, staff, superuser):
+            self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'CLIENTE')
+            self.assertEqual(AppUser.objects.filter(django_user=user).count(), 1)
+
+    def test_missing_client_role_is_recreated_and_save_does_not_override_explicit_role(self):
+        Role.objects.filter(code='CLIENTE').delete()
+        user = User.objects.create_user(username='needs-client-role')
+        self.assertEqual(user.app_user.role.code, 'CLIENTE')
+        self.assertEqual(Role.objects.filter(code='CLIENTE').count(), 1)
+        mapping_id = user.app_user.pk
+        user.app_user.role = Role.objects.get(code='ADMIN')
+        user.app_user.save(update_fields=['role'])
+
+        user.is_staff = True
+        user.save(update_fields=['is_staff'])
+
+        self.assertEqual(AppUser.objects.get(django_user=user).pk, mapping_id)
+        self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'ADMIN')
+
+
 class AppUserMappingTests(TestCase):
     """Additive domain accounts: Django User remains the authentication source."""
 
@@ -313,18 +448,19 @@ class AppUserMappingTests(TestCase):
             for details in constraints.values()
         ))
 
-    def test_local_users_are_not_automatically_mapped(self):
+    def test_local_users_receive_exactly_one_default_mapping(self):
         _, AppUser = self.models()
-        user = get_user_model().objects.create_user(username='unmapped')
-        self.assertFalse(AppUser.objects.filter(django_user=user).exists())
+        user = get_user_model().objects.create_user(username='mapped')
+        self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'CLIENTE')
+        self.assertEqual(AppUser.objects.filter(django_user=user).count(), 1)
 
     def test_two_local_users_can_share_one_role_without_oidc(self):
         Role, AppUser = self.models()
-        role = Role.objects.create(code='CLIENTE', name='Client')
+        role = Role.objects.get(code='CLIENTE')
         first = get_user_model().objects.create_user(username='local-1')
         second = get_user_model().objects.create_user(username='local-2')
 
-        mappings = [AppUser.objects.create(django_user=user, role=role) for user in (first, second)]
+        mappings = [user.app_user for user in (first, second)]
 
         for user, mapping in zip((first, second), mappings):
             self.assertIsInstance(mapping.pk, uuid.UUID)
@@ -341,7 +477,7 @@ class AppUserMappingTests(TestCase):
         self.assertEqual(
             set(Role.Code.values), {'CLIENTE', 'ADMIN', 'ANALISTA', 'RECEPCION'},
         )
-        role = Role.objects.create(code='CLIENTE', name='Client')
+        role = Role.objects.get(code='CLIENTE')
         self.assertIsInstance(role.pk, uuid.UUID)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
@@ -355,9 +491,8 @@ class AppUserMappingTests(TestCase):
 
     def test_user_link_and_role_are_required_and_one_to_one(self):
         Role, AppUser = self.models()
-        role = Role.objects.create(code='CLIENTE', name='Client')
+        role = Role.objects.get(code='CLIENTE')
         user = get_user_model().objects.create_user(username='local-1')
-        AppUser.objects.create(django_user=user, role=role)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 AppUser.objects.create(django_user=user, role=role)
@@ -366,18 +501,22 @@ class AppUserMappingTests(TestCase):
                 AppUser.objects.create(role=role)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                AppUser.objects.create(django_user=get_user_model().objects.create_user(username='local-2'))
+                AppUser.objects.create(django_user=get_user_model().objects.bulk_create([
+                    get_user_model()(username='local-2')
+                ])[0])
 
     def test_oidc_identity_rejects_partial_or_empty_values_on_insert_and_update(self):
         Role, AppUser = self.models()
-        role = Role.objects.create(code='CLIENTE', name='Client')
+        role = Role.objects.get(code='CLIENTE')
         incomplete = [
             (None, 'subject'), ('https://issuer.example', None),
             ('', ''), ('', 'subject'), ('https://issuer.example', ''),
         ]
         for index, (issuer, subject) in enumerate(incomplete):
             with self.subTest(issuer=issuer, subject=subject):
-                user = get_user_model().objects.create_user(username=f'partial-{index}')
+                user = get_user_model().objects.bulk_create([
+                    get_user_model()(username=f'partial-{index}')
+                ])[0]
                 with self.assertRaises(IntegrityError):
                     with transaction.atomic():
                         AppUser.objects.create(
@@ -385,15 +524,17 @@ class AppUserMappingTests(TestCase):
                             oidc_issuer=issuer, oidc_subject=subject,
                         )
         user = get_user_model().objects.create_user(username='local-update')
-        mapping = AppUser.objects.create(django_user=user, role=role)
+        mapping = user.app_user
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 AppUser.objects.filter(pk=mapping.pk).update(oidc_subject='subject')
 
     def test_oidc_identity_is_unique_per_issuer_when_present(self):
         Role, AppUser = self.models()
-        role = Role.objects.create(code='CLIENTE', name='Client')
-        users = [get_user_model().objects.create_user(username=f'oidc-{index}') for index in range(3)]
+        role = Role.objects.get(code='CLIENTE')
+        users = get_user_model().objects.bulk_create([
+            get_user_model()(username=f'oidc-{index}') for index in range(3)
+        ])
         AppUser.objects.create(
             django_user=users[0], role=role,
             oidc_issuer='https://issuer.example', oidc_subject='subject',
