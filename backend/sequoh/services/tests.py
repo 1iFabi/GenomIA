@@ -65,11 +65,15 @@ if __name__ == '__main__':
         sys.exit(bool(failures))
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from importlib import import_module
+from threading import Barrier
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, connection, transaction
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, connection, connections, transaction
 from django.db.migrations.loader import MigrationLoader
 from django.db.models.deletion import PROTECT, ProtectedError
 from django.test import TestCase
@@ -184,3 +188,211 @@ class PurchaseSchemaTests(TestCase):
             constraints = connection.introspection.get_constraints(cursor, 'purchase')
         for name in indexes:
             self.assertTrue(constraints[name]['index'])
+
+
+class ServiceRequestSchemaTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(username='service-client')
+        cls.other_user = get_user_model().objects.create_user(username='other-service-client')
+        cls.purchase = domain.Purchase.objects.create(
+            owner=cls.user.app_user, status=domain.PurchaseStatus.objects.get(code='PAID'),
+        )
+        cls.waiting = domain.ServiceStatus.objects.get(code='WAITING_SAMPLE')
+        from participants.models import Participant
+        cls.participant = Participant.objects.create(user=cls.user, participant_code='service-owned')
+        cls.other_participant = Participant.objects.create(
+            user=cls.other_user, participant_code='service-other',
+        )
+
+    def test_sql_columns_required_keys_defaults_and_catalog_references(self):
+        request = domain.ServiceRequest.objects.create(purchase=self.purchase, status=self.waiting)
+        self.assertEqual((request._meta.db_table, request._meta.pk.name),
+                         ('service_request', 'service_request_id'))
+        self.assertIsInstance(request.pk, uuid.UUID)
+        self.assertEqual({f.column for f in request._meta.local_fields}, {
+            'service_request_id', 'purchase_id', 'participant_id', 'service_status_id',
+            'created_at', 'started_at', 'completed_at',
+        })
+        self.assertIsNone(request.participant_id)
+        self.assertIsNone(request.completed_at)
+        self.assertTrue(timezone.is_aware(request.created_at))
+        self.assertTrue(timezone.is_aware(request.started_at))
+        self.assertEqual(request.status.code, 'WAITING_SAMPLE')
+        log = domain.ServiceStatusLog.objects.create(
+            request=request, status=self.waiting, actor=self.user.app_user,
+        )
+        self.assertEqual((log._meta.db_table, log._meta.pk.name),
+                         ('service_status_log', 'service_status_log_id'))
+        self.assertIsInstance(log.pk, uuid.UUID)
+        self.assertEqual({f.column for f in log._meta.local_fields}, {
+            'service_status_log_id', 'service_request_id', 'service_status_id',
+            'user_id', 'changed_at', 'comment',
+        })
+        self.assertIsNone(log.comment)
+        self.assertTrue(timezone.is_aware(log.changed_at))
+        self.assertEqual(log.actor.django_user_id, self.user.pk)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                domain.ServiceStatusLog.objects.create(request=request, status=self.waiting)
+        other_purchase = domain.Purchase.objects.create(owner=self.other_user.app_user)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                domain.ServiceRequest.objects.create(purchase=other_purchase)
+        for model, required in (
+            (domain.ServiceRequest, ('purchase', 'status', 'created_at', 'started_at')),
+            (domain.ServiceStatusLog, ('request', 'status', 'actor', 'changed_at')),
+        ):
+            for field in required:
+                self.assertFalse(model._meta.get_field(field).null)
+        for model, optional in (
+            (domain.ServiceRequest, ('participant', 'completed_at')),
+            (domain.ServiceStatusLog, ('comment',)),
+        ):
+            for field in optional:
+                self.assertTrue(model._meta.get_field(field).null)
+        self.assertEqual(domain.ServiceStatusLog._meta.get_field('actor').remote_field.model._meta.label,
+                         'accounts.AppUser')
+
+    def test_owned_participant_optional_but_cross_user_creation_and_reassignment_rejected(self):
+        with self.assertRaises(ValidationError):
+            domain.ServiceRequest.objects.create(
+                purchase=self.purchase, participant=self.other_participant, status=self.waiting,
+            )
+        request = domain.ServiceRequest.objects.create(
+            purchase=self.purchase, participant=self.participant, status=self.waiting,
+        )
+        request.participant = self.other_participant
+        with self.assertRaises(ValidationError):
+            request.clean()
+        with self.assertRaises(ValidationError):
+            request.save()
+        request.refresh_from_db()
+        self.assertEqual(request.participant_id, self.participant.pk)
+        another_purchase = domain.Purchase.objects.create(owner=self.other_user.app_user)
+        request.purchase = another_purchase
+        with self.assertRaises(ValidationError):
+            request.save()
+        request.refresh_from_db()
+        self.assertEqual(request.purchase_id, self.purchase.pk)
+
+    def test_multiple_purchases_one_owner_but_unique_purchase_request(self):
+        first = domain.ServiceRequest.objects.create(purchase=self.purchase, status=self.waiting)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                domain.ServiceRequest.objects.create(purchase=self.purchase, status=self.waiting)
+        second_purchase = domain.Purchase.objects.create(
+            owner=self.user.app_user, status=domain.PurchaseStatus.objects.get(code='PAID'),
+        )
+        second = domain.ServiceRequest.objects.create(purchase=second_purchase, status=self.waiting)
+        self.assertNotEqual(first.pk, second.pk)
+        self.assertEqual(domain.ServiceRequest.objects.filter(purchase__owner=self.user.app_user).count(), 2)
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, 'service_request')
+        self.assertTrue(any(info['unique'] and info['columns'] == ['purchase_id']
+                            for info in constraints.values()))
+
+    def test_completed_at_is_nullable_and_cannot_precede_started_at_at_database(self):
+        start = timezone.now()
+        request = domain.ServiceRequest.objects.create(
+            purchase=self.purchase, status=self.waiting, started_at=start,
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                domain.ServiceRequest.objects.filter(pk=request.pk).update(
+                    completed_at=start - timedelta(seconds=1),
+                )
+        request.completed_at = start + timedelta(seconds=1)
+        request.save()
+        self.assertEqual(domain.ServiceRequest.objects.get(pk=request.pk).completed_at,
+                         start + timedelta(seconds=1))
+
+    def test_protects_purchase_participant_status_actor_and_logged_history(self):
+        request = domain.ServiceRequest.objects.create(
+            purchase=self.purchase, participant=self.participant, status=self.waiting,
+        )
+        log = domain.ServiceStatusLog.objects.create(
+            request=request, status=self.waiting, actor=self.other_user.app_user,
+            comment='Received by staff',
+        )
+        for field in (domain.ServiceRequest._meta.get_field('purchase'),
+                      domain.ServiceRequest._meta.get_field('participant'),
+                      domain.ServiceRequest._meta.get_field('status'),
+                      domain.ServiceStatusLog._meta.get_field('request'),
+                      domain.ServiceStatusLog._meta.get_field('status'),
+                      domain.ServiceStatusLog._meta.get_field('actor')):
+            self.assertEqual(field.remote_field.on_delete, PROTECT)
+        for item in (self.purchase, self.participant, self.waiting,
+                     self.other_user.app_user, self.other_user, request):
+            with self.assertRaises(ProtectedError):
+                item.delete()
+        self.assertTrue(domain.ServiceStatusLog.objects.filter(pk=log.pk).exists())
+
+    def test_migration_indexes_and_no_transition_rule_in_schema(self):
+        migration = import_module('services.migrations.0003_service_request_status_log').Migration
+        self.assertIn(('services', '0002_seed_statuses'), migration.dependencies)
+        state = MigrationLoader(connection).project_state([('services', '0003_service_request_status_log')])
+        for name, table, indexes in (
+            ('ServiceRequest', 'service_request', {'service_req_created_idx': ['-created_at']}),
+            ('ServiceStatusLog', 'service_status_log',
+             {'service_log_request_time_idx': ['request', '-changed_at']}),
+        ):
+            model = state.apps.get_model('services', name)
+            self.assertEqual(model._meta.db_table, table)
+            self.assertEqual({i.name: i.fields for i in model._meta.indexes}, indexes)
+            with connection.cursor() as cursor:
+                constraints = connection.introspection.get_constraints(cursor, table)
+            for index in indexes:
+                self.assertTrue(constraints[index]['index'])
+        request = domain.ServiceRequest.objects.create(purchase=self.purchase, status=self.waiting)
+        completed = domain.ServiceStatus.objects.get(code='COMPLETED')
+        log = domain.ServiceStatusLog.objects.create(
+            request=request, status=completed, actor=self.user.app_user,
+        )
+        self.assertEqual(log.status, completed)  # Transition rules belong to the later workflow.
+
+
+    def test_database_unique_constraint_serializes_competing_inserts(self):
+        # Thread-created fixtures commit outside TestCase's transaction; remove them in a
+        # worker so this test neither flushes migration seeds nor leaks committed rows.
+        def create_purchase():
+            try:
+                user = get_user_model().objects.create_user(username='concurrent-service-client')
+                purchase = domain.Purchase.objects.create(
+                    owner=user.app_user, status=domain.PurchaseStatus.objects.get(code='PAID'),
+                )
+                status = domain.ServiceStatus.objects.get(code='WAITING_SAMPLE')
+                return purchase.pk, user.pk, status.pk
+            finally:
+                connections.close_all()
+
+        def remove_purchase(purchase_id, user_id):
+            try:
+                domain.ServiceRequest.objects.filter(purchase_id=purchase_id).delete()
+                domain.Purchase.objects.filter(pk=purchase_id).delete()
+                get_user_model().objects.filter(pk=user_id).delete()
+            finally:
+                connections.close_all()
+
+        gate = Barrier(2)
+
+        def insert_request(purchase_id, status_id):
+            try:
+                gate.wait(timeout=10)
+                try:
+                    with transaction.atomic():
+                        domain.ServiceRequest.objects.create(purchase_id=purchase_id, status_id=status_id)
+                except IntegrityError:
+                    return 'duplicate'
+                return 'created'
+            finally:
+                connections.close_all()  # Threads must release sessions before test DB teardown.
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            purchase_id, user_id, status_id = pool.submit(create_purchase).result()
+            try:
+                results = list(pool.map(lambda _: insert_request(purchase_id, status_id), range(2)))
+                self.assertEqual(sorted(results), ['created', 'duplicate'])
+                self.assertEqual(domain.ServiceRequest.objects.filter(purchase_id=purchase_id).count(), 1)
+            finally:
+                pool.submit(remove_purchase, purchase_id, user_id).result()
