@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     'accounts',
     'profiles',
     'participants',
+    'services',
     'reception',
     'genetics',
     'reports',
