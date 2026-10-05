@@ -3,14 +3,19 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.db.models import Case, When, IntegerField
 from accounts.authentication import JWTAuthentication
 from accounts.csrf import CSRFDoubleSubmitMixin
 from .models import SNP, UserSNP
 from profiles.models import Profile, ServiceStatus
 from accounts.roles import is_admin_or_analyst
+from accounts.models import AppUser
+from services.legacy_profile import get_paid_legacy_service_projections
+from services.models import Purchase
 import logging
 import json
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -203,41 +208,61 @@ class DeleteGeneticFileAPIView(CSRFDoubleSubmitMixin, APIView):
             )
 
         try:
-            # Obtener datos del body
+            # Reject malformed bodies and IDs before any target lookup or integer coercion.
             try:
                 data = json.loads(request.body or '{}')
-            except json.JSONDecodeError:
-                data = {}
-
+            except (ValueError, RecursionError):
+                return Response({"error": "userId inválido"}, status=status.HTTP_400_BAD_REQUEST)
+            if not isinstance(data, dict):
+                return Response({"error": "userId inválido"}, status=status.HTTP_400_BAD_REQUEST)
             user_id = data.get('userId')
-
-            if not user_id:
+            if user_id is None:
                 return Response(
                     {"error": "userId es obligatorio"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            target_id = user_id
+            if type(target_id) is str:
+                if len(target_id) > 19 or not re.fullmatch(r'[1-9][0-9]*', target_id):
+                    return Response({"error": "userId inválido"}, status=status.HTTP_400_BAD_REQUEST)
+                target_id = int(target_id)
+            if type(target_id) is not int or not 0 < target_id <= 2**63 - 1:
+                return Response({"error": "userId inválido"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Verificar que el usuario exista
             try:
-                target_user = User.objects.get(id=user_id)
+                target_user = User.objects.get(id=target_id)
             except User.DoesNotExist:
                 return Response(
                     {"error": "Usuario no encontrado"},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Eliminar todas las asociaciones user-snp del usuario
-            deleted_count, _ = UserSNP.objects.filter(user=target_user).delete()
-            logger.info(f"Eliminadas {deleted_count} variantes genéticas del usuario {target_user.email}")
+            with transaction.atomic():
+                # Serialize with payment before inspecting PAID ownership or deleting legacy data.
+                AppUser.objects.select_for_update(of=('self',)).filter(django_user_id=target_user.pk).first()
+                if Purchase.objects.filter(owner__django_user_id=target_user.pk, status__code='PAID').exists():
+                    return Response(
+                        {"error": "Selecciona un servicio pagado específico"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
 
-            # Actualizar el service_status a NO_PURCHASED
-            try:
-                profile = target_user.profile
-                profile.service_status = ServiceStatus.NO_PURCHASED
-                profile.save()
-                logger.info(f"Service status actualizado a NO_PURCHASED para usuario {target_user.email}")
-            except Profile.DoesNotExist:
-                logger.warning(f"El usuario {target_user.email} no tiene perfil")
+                # Eliminar todas las asociaciones user-snp del usuario
+                deleted_count, _ = UserSNP.objects.filter(user=target_user).delete()
+                logger.info(f"Eliminadas {deleted_count} variantes genéticas del usuario {target_user.email}")
+
+                # Actualizar el service_status a NO_PURCHASED
+                try:
+                    profile = target_user.profile
+                    profile.service_status = ServiceStatus.NO_PURCHASED
+                    profile.report_filename = None
+                    profile.report_uploaded_at = None
+                    profile.save(update_fields=[
+                        'service_status', 'service_updated_at', 'report_filename', 'report_uploaded_at',
+                    ])
+                    logger.info(f"Service status actualizado a NO_PURCHASED para usuario {target_user.email}")
+                except Profile.DoesNotExist:
+                    logger.warning(f"El usuario {target_user.email} no tiene perfil")
 
             return Response({
                 "success": True,
@@ -255,7 +280,7 @@ class DeleteGeneticFileAPIView(CSRFDoubleSubmitMixin, APIView):
 
 
 class GetUserReportStatusAPIView(APIView):
-    """Vista para obtener el estado de reportes de un usuario"""
+    """Legacy report summary; snp_count is historical, not paid-service report evidence."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -277,20 +302,25 @@ class GetUserReportStatusAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Verificar si tiene UserSNP
-            has_snps = UserSNP.objects.filter(user=target_user).exists()
+            # UserSNP has no service identity: retain only its raw historical count for paid owners.
             snp_count = UserSNP.objects.filter(user=target_user).count()
-            
-            # Obtener el service_status y datos del archivo
-            try:
-                profile = target_user.profile
-                service_status = profile.service_status
-                report_filename = profile.report_filename
-                report_uploaded_at = profile.report_uploaded_at.strftime("%Y-%m-%d") if profile.report_uploaded_at else None
-            except Profile.DoesNotExist:
-                service_status = ServiceStatus.NO_PURCHASED
+            paid_projection = get_paid_legacy_service_projections([target_user.pk]).get(target_user.pk)
+            if paid_projection is not None:
+                service_status = paid_projection.service_status
+                has_snps = False
                 report_filename = None
                 report_uploaded_at = None
+            else:
+                has_snps = snp_count > 0
+                try:
+                    profile = target_user.profile
+                    service_status = profile.service_status
+                    report_filename = profile.report_filename
+                    report_uploaded_at = profile.report_uploaded_at.strftime("%Y-%m-%d") if profile.report_uploaded_at else None
+                except Profile.DoesNotExist:
+                    service_status = ServiceStatus.NO_PURCHASED
+                    report_filename = None
+                    report_uploaded_at = None
 
             return Response({
                 "user_id": user_id,
