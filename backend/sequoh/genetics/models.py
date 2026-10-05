@@ -32,6 +32,22 @@ class DataRelease(models.Model):
         constraints = [models.UniqueConstraint(fields=['name', 'version'], name='uq_data_release_name_version')]
 
 
+class Variant(models.Model):
+    """Stable variant concept independent of genomic placements."""
+
+    variant_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant_type = models.CharField(max_length=32)
+    canonical_name = models.CharField(max_length=255, null=True, blank=True)
+    vrs_id = models.CharField(max_length=255, null=True, blank=True, unique=True)
+    status = models.CharField(max_length=32, default='active', db_default='active')
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'variant'
+        indexes = [models.Index(fields=['variant_type'], name='idx_variant_type')]
+
+
 class Analysis(models.Model):
     """Pipeline provenance with optional participant, sample, request and release links."""
 

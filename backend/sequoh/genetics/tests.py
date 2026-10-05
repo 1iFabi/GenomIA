@@ -9,7 +9,7 @@ from django.contrib.auth.models import Group, User
 from django.contrib.postgres.functions import TransactionNow
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.db import IntegrityError, connection, transaction
+from django.db import DataError, IntegrityError, connection, transaction
 from django.db.migrations.loader import MigrationLoader
 from django.db.models.deletion import PROTECT, ProtectedError
 from django.test import TestCase
@@ -28,6 +28,141 @@ from services.models import (
     Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
 )
+
+
+class VariantTests(TestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+
+    def test_minimal_variant_has_orm_defaults_and_nullable_fields(self):
+        self.assertTrue(hasattr(domain, 'Variant'), 'The stable Variant concept is missing.')
+        variant = domain.Variant(variant_type='synthetic-type')
+        variant.full_clean()
+        variant.save()
+        variant.refresh_from_db()
+        self.assertIsInstance(variant.pk, uuid.UUID)
+        self.assertEqual(variant.pk.version, 4)
+        self.assertEqual(variant.variant_type, 'synthetic-type')
+        self.assertEqual(variant.status, 'active')
+        self.assertTrue(timezone.is_aware(variant.created_at))
+        for field in ('canonical_name', 'vrs_id', 'metadata'):
+            self.assertIsNone(getattr(variant, field))
+
+    def test_exact_seven_physical_columns_defaults_primary_key_unique_and_index(self):
+        columns = {
+            'variant_id': ('uuid', None, 'NO', None),
+            'variant_type': ('character varying', 32, 'NO', None),
+            'canonical_name': ('character varying', 255, 'YES', None),
+            'vrs_id': ('character varying', 255, 'YES', None),
+            'status': ('character varying', 32, 'NO', "'active'::character varying"),
+            'metadata': ('jsonb', None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        model = domain.Variant
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('variant', 'variant_id'))
+        self.assertEqual({field.column for field in model._meta.local_fields}, set(columns))
+        self.assertIs(model._meta.pk.default, uuid.uuid4)
+        self.assertFalse(model._meta.pk.editable)
+        for field in model._meta.local_fields:
+            _, length, nullable, _ = columns[field.column]
+            self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+            if length is not None:
+                self.assertEqual(field.max_length, length)
+        status = model._meta.get_field('status')
+        self.assertEqual((status.default, status.db_default), ('active', 'active'))
+        created_at = model._meta.get_field('created_at')
+        self.assertIs(created_at.default, timezone.now)
+        self.assertIsInstance(created_at.db_default, TransactionNow)
+        self.assertTrue(model._meta.get_field('vrs_id').unique)
+        for field in ('variant_type', 'status'):
+            self.assertFalse(model._meta.get_field(field).choices)
+        self.assertEqual({index.name: index.fields for index in model._meta.indexes}, {
+            'idx_variant_type': ['variant_type'],
+        })
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable, column_default '
+                           "FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'variant'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'variant')
+        self.assertEqual([info['columns'] for info in constraints.values() if info['primary_key']], [['variant_id']])
+        self.assertTrue(any(info['unique'] and info['columns'] == ['vrs_id'] for info in constraints.values()))
+        self.assertFalse(any(info['foreign_key'] for info in constraints.values()))
+        index = constraints['idx_variant_type']
+        self.assertTrue(index['index'])
+        self.assertFalse(index['unique'])
+        self.assertEqual(index['columns'], ['variant_type'])
+
+    def test_optional_metadata_and_explicit_values_round_trip_without_legacy_side_effects(self):
+        legacy = (SNP, UserSNP, domain.Analysis, domain.DataRelease)
+        before = {model: model.objects.count() for model in legacy}
+        values = dict(
+            variant_type='synthetic-structural', canonical_name='Synthetic concept',
+            vrs_id='ga4gh:VA.synthetic-round-trip', status='custom-status',
+            metadata={'tags': ['synthetic'], 'details': {'count': 2}}, created_at=timezone.now(),
+        )
+        variant = domain.Variant(**values)
+        variant.full_clean()
+        variant.save()
+        variant.refresh_from_db()
+        self.assertEqual({field: getattr(variant, field) for field in values}, values)
+        self.assertEqual({model: model.objects.count() for model in legacy}, before)
+
+    def test_database_rejects_duplicate_vrs_and_primary_key_but_allows_multiple_null_vrs(self):
+        first = domain.Variant.objects.create(variant_type='synthetic', vrs_id='ga4gh:VA.synthetic-one')
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            domain.Variant.objects.create(variant_type='different-type', vrs_id=first.vrs_id)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            domain.Variant.objects.create(variant_id=first.pk, variant_type='different-type')
+        domain.Variant.objects.create(variant_type='synthetic', vrs_id='ga4gh:VA.synthetic-two')
+        for _ in range(2):
+            variant = domain.Variant(variant_type='synthetic', canonical_name='Repeated concept', vrs_id=None)
+            variant.full_clean()
+            variant.save()
+        self.assertEqual(domain.Variant.objects.count(), 4)
+        self.assertEqual(domain.Variant.objects.filter(vrs_id__isnull=True).count(), 2)
+
+    def test_raw_sql_minimal_insert_uses_active_and_transaction_timestamp_defaults(self):
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO variant (variant_id, variant_type) VALUES (%s, %s) '
+                           'RETURNING canonical_name, vrs_id, status, metadata, created_at, transaction_timestamp()',
+                           [uuid.uuid4(), 'synthetic-sql'])
+            name, vrs_id, status, metadata, created_at, database_now = cursor.fetchone()
+        self.assertEqual((name, vrs_id, metadata), (None, None, None))
+        self.assertEqual(status, 'active')
+        self.assertTrue(timezone.is_aware(created_at))
+        self.assertEqual(created_at, database_now)
+
+    def test_database_required_columns_and_varchar_limits_are_enforced(self):
+        values = dict(variant_id=uuid.uuid4(), variant_type='synthetic', status='active', created_at=timezone.now())
+        for field in values:
+            with self.subTest(null_field=field), self.assertRaises(IntegrityError), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('INSERT INTO variant (variant_id, variant_type, status, created_at) '
+                                   'VALUES (%s, %s, %s, %s)',
+                                   [None if name == field else value for name, value in values.items()])
+        for field, length in (('variant_type', 32), ('status', 32), ('canonical_name', 255), ('vrs_id', 255)):
+            variant = domain.Variant(**(dict(variant_type='synthetic') | {field: 'x' * (length + 1)}))
+            with self.subTest(long_field=field):
+                with self.assertRaises(ValidationError) as error:
+                    variant.full_clean()
+                self.assertIn(field, error.exception.message_dict)
+                with self.assertRaises(DataError), transaction.atomic():
+                    variant.save()
+
+    def test_schema_only_migration_dependency_and_state_match_current_model(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0004_variant')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0003_data_release_analysis_release')])
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel'])
+        self.assertEqual(migration.operations[0].name, 'Variant')
+        historical = MigrationLoader(connection).project_state([('genetics', '0004_variant')]).apps.get_model('genetics', 'Variant')
+        self.assertEqual(historical._meta.db_table, domain.Variant._meta.db_table)
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in domain.Variant._meta.local_fields})
+        self.assertEqual(historical._meta.indexes, domain.Variant._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.Variant._meta.constraints)
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
 
 
 class DataReleaseTests(TestCase):
