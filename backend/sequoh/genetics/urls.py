@@ -9,6 +9,7 @@ from .biometrics_views import BiometricsAPIView
 from .biomarkers_views import BiomarkersAPIView
 from .pharmacogenetics_views import PharmacogeneticsAPIView
 from .upload_views import UploadGeneticFileAPIView, DeleteGeneticFileAPIView, GetUserReportStatusAPIView
+from .service_result_views import SyntheticServiceListAPIView, SyntheticServiceResultsAPIView
 
 urlpatterns = [
     # Genética
@@ -26,4 +27,9 @@ urlpatterns = [
     path('ingest/upload-genetic-file/', UploadGeneticFileAPIView.as_view(), name='api_upload_genetic_file'),
     path('ingest/delete-genetic-file/', DeleteGeneticFileAPIView.as_view(), name='api_delete_genetic_file'),
     path('ingest/user-report-status/<int:user_id>/', GetUserReportStatusAPIView.as_view(), name='api_user_report_status'),
+
+    # Local-only bundled synthetic v1 reads; no legacy projections or counters.
+    path('genomics/v1/services/', SyntheticServiceListAPIView.as_view(), name='api_genomics_v1_services'),
+    path('genomics/v1/services/<str:service_request_id>/results/',
+         SyntheticServiceResultsAPIView.as_view(), name='api_genomics_v1_service_results'),
 ]

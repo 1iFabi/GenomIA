@@ -7,7 +7,7 @@ from datetime import timedelta
 from decimal import Decimal
 from importlib import import_module, reload
 from threading import Barrier
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
@@ -20,13 +20,15 @@ from django.db.migrations.loader import MigrationLoader
 from django.db.models.deletion import CASCADE, PROTECT, RESTRICT, SET_NULL, ProtectedError, RestrictedError
 from django.test import TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
+from django.urls import resolve
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from accounts.jwt_utils import encode_jwt
-from accounts.models import AppUser
+from accounts.models import AppUser, Role
 from accounts.roles import grant_admin_role, grant_analyst_role, grant_reception_role
-from genetics import models as domain
+from genetics import models as domain, synthetic_import as bundle
+from participants.models import Participant
 from genetics.models import SNP, UserSNP
 from genetics.upload_views import UploadGeneticFileAPIView
 from profiles.models import Profile, ServiceStatus
@@ -34,6 +36,411 @@ from services.models import (
     Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
 )
+
+
+class SyntheticServiceResultReadTests(APITestCase):
+    list_url = '/api/genomics/v1/services/'
+
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        environment = patch.dict(os.environ, {
+            'ENVIRONMENT': 'development', 'RENDER': '',
+            'RENDER_EXTERNAL_HOSTNAME': '', 'DATABASE_URL': '',
+        })
+        environment.start()
+        self.addCleanup(environment.stop)
+        debug = self.settings(DEBUG=True)
+        debug.enable()
+        self.addCleanup(debug.disable)
+        self.user = User.objects.create_user(username='synthetic-read-owner')
+        self.other = User.objects.create_user(username='synthetic-read-other')
+        self.receipt = bundle.import_synthetic_genomics(user_id=self.user.pk)
+        self.other_receipt = bundle.import_synthetic_genomics(user_id=self.other.pk)
+        self.request = ServiceRequest.objects.get(pk=self.receipt.service_request_id)
+        self.purchase = self.request.purchase
+        self.participant = self.request.participant
+        self.sample = Sample.objects.get(pk=self.receipt.sample_id)
+        self.result = domain.AnalysisResult.objects.get(sample=self.sample, module=bundle.MODULES[0][0])
+        self.analysis = self.result.analysis
+        self.release = self.result.release
+        self.other_sample = Sample.objects.get(pk=self.other_receipt.sample_id)
+        self.other_analysis = domain.Analysis.objects.get(sample=self.other_sample, module=self.analysis.module)
+        self.authenticate(self.user)
+
+    def authenticate(self, user):
+        self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
+
+    def detail_url(self, identifier=None):
+        return f'{self.list_url}{identifier or self.receipt.service_request_id}/results/'
+
+    def assert_response(self, response, status, body):
+        self.assertEqual(response.status_code, status)
+        self.assertEqual(response['Content-Type'], 'application/json')
+        self.assertEqual(response.json(), body)
+
+    def assert_hidden(self):
+        self.assert_response(self.client.get(self.detail_url()), 404, {'detail': 'Not found.'})
+        self.assert_response(self.client.get(self.list_url), 200, {'services': []})
+
+    def summary(self, receipt=None):
+        receipt = receipt or self.receipt
+        sample = Sample.objects.get(pk=receipt.sample_id)
+        return {
+            'service_request_id': str(receipt.service_request_id), 'sample_id': str(receipt.sample_id),
+            'sample_code': sample.sample_code, 'release_version': bundle.DEMO_VERSION,
+            'synthetic': True, 'non_clinical': True, 'disclaimer': bundle.DISCLAIMER,
+        }
+
+    def state(self):
+        return [list(model.objects.order_by('pk').values()) for model in (
+            User, AppUser, Participant, Profile, SNP, UserSNP, Purchase, ServiceRequest,
+            ServiceStatusLog, Sample, domain.DataRelease, domain.Analysis, domain.AnalysisResult,
+        )]
+
+    def test_owner_gets_exact_owned_list_and_six_raw_nonclinical_module_results_without_writes(self):
+        before = self.state()
+        expected_results = [{
+            'module': module, 'result_type': 'synthetic_placeholder',
+            'value_code': 'SYNTHETIC_NOT_EVALUATED', 'value_text': f'{label}. {bundle.DISCLAIMER}',
+            'payload': {
+                'demo_id': bundle.DEMO_NAME, 'demo_version': bundle.DEMO_VERSION,
+                'synthetic': True, 'non_clinical': True, 'clinically_reviewed': False,
+                'disclaimer': bundle.DISCLAIMER, 'module': module, 'label': label,
+                'state': 'not_evaluated',
+                'rows': [{'label': label, 'state': 'not_evaluated', 'value': None}],
+            },
+        } for module, label in bundle.MODULES]
+        expected = self.summary()
+        with CaptureQueriesContext(connection) as queries:
+            self.assert_response(self.client.get(self.list_url), 200, {'services': [expected]})
+            self.assert_response(self.client.get(self.detail_url()), 200, expected | {'results': expected_results})
+        self.assertFalse(any(query['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))
+                             for query in queries.captured_queries))
+        self.assertFalse(any('"genotype"' in query['sql'] or 'COUNT(' in query['sql'].upper()
+                             for query in queries.captured_queries))
+        self.assertEqual(self.state(), before)
+
+    def test_responses_never_include_counters_legacy_metrics_or_participant_account_identifiers(self):
+        forbidden = {
+            'count', 'user_id', 'userId', 'owner_id', 'account_id', 'participant_id', 'participant_code',
+            'purchase_id', 'import_id', 'manifest_checksum', 'genotype', 'genotipo', 'rsid',
+            'percentage', 'risk_score', 'nivel_riesgo', 'magnitud_efecto', 'total_variants', 'snp_count',
+        }
+
+        def check(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    self.assertNotIn(key, forbidden)
+                    self.assertFalse(key.startswith('total_') or 'count' in key.lower(), key)
+                    check(item)
+            elif isinstance(value, list):
+                for item in value:
+                    check(item)
+
+        for path in (self.list_url, self.detail_url()):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            check(response.json())
+
+    def test_unauthenticated_gets_are_denied_without_domain_queries(self):
+        self.client.cookies.clear()
+        for path in (self.list_url, self.detail_url()):
+            with self.subTest(path=path), self.assertNumQueries(0):
+                self.assertIn(self.client.get(path).status_code, (401, 403))
+
+    def test_other_owner_missing_and_malformed_identifiers_are_indistinguishable_even_with_staff_flags(self):
+        self.other.is_staff = self.other.is_superuser = True
+        self.other.save(update_fields=['is_staff', 'is_superuser'])
+        self.other.groups.add(Group.objects.get_or_create(name='ADMIN')[0])
+        self.authenticate(self.other)
+        for identifier in (self.receipt.service_request_id, uuid.uuid4(), 'not-a-uuid', '-1'):
+            self.assert_response(self.client.get(self.detail_url(identifier)), 404, {'detail': 'Not found.'})
+        self.assert_response(self.client.get(self.list_url), 200, {'services': [self.summary(self.other_receipt)]})
+        for grant in (grant_admin_role, grant_analyst_role, grant_reception_role):
+            with self.subTest(role=grant.__name__):
+                grant(self.other)
+                for identifier in (self.receipt.service_request_id, self.other_receipt.service_request_id, uuid.uuid4()):
+                    self.assert_response(self.client.get(self.detail_url(identifier)), 404, {'detail': 'Not found.'})
+                self.assert_response(self.client.get(self.list_url), 200, {'services': []})
+
+    def test_active_existing_client_mapping_is_required_and_never_created_or_repaired(self):
+        before = self.state()
+        unmapped = User.objects.bulk_create([User(username='synthetic-read-unmapped')])[0]
+        self.client.force_authenticate(user=unmapped)
+        self.assert_hidden()
+        self.assertFalse(AppUser.objects.filter(django_user=unmapped).exists())
+        self.client.force_authenticate(user=self.user)
+        for changes in ({'is_active': False},):
+            with transaction.atomic():
+                User.objects.filter(pk=self.user.pk).update(**changes)
+                self.assert_hidden()  # Even a stale authenticated instance cannot authorize reads.
+                transaction.set_rollback(True)
+        for code in ('ADMIN', 'ANALISTA', 'RECEPCION'):
+            with self.subTest(role=code), transaction.atomic():
+                AppUser.objects.filter(django_user=self.user).update(role=Role.objects.get(code=code))
+                self.assert_hidden()
+                transaction.set_rollback(True)
+        User.objects.filter(pk=unmapped.pk).delete()
+        self.assertEqual(self.state(), before)
+
+    def test_an_eligible_owner_without_a_bundle_gets_empty_list_and_generic_detail_404(self):
+        user = User.objects.create_user(username='synthetic-read-empty')
+        self.authenticate(user)
+        self.assert_hidden()
+
+    def test_list_ignores_unrelated_paid_services_and_query_parameters_cannot_choose_an_owner(self):
+        ServiceRequest.objects.create(
+            purchase=Purchase.objects.create(owner=self.user.app_user, status=self.purchase.status),
+            participant=self.participant, status=self.request.status,
+        )
+        query = f'?user_id={self.other.pk}&participant_id={self.other_sample.participant_id}'
+        expected = self.summary()
+        self.assert_response(self.client.get(self.list_url + query), 200, {'services': [expected]})
+        response = self.client.get(self.detail_url() + query)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['service_request_id'], str(self.receipt.service_request_id))
+
+    def test_existing_nonsynthetic_participant_is_supported_without_disclosing_or_rewriting_it(self):
+        user = User.objects.create_user(username='synthetic-read-existing-participant')
+        participant = Participant.objects.create(
+            user=user, participant_code='existing-read-participant', metadata=['existing'],
+            consent_status='withdrawn', enrollment_status='inactive',
+        )
+        receipt = bundle.import_synthetic_genomics(user_id=user.pk)
+        before = self.state()
+        self.authenticate(user)
+        self.assert_response(self.client.get(self.list_url), 200, {'services': [self.summary(receipt)]})
+        response = self.client.get(self.detail_url(receipt.service_request_id))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(str(participant.pk), response.content.decode())
+        self.assertNotIn(participant.participant_code, response.content.decode())
+        self.assertEqual(self.state(), before)
+
+    def test_both_endpoints_use_the_importer_guard_before_any_domain_query(self):
+        self.client.force_authenticate(user=self.user)
+        with patch.object(bundle, '_require_local_development', side_effect=CommandError(bundle.LOCAL_ONLY)) as guard:
+            for path in (self.list_url, self.detail_url()):
+                with self.assertNumQueries(0):
+                    self.assert_response(self.client.get(path), 404, {'detail': 'Not found.'})
+            self.assertEqual(guard.call_count, 2)
+        with patch.object(bundle, '_require_local_development', wraps=bundle._require_local_development) as guard:
+            for path in (self.list_url, self.detail_url()):
+                with CaptureQueriesContext(connection) as queries:
+                    self.assertEqual(self.client.get(path).status_code, 200)
+                self.assertTrue(queries.captured_queries[0]['sql'].startswith('SELECT current_database()'))
+            self.assertEqual(guard.call_count, 2)
+
+    def test_disabled_environment_returns_generic_404_without_domain_queries(self):
+        self.client.force_authenticate(user=self.user)
+        for environment in ('', 'production', 'staging', 'test', 'dev', 'Development'):
+            with self.subTest(environment=environment), patch.dict(os.environ, {'ENVIRONMENT': environment}):
+                for path in (self.list_url, self.detail_url()):
+                    with self.assertNumQueries(0):
+                        self.assert_response(self.client.get(path), 404, {'detail': 'Not found.'})
+        with patch.dict(os.environ):
+            os.environ.pop('ENVIRONMENT')
+            with self.assertNumQueries(0):
+                self.assert_response(self.client.get(self.list_url), 404, {'detail': 'Not found.'})
+        for options in ({'DEBUG': False}, {'DEBUG': 1}, {'DATABASE_ROUTERS': [object()]}):
+            with self.subTest(settings=options), self.settings(**options):
+                for path in (self.list_url, self.detail_url()):
+                    with self.assertNumQueries(0):
+                        self.assert_response(self.client.get(path), 404, {'detail': 'Not found.'})
+        for key in ('RENDER', 'RENDER_EXTERNAL_HOSTNAME'):
+            with patch.dict(os.environ, {key: 'deployment-present'}), self.assertNumQueries(0):
+                self.assert_response(self.client.get(self.detail_url()), 404, {'detail': 'Not found.'})
+        for config in ({'HOST': '192.0.2.1'}, {'NAME': 'postgres'},
+                       {'ENGINE': 'django.db.backends.sqlite3'}, {'OPTIONS': {'host': 'override'}}):
+            with self.subTest(config=config), patch.dict(connection.settings_dict, config):
+                for path in (self.list_url, self.detail_url()):
+                    with self.assertNumQueries(0):
+                        self.assert_response(self.client.get(path), 404, {'detail': 'Not found.'})
+
+    def test_actual_database_guard_rejection_performs_only_the_importers_server_identity_query(self):
+        self.client.force_authenticate(user=self.user)
+        for database, address in ((connection.settings_dict['NAME'], '192.0.2.1'),
+                                  ('unexpected_database', '127.0.0.1')):
+            for path in (self.list_url, self.detail_url()):
+                with self.subTest(database=database, path=path), patch.object(connection, 'cursor') as cursor:
+                    sql = cursor.return_value.__enter__.return_value
+                    sql.fetchone.return_value = (database, address)
+                    self.assert_response(self.client.get(path), 404, {'detail': 'Not found.'})
+                    self.assertEqual(sql.execute.call_args_list, [
+                        call('SELECT current_database(), inet_server_addr()::text'),
+                    ])
+
+    def test_tampered_ownership_sample_analysis_release_and_results_fail_closed_not_partially(self):
+        spare = User.objects.bulk_create([User(username='synthetic-read-displaced-user')])[0]
+        unrelated_release = domain.DataRelease.objects.create(
+            name='unrelated-read-release', version='other', status='unlisted', reference_assembly='unknown',
+        )
+        scenarios = (
+            (AppUser, self.user.app_user.pk, {'django_user': spare}),
+            (Participant, self.participant.pk, {'user': spare}),
+            (Purchase, self.purchase.pk, {'owner': self.other.app_user}),
+            (Purchase, self.purchase.pk, {'status': PurchaseStatus.objects.get(code='PENDING')}),
+            (Purchase, self.purchase.pk, {'status': None}),
+            (Purchase, self.purchase.pk, {'purchased_at': None}),
+            (ServiceRequest, self.request.pk, {'participant': None}),
+            (ServiceRequest, self.request.pk, {'participant': self.other_sample.participant}),
+            (ServiceRequest, self.request.pk, {'completed_at': timezone.now()}),
+            (Sample, self.sample.pk, {'participant': self.other_sample.participant}),
+            (Sample, self.sample.pk, {'service_request': self.other_sample.service_request}),
+            (Sample, self.sample.pk, {'sample_type': 'saliva'}),
+            (Sample, self.sample.pk, {'sample_code': 'NOT-THE-BUNDLED-SAMPLE'}),
+            (Sample, self.sample.pk, {'status': 'available'}),
+            (Sample, self.sample.pk, {'parent_sample': self.sample}),
+            (Sample, self.sample.pk, {'material': 'biological'}),
+            (domain.Analysis, self.analysis.pk, {'participant': None}),
+            (domain.Analysis, self.analysis.pk, {'participant': self.other_sample.participant}),
+            (domain.Analysis, self.analysis.pk, {'sample': None}),
+            (domain.Analysis, self.analysis.pk, {'sample': self.other_sample}),
+            (domain.Analysis, self.analysis.pk, {'service_request': None}),
+            (domain.Analysis, self.analysis.pk, {'service_request': self.other_sample.service_request}),
+            (domain.Analysis, self.analysis.pk, {'release': None}),
+            (domain.Analysis, self.analysis.pk, {'release': unrelated_release}),
+            (domain.Analysis, self.analysis.pk, {'module': bundle.MODULES[1][0]}),
+            (domain.Analysis, self.analysis.pk, {'pipeline_name': 'not-synthetic'}),
+            (domain.Analysis, self.analysis.pk, {'pipeline_version': '2'}),
+            (domain.Analysis, self.analysis.pk, {'status': 'completed'}),
+            (domain.Analysis, self.analysis.pk, {'started_at': timezone.now()}),
+            (domain.DataRelease, self.release.pk, {'name': 'not-the-bundle'}),
+            (domain.DataRelease, self.release.pk, {'version': '2'}),
+            (domain.DataRelease, self.release.pk, {'status': 'published'}),
+            (domain.DataRelease, self.release.pk, {'manifest_checksum': '0' * 64}),
+            (domain.DataRelease, self.release.pk, {'description': 'clinically reviewed'}),
+            (domain.DataRelease, self.release.pk, {'reference_assembly': 'GRCh38'}),
+            (domain.AnalysisResult, self.result.pk, {'analysis': self.other_analysis}),
+            (domain.AnalysisResult, self.result.pk, {'participant': None}),
+            (domain.AnalysisResult, self.result.pk, {'participant': self.other_sample.participant}),
+            (domain.AnalysisResult, self.result.pk, {'sample': None}),
+            (domain.AnalysisResult, self.result.pk, {'sample': self.other_sample}),
+            (domain.AnalysisResult, self.result.pk, {'release': None}),
+            (domain.AnalysisResult, self.result.pk, {'release': unrelated_release}),
+            (domain.AnalysisResult, self.result.pk, {'module': bundle.MODULES[1][0]}),
+            (domain.AnalysisResult, self.result.pk, {'result_type': 'clinical'}),
+            (domain.AnalysisResult, self.result.pk, {'value_code': 'EVALUATED'}),
+            (domain.AnalysisResult, self.result.pk, {'value_text': 'interpreted result'}),
+            (domain.AnalysisResult, self.result.pk, {'value_numeric': Decimal('1')}),
+            (domain.AnalysisResult, self.result.pk, {'reference_assembly': 'GRCh38'}),
+            (domain.AnalysisResult, self.result.pk, {'haplotype': 1}),
+            (domain.AnalysisResult, self.result.pk, {'unit': 'clinical'}),
+            (domain.AnalysisResult, self.result.pk, {'percentile': Decimal('50')}),
+        )
+        for model, pk, changes in scenarios:
+            with self.subTest(model=model.__name__, changes=changes), transaction.atomic():
+                model.objects.filter(pk=pk).update(**changes)
+                before = self.state()
+                self.assert_hidden()
+                self.assertEqual(self.state(), before)
+                transaction.set_rollback(True)
+
+    def test_missing_extra_nonobject_or_tampered_markers_and_placeholder_payloads_are_rejected(self):
+        for model, row, field in ((Sample, self.sample, 'metadata'),
+                                  (domain.Analysis, self.analysis, 'parameters'),
+                                  (domain.AnalysisResult, self.result, 'payload')):
+            marker = getattr(row, field)
+            changes = [None, [], {}, marker | {'synthetic': False}, marker | {'synthetic': 1},
+                       marker | {'non_clinical': False}, marker | {'clinically_reviewed': True},
+                       marker | {'clinically_reviewed': 0}, marker | {'demo_id': 'other'},
+                       marker | {'demo_version': '2'}, marker | {'import_id': str(uuid.uuid4())},
+                       marker | {'manifest_checksum': '0' * 64}, marker | {'disclaimer': ''},
+                       marker | {'participant_id': str(self.participant.pk)}, marker | {'count': 6}]
+            if field == 'payload':
+                changes += [marker | {'module': 'other'}, marker | {'state': 'evaluated'},
+                            marker | {'label': 'interpreted'}, marker | {'rows': []},
+                            marker | {'rows': [{'label': marker['label'], 'state': 'evaluated', 'value': 1}]}]
+            for value in changes:
+                with self.subTest(model=model.__name__, marker=value), transaction.atomic():
+                    model.objects.filter(pk=row.pk).update(**{field: value})
+                    self.assert_hidden()
+                    transaction.set_rollback(True)
+
+    def test_missing_graph_rows_never_expose_a_partial_result_set(self):
+        chain = (domain.AnalysisResult, domain.Analysis, Sample, ServiceRequest, Purchase, Participant)
+        for index, model in enumerate(chain):
+            with self.subTest(missing=model.__name__), transaction.atomic():
+                for preceding in chain[:index + 1]:
+                    if preceding is Purchase:
+                        preceding.objects.filter(pk=self.purchase.pk).delete()
+                    elif preceding is ServiceRequest:
+                        preceding.objects.filter(pk=self.request.pk).delete()
+                    elif preceding is Participant:
+                        preceding.objects.filter(pk=self.participant.pk).delete()
+                    else:
+                        preceding.objects.filter(participant=self.participant).delete()
+                self.assert_hidden()
+                transaction.set_rollback(True)
+        with transaction.atomic():
+            domain.AnalysisResult.objects.filter(pk=self.result.pk).delete()
+            self.assert_hidden()
+            transaction.set_rollback(True)
+        with transaction.atomic():
+            domain.Analysis.objects.filter(participant=self.participant).update(release=None)
+            domain.AnalysisResult.objects.filter(participant=self.participant).update(release=None)
+            # The shared release may be absent without affecting the account/service rows.
+            domain.Analysis.objects.filter(release=self.release).update(release=None)
+            domain.AnalysisResult.objects.filter(release=self.release).update(release=None)
+            self.release.delete()
+            self.assert_hidden()
+            transaction.set_rollback(True)
+
+    def test_duplicate_and_displaced_rows_are_rejected_instead_of_filtered_or_deduplicated(self):
+        for model, original in ((Sample, self.sample), (domain.Analysis, self.analysis),
+                                (domain.AnalysisResult, self.result)):
+            for detached in (False, True):
+                with self.subTest(model=model.__name__, detached=detached), transaction.atomic():
+                    duplicate = model.objects.get(pk=original.pk)
+                    duplicate.pk = uuid.uuid4()
+                    if model is Sample:
+                        duplicate.sample_code += '-duplicate'
+                        if detached:
+                            duplicate.metadata = duplicate.metadata | {'import_id': str(uuid.uuid4())}
+                            duplicate.service_request = ServiceRequest.objects.create(
+                                purchase=Purchase.objects.create(owner=self.user.app_user, status=self.purchase.status),
+                                participant=self.participant, status=self.request.status,
+                            )
+                    elif detached and model is domain.Analysis:
+                        duplicate.sample = duplicate.service_request = None
+                        duplicate.parameters = duplicate.parameters | {'import_id': str(uuid.uuid4())}
+                    elif detached:
+                        duplicate.analysis = self.other_analysis
+                        duplicate.sample = duplicate.participant = duplicate.release = None
+                    duplicate.save(force_insert=True)
+                    self.assert_hidden()
+                    transaction.set_rollback(True)
+
+    def test_only_get_is_supported_and_legacy_routes_status_counts_and_rows_are_unchanged(self):
+        from genetics import urls
+
+        self.assertEqual([str(route.pattern) for route in urls.urlpatterns], [
+            'genetics/diseases/', 'genetics/patient-variants/<int:user_id>/', 'genetics/variantes/',
+            'genetics/ancestry/', 'genetics/indigenous/', 'genetics/traits/', 'genetics/biometrics/',
+            'genetics/biomarkers/', 'genetics/pharmacogenetics/', 'ingest/upload-genetic-file/',
+            'ingest/delete-genetic-file/', 'ingest/user-report-status/<int:user_id>/',
+            'genomics/v1/services/', 'genomics/v1/services/<str:service_request_id>/results/',
+        ])
+        self.assertEqual(resolve('/api/report/pdf/').view_name, 'api_report_pdf')
+        self.assertEqual(resolve('/api/ingest/user-report-status/1/').view_name, 'api_user_report_status')
+        self.assertEqual(resolve('/api/auth/service/status/').view_name, 'api_service_status')
+        snp = SNP.objects.create(rsid='rs-read-legacy', genotipo='unknown', fenotipo='Legacy row')
+        UserSNP.objects.create(user=self.user, snp=snp)
+        Profile.objects.create(user=self.user, service_status=ServiceStatus.COMPLETED, report_filename='legacy.txt')
+        legacy_paths = ('/api/auth/service/status/', '/api/genetics/traits/', '/api/genetics/ancestry/')
+        legacy_before = [(self.client.get(path).status_code, self.client.get(path).json()) for path in legacy_paths]
+        before = self.state()
+        for path in (self.list_url, self.detail_url()):
+            self.assertEqual(self.client.get(path).status_code, 200)
+            self.assertEqual(self.client.post(path, {}, format='json').status_code, 405)
+        self.assertEqual([(self.client.get(path).status_code, self.client.get(path).json())
+                          for path in legacy_paths], legacy_before)
+        self.assertEqual(self.state(), before)
+        grant_admin_role(self.other)
+        self.authenticate(self.other)
+        self.assert_response(self.client.get(f'/api/ingest/user-report-status/{self.user.pk}/'), 200, {
+            'user_id': self.user.pk, 'has_report': False, 'snp_count': 1,
+            'service_status': ServiceStatus.NO_PURCHASED, 'report_filename': None, 'report_date': None,
+        })
 
 
 class SyntheticGenomicsImportTests(TestCase):
