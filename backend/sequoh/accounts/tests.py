@@ -1,6 +1,8 @@
 import json
+from datetime import timedelta
 from importlib import import_module
 from types import SimpleNamespace
+from django.utils import timezone
 from unittest.mock import patch
 
 from django.apps import apps
@@ -23,6 +25,7 @@ from .roles import (
     is_admin, is_analyst, is_reception, revoke_analyst_role, revoke_reception_role,
 )
 from profiles.models import Profile
+from services.models import Purchase, PurchaseStatus, ServiceRequest, ServiceStatus as RequestStatus, ServiceStatusLog
 
 
 @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
@@ -551,6 +554,127 @@ class FunctionalRoleReadSurfaceTests(TestCase):
             fallback = self.get_as(self.admin, '/api/admin/stats/')
         self.assertEqual(fallback.status_code, 200, fallback.data)
         self.assertEqual(fallback.data['total_users'], 2)
+
+
+class SelfServiceProjectionTests(TestCase):
+    def test_paid_waiting_overrides_legacy_completion_across_self_reads(self):
+        user = User.objects.create_user(username='self-paid-waiting')
+        Profile.objects.create(user=user, service_status='COMPLETED', phone='1234567')
+        purchase = Purchase.objects.create(
+            owner=user.app_user, status=PurchaseStatus.objects.get(code='PAID'),
+            purchased_at=timezone.now(),
+        )
+        service = ServiceRequest.objects.create(
+            purchase=purchase, status=RequestStatus.objects.get(code='WAITING_SAMPLE'),
+        )
+        log = ServiceStatusLog.objects.create(request=service, status=service.status, actor=user.app_user)
+        client = APIClient()
+        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
+
+        status = client.get('/api/auth/service/status/')
+        me = client.get('/api/auth/me/')
+        dashboard = client.get('/api/auth/dashboard/')
+        for response in (status, me, dashboard):
+            self.assertEqual(response.status_code, 200, getattr(response, 'data', None))
+        self.assertEqual(status.data, {
+            'user_id': user.pk, 'service_status': 'PENDING',
+            'can_view_results': False, 'updated_at': log.changed_at,
+        })
+        self.assertEqual(me.data['user']['service_status'], 'PENDING')
+        self.assertFalse(me.data['user']['can_view_results'])
+        self.assertEqual(dashboard.data['profile'], {
+            'phone': '1234567', 'service_status': 'PENDING', 'can_view_results': False,
+        })
+        profile = Profile.objects.get(user=user)
+        self.assertEqual(profile.service_status, 'COMPLETED')  # The read does not repair legacy rows.
+        self.assertEqual(ServiceStatusLog.objects.filter(request=service).count(), 1)
+
+    def test_legacy_and_unmapped_users_keep_existing_self_response_shapes(self):
+        legacy = User.objects.create_user(username='legacy-completed')
+        Profile.objects.create(user=legacy, phone='legacy-phone', service_status='COMPLETED')
+        client = APIClient()
+        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(legacy.pk)})
+        status = client.get('/api/auth/service/status/')
+        me = client.get('/api/auth/me/')
+        dashboard = client.get('/api/auth/dashboard/')
+        self.assertEqual(status.status_code, 200)
+        self.assertEqual(set(status.data), {'user_id', 'service_status', 'can_view_results', 'updated_at'})
+        self.assertEqual(status.data['service_status'], 'COMPLETED')
+        self.assertTrue(status.data['can_view_results'])
+        self.assertEqual(status.data['updated_at'], legacy.profile.service_updated_at)
+        self.assertEqual(me.data['user']['roles'], ['CLIENTE'])
+        self.assertTrue(me.data['user']['can_view_results'])
+        self.assertEqual(dashboard.data['profile'], {
+            'phone': 'legacy-phone', 'service_status': 'COMPLETED', 'can_view_results': True,
+        })
+        self.assertIn('no-store', me['Cache-Control'])
+        self.assertIn('no-store', dashboard['Cache-Control'])
+
+        absent = User.objects.create_user(username='no-profile')
+        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(absent.pk)})
+        self.assertEqual(client.get('/api/auth/service/status/').data, {
+            'user_id': absent.pk, 'service_status': 'NO_PURCHASED',
+            'can_view_results': False, 'updated_at': None,
+        })
+        self.assertEqual(client.get('/api/auth/dashboard/').data['profile'], {
+            'phone': None, 'service_status': 'NO_PURCHASED', 'can_view_results': False,
+        })
+
+    def test_completed_paid_service_exposes_results_only_with_history(self):
+        user = User.objects.create_user(username='self-paid-completed')
+        purchase = Purchase.objects.create(
+            owner=user.app_user, status=PurchaseStatus.objects.get(code='PAID'),
+            purchased_at=timezone.now(),
+        )
+        waiting = RequestStatus.objects.get(code='WAITING_SAMPLE')
+        completed = RequestStatus.objects.get(code='COMPLETED')
+        service = ServiceRequest.objects.create(
+            purchase=purchase, status=completed,
+            started_at=timezone.now() - timedelta(seconds=2), completed_at=timezone.now(),
+        )
+        ServiceStatusLog.objects.create(request=service, status=waiting, actor=user.app_user)
+        completion = ServiceStatusLog.objects.create(
+            request=service, status=completed, actor=user.app_user,
+            changed_at=timezone.now() + timedelta(seconds=1),
+        )
+        client = APIClient()
+        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
+        status = client.get('/api/auth/service/status/')
+        self.assertEqual(status.data, {
+            'user_id': user.pk, 'service_status': 'COMPLETED',
+            'can_view_results': True, 'updated_at': completion.changed_at,
+        })
+        self.assertTrue(client.get('/api/auth/me/').data['user']['can_view_results'])
+        self.assertTrue(client.get('/api/auth/dashboard/').data['profile']['can_view_results'])
+
+    def test_paid_self_reads_preserve_role_boundary_without_exposing_other_account(self):
+        user = User.objects.create_user(username='staff-with-client-role', is_staff=True)
+        other = User.objects.create_user(username='other-completed')
+        Profile.objects.create(user=other, service_status='COMPLETED')
+        purchase = Purchase.objects.create(
+            owner=user.app_user, status=PurchaseStatus.objects.get(code='PAID'),
+            purchased_at=timezone.now(),
+        )
+        service = ServiceRequest.objects.create(
+            purchase=purchase, status=RequestStatus.objects.get(code='WAITING_SAMPLE'),
+        )
+        ServiceStatusLog.objects.create(request=service, status=service.status, actor=user.app_user)
+        client = APIClient()
+        self.assertIn(client.get('/api/auth/service/status/').status_code, (401, 403))
+        self.assertIn(client.get('/api/auth/me/').status_code, (401, 403))
+        self.assertIn(client.get('/api/auth/dashboard/').status_code, (401, 403))
+        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
+        me = client.get('/api/auth/me/')
+        self.assertEqual(me.status_code, 200)
+        self.assertEqual(me.data['user']['roles'], ['CLIENTE'])
+        self.assertEqual(me.data['user']['user_type'], 'user')
+        self.assertFalse(me.data['user']['is_admin'])
+        self.assertTrue(me.data['user']['is_staff'])
+        self.assertFalse(me.data['user']['can_view_results'])
+        dashboard = client.get('/api/auth/dashboard/')
+        self.assertEqual(set(dashboard.data), {'user', 'profile'})  # Django staff is not app ADMIN.
+        self.assertFalse(dashboard.data['profile']['can_view_results'])
+        self.assertEqual(client.get('/api/auth/service/status/').data['user_id'], user.pk)
 
 
 class FunctionalRoleDjangoAdminTests(TestCase):

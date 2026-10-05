@@ -89,7 +89,120 @@ from accounts.jwt_utils import encode_jwt
 from accounts.models import AppUser, Role
 from accounts.roles import grant_admin_role, grant_reception_role
 from participants.models import Participant
+from profiles.models import Profile
 from services import models as domain
+from services.legacy_profile import get_legacy_service_projection
+
+
+class LegacyProfileProjectionTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='projection-client')
+        self.paid = domain.PurchaseStatus.objects.get(code='PAID')
+        self.pending = domain.PurchaseStatus.objects.get(code='PENDING')
+        self.waiting = domain.ServiceStatus.objects.get(code='WAITING_SAMPLE')
+        self.now = timezone.now()
+
+    def purchase(self, status, *, purchased_at=None, created_at=None):
+        return domain.Purchase.objects.create(
+            owner=self.user.app_user, status=status, purchased_at=purchased_at,
+            created_at=created_at or self.now,
+        )
+
+    def service(self, purchase, code, *, initial=True, current=True, completed_at=None):
+        state = domain.ServiceStatus.objects.get(code=code)
+        request = domain.ServiceRequest.objects.create(
+            purchase=purchase, status=state, started_at=self.now,
+            completed_at=completed_at,
+        )
+        if initial:
+            domain.ServiceStatusLog.objects.create(
+                request=request, status=self.waiting, actor=self.user.app_user,
+                changed_at=self.now,
+            )
+        if current and state != self.waiting:
+            domain.ServiceStatusLog.objects.create(
+                request=request, status=state, actor=self.user.app_user,
+                changed_at=self.now + timedelta(seconds=5),
+            )
+        return request
+
+    def assert_projection(self, status, updated_at):
+        projection = get_legacy_service_projection(self.user)
+        self.assertEqual((projection.service_status, projection.updated_at, projection.can_view_results),
+                         (status, updated_at, status == 'COMPLETED'))
+
+    def test_no_purchase_and_profile_only_complete_fallback(self):
+        self.assert_projection('NO_PURCHASED', None)
+        self.purchase(self.pending)
+        self.assert_projection('NO_PURCHASED', None)  # Pending-only without a Profile.
+        profile = Profile.objects.create(user=self.user, service_status='COMPLETED')
+        self.assert_projection('COMPLETED', profile.service_updated_at)
+        self.purchase(self.pending, created_at=self.now + timedelta(days=1))
+        self.assert_projection('COMPLETED', profile.service_updated_at)
+
+    def test_paid_states_require_current_history_and_project_latest_log_time(self):
+        for code in ('WAITING_SAMPLE', 'SAMPLE_RECEIVED', 'PROCESSING', 'COMPLETED'):
+            with self.subTest(code=code):
+                purchase = self.purchase(self.paid, purchased_at=self.now + timedelta(days=1))
+                service = self.service(
+                    purchase, code,
+                    completed_at=self.now + timedelta(seconds=4) if code == 'COMPLETED' else None,
+                )
+                latest = domain.ServiceStatusLog.objects.filter(request=service).order_by('-changed_at').first()
+                self.assert_projection('COMPLETED' if code == 'COMPLETED' else 'PENDING', latest.changed_at)
+                # The next paid purchase must outrank this one even if this state was completed.
+                self.now += timedelta(days=2)
+
+    def test_pending_purchase_does_not_shadow_paid_and_newer_paid_wins(self):
+        old = self.purchase(self.paid, purchased_at=self.now)
+        self.service(old, 'COMPLETED', completed_at=self.now + timedelta(seconds=4))
+        completed_at = self.now + timedelta(seconds=5)
+        self.purchase(self.pending, created_at=self.now + timedelta(days=4))
+        self.assert_projection('COMPLETED', completed_at)
+        newer = self.purchase(self.paid, purchased_at=self.now + timedelta(days=1))
+        new_service = self.service(newer, 'WAITING_SAMPLE')
+        log = domain.ServiceStatusLog.objects.get(request=new_service)
+        self.assert_projection('PENDING', log.changed_at)
+
+    def test_newest_paid_missing_required_data_never_falls_back_to_old_completion(self):
+        Profile.objects.create(user=self.user, service_status='COMPLETED')
+        old = self.purchase(self.paid, purchased_at=self.now)
+        self.service(old, 'COMPLETED', completed_at=self.now + timedelta(seconds=4))
+        newer = self.purchase(self.paid, purchased_at=self.now + timedelta(days=1))
+        self.assert_projection('NO_PURCHASED', None)  # Missing request.
+        request = self.service(newer, 'WAITING_SAMPLE', initial=False)
+        self.assert_projection('NO_PURCHASED', None)  # Missing initial log.
+        domain.ServiceStatusLog.objects.create(request=request, status=self.waiting, actor=self.user.app_user)
+        newer.purchased_at = None
+        newer.save(update_fields=['purchased_at'])
+        self.assert_projection('NO_PURCHASED', None)  # Malformed paid purchase must not be skipped.
+        newer.purchased_at = self.now + timedelta(days=1)
+        newer.save(update_fields=['purchased_at'])
+        request.status = domain.ServiceStatus.objects.get(code='COMPLETED')
+        request.save(update_fields=['status'])
+        self.assert_projection('NO_PURCHASED', None)  # Missing current log.
+        domain.ServiceStatusLog.objects.create(request=request, status=request.status, actor=self.user.app_user)
+        self.assert_projection('NO_PURCHASED', None)  # Missing completion timestamp.
+
+    def test_paid_ties_break_by_creation_and_pk_and_history_mismatch_fails_closed(self):
+        older = self.purchase(self.paid, purchased_at=self.now, created_at=self.now)
+        self.service(older, 'COMPLETED', completed_at=self.now + timedelta(seconds=4))
+        later = self.purchase(self.paid, purchased_at=self.now, created_at=self.now + timedelta(seconds=1))
+        waiting = self.service(later, 'WAITING_SAMPLE')
+        self.assert_projection('PENDING', domain.ServiceStatusLog.objects.get(request=waiting).changed_at)
+        highest_pk = uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')
+        tie = domain.Purchase.objects.create(
+            pk=highest_pk, owner=self.user.app_user, status=self.paid,
+            purchased_at=self.now, created_at=later.created_at,
+        )
+        self.assert_projection('NO_PURCHASED', None)  # A tied newer paid purchase has no request.
+        tie.status = self.pending
+        tie.save(update_fields=['status'])
+        domain.ServiceStatusLog.objects.create(
+            request=waiting, status=domain.ServiceStatus.objects.get(code='PROCESSING'),
+            actor=self.user.app_user, changed_at=self.now + timedelta(seconds=10),
+        )
+        self.assert_projection('NO_PURCHASED', None)  # Latest history disagrees with current state.
 
 
 class PurchaseSchemaTests(TestCase):

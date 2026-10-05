@@ -24,6 +24,7 @@ from .email_utils import (
 from .jwt_utils import encode_jwt, decode_jwt
 from .authentication import JWTAuthentication
 from profiles.models import Profile, ServiceStatus
+from services.legacy_profile import get_legacy_service_projection
 from genetics.models import SNP
 from .models import AppUser, RevokedToken, Role, WelcomeStatus
 from .email_validation import is_valid_registration_name, validate_registration_email
@@ -54,18 +55,12 @@ class UserServiceStatusAPIView(CSRFDoubleSubmitMixin, APIView):
     def get(self, request):
         """Devuelve el estado del usuario autenticado."""
         u = request.user
-        from profiles.models import Profile, ServiceStatus
-        try:
-            status_value = u.profile.service_status
-            updated_at = u.profile.service_updated_at
-        except Profile.DoesNotExist:
-            status_value = ServiceStatus.NO_PURCHASED
-            updated_at = None
+        projection = get_legacy_service_projection(u)
         return Response({
             "user_id": u.id,
-            "service_status": status_value,
-            "can_view_results": status_value == ServiceStatus.COMPLETED,
-            "updated_at": updated_at,
+            "service_status": projection.service_status,
+            "can_view_results": projection.can_view_results,
+            "updated_at": projection.updated_at,
         })
 
     def post(self, request):
@@ -221,13 +216,7 @@ class MeAPIView(APIView):
     def get(self, request):
         u = request.user
 
-        # Cargar estado de servicio desde Profile
-        from profiles.models import Profile, ServiceStatus
-        try:
-            p = u.profile
-            service_status = p.service_status
-        except Profile.DoesNotExist:
-            service_status = ServiceStatus.NO_PURCHASED
+        projection = get_legacy_service_projection(u)
 
         functional_role = AppUser.objects.filter(django_user=u).values_list('role__code', flat=True).first()
         admin_flag = functional_role == Role.Code.ADMIN
@@ -255,8 +244,8 @@ class MeAPIView(APIView):
             "is_reception": reception_flag,
             "roles": data_roles,
             "user_type": user_type,
-            "service_status": service_status,
-            "can_view_results": service_status == ServiceStatus.COMPLETED,
+            "service_status": projection.service_status,
+            "can_view_results": projection.can_view_results,
         }
         # Evitar cacheo del perfil actual
         resp = Response({"user": data})
@@ -413,10 +402,9 @@ class DashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from profiles.models import Profile, ServiceStatus
         u = request.user
         profile = getattr(u, 'profile', None)
-        service_status = getattr(profile, 'service_status', ServiceStatus.NO_PURCHASED)
+        projection = get_legacy_service_projection(u)
         payload = {
             "user": {
                 "id": u.id,
@@ -426,8 +414,8 @@ class DashboardAPIView(APIView):
             },
             "profile": {
                 "phone": getattr(profile, 'phone', None),
-                "service_status": service_status,
-                "can_view_results": service_status == ServiceStatus.COMPLETED,
+                "service_status": projection.service_status,
+                "can_view_results": projection.can_view_results,
             },
         }
         # Métricas globales solo para staff/analista (evita fuga de datos de negocio)
