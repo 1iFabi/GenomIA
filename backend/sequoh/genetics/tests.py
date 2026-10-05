@@ -13,7 +13,7 @@ from django.core.management import call_command
 from django.db import DataError, IntegrityError, connection, models, transaction
 from django.db.migrations.loader import MigrationLoader
 from django.db.models.deletion import CASCADE, PROTECT, RESTRICT, SET_NULL, ProtectedError, RestrictedError
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -29,6 +29,382 @@ from services.models import (
     Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
 )
+
+
+class GenotypeTests(TestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        from participants.models import Participant
+        self.user = User.objects.create_user(username=f'genotype-{uuid.uuid4().hex}')
+        self.participant = Participant.objects.create(
+            user=self.user, participant_code=f'genotype-{uuid.uuid4().hex}',
+        )
+        self.release = self.new_release()
+        self.variant = self.new_variant()
+        self.analysis = self.new_analysis()
+
+    def new_release(self):
+        return domain.DataRelease.objects.create(
+            name=uuid.uuid4().hex, version='v1', status='unlisted', reference_assembly='synthetic',
+        )
+
+    def new_variant(self):
+        return domain.Variant.objects.create(variant_type='synthetic-genotype')
+
+    def new_analysis(self):
+        return domain.Analysis.objects.create(
+            module='synthetic', pipeline_name='synthetic', pipeline_version='v1', status='unlisted',
+        )
+
+    def new_sample(self, *, independent_participant=False):
+        user, participant = self.user, self.participant
+        if independent_participant:
+            from participants.models import Participant
+            user = User.objects.create_user(username=f'genotype-sample-{uuid.uuid4().hex}')
+            participant = Participant.objects.create(
+                user=user, participant_code=f'genotype-sample-{uuid.uuid4().hex}',
+            )
+        request = ServiceRequest.objects.create(
+            purchase=Purchase.objects.create(owner=user.app_user), participant=participant,
+            status=RequestStatus.objects.get(code='WAITING_SAMPLE'),
+        )
+        return Sample.objects.create(
+            service_request=request, participant=participant,
+            sample_code=f'genotype-{uuid.uuid4().hex}', sample_type='synthetic',
+        )
+
+    def genotype_row(self, **changes):
+        values = {
+            'release': self.release, 'variant': self.variant, 'participant': self.participant,
+            'analysis': self.analysis, 'genotype': 'unlisted-call',
+        }
+        return domain.Genotype(**(values | changes))
+
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT conname, confdeltype, confupdtype, condeferrable, condeferred '
+                'FROM pg_constraint WHERE conrelid = %s::regclass AND contype = %s', ['genotype', 'f'],
+            )
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def test_exact_columns_defaults_types_constraints_and_two_explicit_indexes(self):
+        columns = {
+            'genotype_id': ('uuid', None, 'NO', None),
+            'release_id': ('uuid', None, 'NO', None),
+            'variant_id': ('uuid', None, 'NO', None),
+            'participant_id': ('uuid', None, 'NO', None),
+            'sample_id': ('uuid', None, 'YES', None),
+            'analysis_id': ('uuid', None, 'NO', None),
+            'genotype': ('character varying', 32, 'NO', None),
+            'phased': ('boolean', None, 'NO', 'false'),
+            'phase_set': ('character varying', 64, 'YES', None),
+            'dosage': ('numeric', None, 'YES', None),
+            'genotype_quality': ('numeric', None, 'YES', None),
+            'read_depth': ('integer', None, 'YES', None),
+            'allele_depths': ('jsonb', None, 'YES', None),
+            'filters': ('jsonb', None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT column_name, data_type, character_maximum_length, is_nullable, column_default '
+                'FROM information_schema.columns WHERE table_schema = current_schema() '
+                "AND table_name = 'genotype' ORDER BY ordinal_position"
+            )
+            physical_columns = cursor.fetchall()
+            indexes = connection.introspection.get_constraints(cursor, 'genotype')
+            cursor.execute(
+                'SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = current_schema() AND tablename = %s',
+                ['genotype'],
+            )
+            index_definitions = dict(cursor.fetchall())
+            index_names = set(index_definitions)
+            cursor.execute(
+                'SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint '
+                'WHERE conrelid = %s::regclass AND contype IN (%s, %s)', ['genotype', 'u', 'c'],
+            )
+            unique_and_checks = dict(cursor.fetchall())
+        self.assertEqual(physical_columns, [(name, *spec) for name, spec in columns.items()])
+        model = domain.Genotype
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('genotype', 'genotype_id'))
+        self.assertEqual([field.column for field in model._meta.local_fields], list(columns))
+        self.assertEqual(
+            {field.name for field in model._meta.local_fields},
+            {'genotype_id', 'release', 'variant', 'participant', 'sample', 'analysis', 'genotype', 'phased',
+             'phase_set', 'dosage', 'genotype_quality', 'read_depth', 'allele_depths', 'filters', 'created_at'},
+        )
+        for field in model._meta.local_fields:
+            expected_null = columns[field.column][2] == 'YES'
+            self.assertEqual((field.null, field.blank), (expected_null, expected_null))
+        self.assertEqual((model._meta.get_field('dosage').max_digits, model._meta.get_field('dosage').decimal_places), (6, 3))
+        self.assertEqual((model._meta.get_field('genotype_quality').max_digits,
+                          model._meta.get_field('genotype_quality').decimal_places), (8, 2))
+        self.assertEqual(model._meta.get_field('phased').default, False)
+        self.assertIsInstance(model._meta.get_field('created_at').db_default, TransactionNow)
+        self.assertEqual(
+            {index.name: index.fields for index in model._meta.indexes},
+            {
+                'idx_genotype_participant_release': ['participant', 'release'],
+                'idx_genotype_variant_release': ['variant', 'release'],
+            },
+        )
+        self.assertEqual(
+            index_names,
+            {'genotype_pkey', 'uq_genotype_analysis_sample_variant',
+             'idx_genotype_participant_release', 'idx_genotype_variant_release'},
+        )
+        self.assertIn('(participant_id, release_id)', index_definitions['idx_genotype_participant_release'])
+        self.assertIn('(variant_id, release_id)', index_definitions['idx_genotype_variant_release'])
+        self.assertEqual(set(unique_and_checks), {
+            'uq_genotype_analysis_sample_variant', 'genotype_quality_gte_0', 'genotype_read_depth_gte_0',
+        })
+        self.assertEqual(unique_and_checks['uq_genotype_analysis_sample_variant'],
+                         'UNIQUE (analysis_id, participant_id, sample_id, variant_id)')
+        self.assertIn('genotype_quality >=', unique_and_checks['genotype_quality_gte_0'])
+        self.assertIn('read_depth >=', unique_and_checks['genotype_read_depth_gte_0'])
+        unique = next(constraint for constraint in model._meta.constraints
+                      if isinstance(constraint, models.UniqueConstraint))
+        self.assertEqual(unique.fields, ('analysis', 'participant', 'sample', 'variant'))
+        self.assertIsNone(unique.nulls_distinct)  # PostgreSQL default: NULLS DISTINCT.
+        self.assertEqual(self.fk_actions(), {
+            'fk_genotype_release': ('c', 'c', False, False),
+            'fk_genotype_variant': ('r', 'c', False, False),
+            'fk_genotype_participant': ('r', 'c', False, False),
+            'fk_genotype_sample': ('n', 'c', False, False),
+            'fk_genotype_analysis': ('r', 'c', False, False),
+        })
+        expected_targets = {
+            'release': ('data_release', 'release_id', CASCADE),
+            'variant': ('variant', 'variant_id', PROTECT),
+            'participant': ('participant', 'participant_id', PROTECT),
+            'sample': ('sample', 'sample_id', SET_NULL),
+            'analysis': ('analysis', 'analysis_id', PROTECT),
+        }
+        for field_name, (table, key, on_delete) in expected_targets.items():
+            field = model._meta.get_field(field_name)
+            self.assertEqual((field.column, field.target_field.name, field.remote_field.on_delete),
+                             (field_name + '_id', key, on_delete))
+            self.assertEqual(field.remote_field.model._meta.db_table, table)
+            self.assertFalse(field.db_index)
+            self.assertTrue(field.db_constraint)
+        self.assertEqual(
+            {name: (info['columns'], info['foreign_key']) for name, info in indexes.items()
+             if info['foreign_key']},
+            {
+                'fk_genotype_release': (['release_id'], ('data_release', 'release_id')),
+                'fk_genotype_variant': (['variant_id'], ('variant', 'variant_id')),
+                'fk_genotype_participant': (['participant_id'], ('participant', 'participant_id')),
+                'fk_genotype_sample': (['sample_id'], ('sample', 'sample_id')),
+                'fk_genotype_analysis': (['analysis_id'], ('analysis', 'analysis_id')),
+            },
+        )
+        self.assertEqual(set(indexes), {
+            'genotype_pkey', 'uq_genotype_analysis_sample_variant',
+            'genotype_quality_gte_0', 'genotype_read_depth_gte_0',
+            'idx_genotype_participant_release', 'idx_genotype_variant_release',
+            'fk_genotype_release', 'fk_genotype_variant', 'fk_genotype_participant',
+            'fk_genotype_sample', 'fk_genotype_analysis',
+        })
+
+    def test_insert_uses_database_defaults_and_jsonb_without_extra_call_semantics(self):
+        identifier = uuid.uuid4()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'INSERT INTO genotype (genotype_id, release_id, variant_id, participant_id, analysis_id, genotype) '
+                'VALUES (%s, %s, %s, %s, %s, %s) '
+                'RETURNING phased, allele_depths, filters, created_at, transaction_timestamp(), '
+                'pg_typeof(allele_depths), pg_typeof(filters)',
+                [identifier, self.release.pk, self.variant.pk, self.participant.pk, self.analysis.pk, 'not-interpreted'],
+            )
+            phased, depths, filters, created, transaction_time, depths_type, filters_type = cursor.fetchone()
+        self.assertFalse(phased)
+        self.assertIsNone(depths)
+        self.assertIsNone(filters)
+        self.assertEqual(created, transaction_time)
+        self.assertEqual((depths_type, filters_type), ('jsonb', 'jsonb'))
+        self.assertTrue(domain.Genotype.objects.filter(pk=identifier, genotype='not-interpreted').exists())
+        defaulted = self.genotype_row()
+        created_by_python = defaulted.created_at
+        self.assertIsInstance(defaulted.pk, uuid.UUID)
+        self.assertTrue(timezone.is_aware(created_by_python))
+        self.assertFalse(defaulted.phased)
+        self.assertIs(domain.Genotype._meta.get_field('genotype_id').default, uuid.uuid4)
+        self.assertIs(domain.Genotype._meta.get_field('created_at').default, timezone.now)
+        defaulted.full_clean()
+        defaulted.save()
+        defaulted.refresh_from_db()
+        self.assertEqual(defaulted.created_at, created_by_python)
+        genotype = self.genotype_row(dosage=Decimal('-1.000'), allele_depths={'A': 3}, filters=['synthetic-filter'])
+        genotype.full_clean()
+        genotype.save()
+        genotype.refresh_from_db()
+        self.assertEqual((genotype.dosage, genotype.allele_depths, genotype.filters),
+                         (Decimal('-1.000'), {'A': 3}, ['synthetic-filter']))
+
+    def test_composite_uniqueness_preserves_null_sample_distinct_and_checks_only_declared_bounds(self):
+        first = self.genotype_row()
+        first.save()
+        second = self.genotype_row()
+        second.save()  # SQL UNIQUE treats each NULL sample_id as distinct.
+        sample = self.new_sample()
+        third = self.genotype_row(sample=sample)
+        third.save()
+        self.assertEqual(domain.Genotype.objects.count(), 3)
+        duplicate = self.genotype_row(sample=sample)
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            duplicate.save(force_insert=True)
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'uq_genotype_analysis_sample_variant')
+        for field, value, constraint in (
+            ('genotype_quality', Decimal('-0.01'), 'genotype_quality_gte_0'),
+            ('read_depth', -1, 'genotype_read_depth_gte_0'),
+        ):
+            with self.subTest(field=field):
+                invalid = self.genotype_row(**{field: value})
+                with self.assertRaises(ValidationError):
+                    invalid.full_clean()
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    invalid.save(force_insert=True)
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint)
+
+    def test_raw_updates_cascade_all_five_parent_keys(self):
+        sample = self.new_sample(independent_participant=True)
+        genotype = self.genotype_row(sample=sample)
+        genotype.save()
+        from participants.models import Participant
+        parents = {
+            'release': (self.release, domain.DataRelease, 'release_id'),
+            'variant': (self.variant, domain.Variant, 'variant_id'),
+            'participant': (self.participant, Participant, 'participant_id'),
+            'sample': (sample, Sample, 'sample_id'),
+            'analysis': (self.analysis, domain.Analysis, 'analysis_id'),
+        }
+        with connection.cursor() as cursor:
+            for field_name, (parent, target, key) in parents.items():
+                new_id = uuid.uuid4()
+                table_name = connection.ops.quote_name(target._meta.db_table)
+                column_name = connection.ops.quote_name(key)
+                cursor.execute(
+                    f'UPDATE {table_name} SET {column_name} = %s WHERE {column_name} = %s',
+                    [new_id, parent.pk],
+                )
+                parent.pk = new_id
+                genotype.refresh_from_db()
+                self.assertEqual(getattr(genotype, field_name + '_id'), new_id)
+
+    def test_raw_deletes_cascade_restrict_and_set_null_immediately(self):
+        sample = self.new_sample(independent_participant=True)
+        genotype = self.genotype_row(sample=sample)
+        genotype.save()
+        for field_name, table, key, constraint in (
+            ('variant', 'variant', 'variant_id', 'fk_genotype_variant'),
+            ('participant', 'participant', 'participant_id', 'fk_genotype_participant'),
+            ('analysis', 'analysis', 'analysis_id', 'fk_genotype_analysis'),
+        ):
+            value = getattr(genotype, field_name + '_id')
+            with self.subTest(field=field_name):
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'DELETE FROM {connection.ops.quote_name(table)} '
+                                       f'WHERE {connection.ops.quote_name(key)} = %s', [value])
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint)
+        with connection.cursor() as cursor:
+            cursor.execute('DELETE FROM sample WHERE sample_id = %s', [sample.pk])
+        genotype.refresh_from_db()
+        self.assertIsNone(genotype.sample_id)
+        with connection.cursor() as cursor:
+            cursor.execute('DELETE FROM data_release WHERE release_id = %s', [self.release.pk])
+        self.assertFalse(domain.Genotype.objects.filter(pk=genotype.pk).exists())
+        self.assertTrue(domain.Variant.objects.filter(pk=self.variant.pk).exists())
+        self.assertTrue(domain.Analysis.objects.filter(pk=self.analysis.pk).exists())
+
+    def test_orm_reverse_relations_and_deletion_policy_match_the_physical_schema(self):
+        sample = self.new_sample(independent_participant=True)
+        genotype = self.genotype_row(sample=sample)
+        genotype.save()
+        for parent in (self.release, self.variant, self.participant, sample, self.analysis):
+            self.assertEqual(list(parent.genotypes.all()), [genotype])
+        for parent in (self.variant, self.participant, self.analysis):
+            with self.assertRaises(ProtectedError):
+                parent.delete()
+        sample.delete()
+        genotype.refresh_from_db()
+        self.assertIsNone(genotype.sample_id)
+        key = genotype.pk
+        self.release.delete()
+        self.assertFalse(domain.Genotype.objects.filter(pk=key).exists())
+
+    def test_migration_state_matches_model_and_has_no_dependency_cycle(self):
+        migration = import_module('genetics.migrations.0013_genotype').Migration
+        self.assertEqual(set(migration.dependencies), {
+            ('genetics', '0012_release_epigenetic_feature'),
+            ('participants', '0003_participant_metadata_support'),
+            ('services', '0004_sample'),
+        })
+        loader = MigrationLoader(connection)
+        state = loader.project_state([('genetics', '0013_genotype')])
+        historical = state.apps.get_model('genetics', 'Genotype')
+        self.assertEqual(
+            {field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+            {field.name: field.deconstruct()[1:] for field in domain.Genotype._meta.local_fields},
+        )
+        self.assertEqual(historical._meta.indexes, domain.Genotype._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.Genotype._meta.constraints)
+        self.assertIn(('genetics', '0013_genotype'), loader.graph.nodes)
+        self.assertIn(('participants', '0003_participant_metadata_support'),
+                      loader.graph.forwards_plan(('genetics', '0013_genotype')))
+        self.assertIn(('services', '0004_sample'), loader.graph.forwards_plan(('genetics', '0013_genotype')))
+
+
+class GenotypeMigrationTests(TransactionTestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT conname, confdeltype, confupdtype, condeferrable, condeferred '
+                'FROM pg_constraint WHERE conrelid = %s::regclass AND contype = %s', ['genotype', 'f'],
+            )
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def test_fk_reverse_restores_deferred_no_action_and_forward_is_physical(self):
+        migration = import_module('genetics.migrations.0013_genotype')
+        editor = connection.SchemaEditorClass(connection)
+        with transaction.atomic():
+            migration.restore_genotype_fks(None, editor)
+            self.assertEqual(self.fk_actions(), {
+                name: ('a', 'a', True, True) for name in (
+                    'fk_genotype_release', 'fk_genotype_variant', 'fk_genotype_participant',
+                    'fk_genotype_sample', 'fk_genotype_analysis',
+                )
+            })
+            migration.replace_genotype_fks(None, editor, physical=True)
+            self.assertEqual(self.fk_actions(), {
+                'fk_genotype_release': ('c', 'c', False, False),
+                'fk_genotype_variant': ('r', 'c', False, False),
+                'fk_genotype_participant': ('r', 'c', False, False),
+                'fk_genotype_sample': ('n', 'c', False, False),
+                'fk_genotype_analysis': ('r', 'c', False, False),
+            })
+        self.assertIs(migration.Migration.operations[-1].reverse_code, migration.restore_genotype_fks)
+
+    def test_fk_lookup_resolves_every_relation_before_any_constraint_ddl(self):
+        migration = import_module('genetics.migrations.0013_genotype')
+        editor = connection.SchemaEditorClass(connection)
+        with transaction.atomic():
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE genotype DROP CONSTRAINT fk_genotype_variant')
+                before = self.fk_actions()
+                self.assertNotIn('fk_genotype_variant', before)
+                with self.assertRaisesRegex(RuntimeError, 'genotype.variant_id -> variant.variant_id'):
+                    migration.replace_genotype_fks(None, editor, physical=True)
+                self.assertEqual(self.fk_actions(), before)
+            finally:
+                transaction.set_rollback(True)
 
 
 class ReleaseEpigeneticFeatureTests(TestCase):

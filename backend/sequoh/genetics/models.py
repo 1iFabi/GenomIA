@@ -89,6 +89,55 @@ class ReleaseEpigeneticFeature(models.Model):
         indexes = [models.Index(fields=['epigenetic_feature'], name='idx_release_epi_feature')]
 
 
+class Genotype(models.Model):
+    """Materialized genotype calls without inferred biological or ownership rules."""
+
+    genotype_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    release = models.ForeignKey(
+        'genetics.DataRelease', on_delete=models.CASCADE, db_column='release_id',
+        db_index=False, related_name='genotypes',
+    )
+    variant = models.ForeignKey(
+        'genetics.Variant', on_delete=models.PROTECT, db_column='variant_id',
+        db_index=False, related_name='genotypes',
+    )
+    participant = models.ForeignKey(
+        'participants.Participant', on_delete=models.PROTECT, db_column='participant_id',
+        db_index=False, related_name='genotypes',
+    )
+    sample = models.ForeignKey(
+        'services.Sample', on_delete=models.SET_NULL, db_column='sample_id',
+        null=True, blank=True, db_index=False, related_name='genotypes',
+    )
+    analysis = models.ForeignKey(
+        'genetics.Analysis', on_delete=models.PROTECT, db_column='analysis_id',
+        db_index=False, related_name='genotypes',
+    )
+    genotype = models.CharField(max_length=32)
+    phased = models.BooleanField(default=False, db_default=False)
+    phase_set = models.CharField(max_length=64, null=True, blank=True)
+    dosage = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True)
+    genotype_quality = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    read_depth = models.IntegerField(null=True, blank=True)
+    allele_depths = models.JSONField(null=True, blank=True)
+    filters = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'genotype'
+        indexes = [
+            PostgreSQLIndex(fields=['participant', 'release'], name='idx_genotype_participant_release'),
+            models.Index(fields=['variant', 'release'], name='idx_genotype_variant_release'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['analysis', 'participant', 'sample', 'variant'], name='uq_genotype_analysis_sample_variant',
+            ),
+            models.CheckConstraint(condition=models.Q(genotype_quality__gte=0), name='genotype_quality_gte_0'),
+            models.CheckConstraint(condition=models.Q(read_depth__gte=0), name='genotype_read_depth_gte_0'),
+        ]
+
+
 class Variant(models.Model):
     """Stable variant concept independent of genomic placements."""
 
