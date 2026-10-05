@@ -14,7 +14,7 @@ from accounts.models import Role
 from accounts.roles import is_admin, is_reception
 from profiles.utils import ensure_sample_code
 from accounts.email_utils import send_email, build_branded_html
-from services.models import Purchase
+from services.models import Purchase, Sample
 from services.legacy_profile import get_paid_legacy_service_projections
 
 
@@ -100,12 +100,26 @@ class ReceptionSearchAPIView(APIView):
         if email:
             qs = qs.filter(Q(user__email__iexact=email) | Q(user__username__iexact=email))
         if sample_code:
-            qs = qs.filter(sample_code__iexact=sample_code)
+            sample_owners = Sample.objects.filter(sample_code__iexact=sample_code).values_list(
+                'service_request__purchase__owner__django_user_id', flat=True,
+            )
+            qs = qs.filter(Q(user_id__in=sample_owners) | Q(sample_code__iexact=sample_code))
 
-        profiles = list(qs[:25])
+        profiles = list(qs if sample_code else qs[:25])
         paid = get_paid_legacy_service_projections(
             (profile.user_id for profile in profiles), include_samples=True,
         )
+        if sample_code:
+            # A Sample hit only identifies a candidate; c1 validates its newest paid service.
+            normalized_code = sample_code.casefold()
+            matching_profiles = []
+            for profile in profiles:
+                projection = paid.get(profile.user_id)
+                codes = ((sample.sample_code for sample in projection.service_samples)
+                         if projection is not None else (profile.sample_code,))
+                if any(code and code.casefold() == normalized_code for code in codes):
+                    matching_profiles.append(profile)
+            profiles = matching_profiles
         results = [
             serialize_reception_profile(profile, paid_projection=paid.get(profile.user_id))
             for profile in profiles
