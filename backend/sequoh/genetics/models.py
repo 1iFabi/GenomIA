@@ -14,6 +14,12 @@ class FixedCharField(models.CharField):
         return f'char({self.max_length})'
 
 
+class PostgreSQLIndex(models.Index):
+    """Allow exact PostgreSQL identifiers beyond Django's portable 30-character limit."""
+
+    max_name_length = 63
+
+
 class DataRelease(models.Model):
     """Versioned release provenance without ingest or publication behavior."""
 
@@ -144,6 +150,61 @@ class VariantAnnotation(models.Model):
             models.Index(fields=['variant'], name='idx_variant_annotation_variant'),
             models.Index(fields=['source_name', 'source_version'], name='idx_variant_annotation_source'),
             models.Index(fields=['gene_symbol'], name='idx_variant_annotation_gene'),
+        ]
+
+
+class AlleleFrequency(models.Model):
+    """Source-reported allele frequencies without inferred count consistency."""
+
+    frequency_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    release = models.ForeignKey(
+        'genetics.DataRelease', on_delete=models.SET_NULL, db_column='release_id',
+        null=True, blank=True, db_index=False, related_name='allele_frequencies',
+    )
+    variant = models.ForeignKey(
+        'genetics.Variant', on_delete=models.PROTECT, db_column='variant_id',
+        db_index=False, related_name='allele_frequencies',
+    )
+    population = models.ForeignKey(
+        'genetics.Population', on_delete=models.PROTECT, db_column='population_id',
+        db_index=False, related_name='allele_frequencies',
+    )
+    analysis = models.ForeignKey(
+        'genetics.Analysis', on_delete=models.SET_NULL, db_column='analysis_id',
+        null=True, blank=True, db_index=False, related_name='allele_frequencies',
+    )
+    source_name = models.CharField(max_length=128)
+    source_version = models.CharField(max_length=64)
+    allele = models.TextField()
+    allele_count = models.BigIntegerField(null=True, blank=True)
+    allele_number = models.BigIntegerField(null=True, blank=True)
+    allele_frequency = models.DecimalField(max_digits=12, decimal_places=10, null=True, blank=True)
+    homozygote_count = models.BigIntegerField(null=True, blank=True)
+    heterozygote_count = models.BigIntegerField(null=True, blank=True)
+    sample_count = models.BigIntegerField(null=True, blank=True)
+    quality_flags = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'allele_frequency'
+        indexes = [
+            PostgreSQLIndex(fields=['variant', 'population'], name='idx_frequency_variant_population'),
+            models.Index(fields=['source_name', 'source_version'], name='idx_frequency_source'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['release', 'variant', 'population', 'source_name', 'source_version', 'allele'],
+                name='uq_allele_frequency_record',
+            ),
+            models.CheckConstraint(condition=models.Q(allele_count__gte=0), name='allele_frequency_allele_count_gte_0'),
+            models.CheckConstraint(condition=models.Q(allele_number__gte=0), name='allele_frequency_allele_number_gte_0'),
+            models.CheckConstraint(condition=models.Q(homozygote_count__gte=0), name='allele_frequency_homozygote_count_gte_0'),
+            models.CheckConstraint(condition=models.Q(heterozygote_count__gte=0), name='allele_frequency_heterozygote_count_gte_0'),
+            models.CheckConstraint(condition=models.Q(sample_count__gte=0), name='allele_frequency_sample_count_gte_0'),
+            models.CheckConstraint(
+                condition=models.Q(allele_frequency__gte=0, allele_frequency__lte=1),
+                name='allele_frequency_value_range',
+            ),
         ]
 
 

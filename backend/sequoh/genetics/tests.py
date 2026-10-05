@@ -31,6 +31,491 @@ from services.models import (
 )
 
 
+class AlleleFrequencyTests(TestCase):
+    count_fields = ('allele_count', 'allele_number', 'homozygote_count', 'heterozygote_count', 'sample_count')
+    fk_specs = (
+        ('release', domain.DataRelease, 'release_id', 'fk_allele_frequency_release', SET_NULL, 'n'),
+        ('variant', domain.Variant, 'variant_id', 'fk_allele_frequency_variant', PROTECT, 'r'),
+        ('population', domain.Population, 'population_id', 'fk_allele_frequency_population', PROTECT, 'r'),
+        ('analysis', domain.Analysis, 'analysis_id', 'fk_allele_frequency_analysis', SET_NULL, 'n'),
+    )
+
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        self.variant = domain.Variant.objects.create(variant_type='synthetic-frequency')
+        self.population = domain.Population.objects.create(code='synthetic-frequency', name='Synthetic cohort')
+
+    def frequency(self, **changes):
+        return domain.AlleleFrequency(**(dict(
+            variant=self.variant, population=self.population, source_name='custom-source', source_version='v1', allele='synthetic',
+        ) | changes))
+
+    def test_minimal_frequency_has_orm_defaults_and_nullable_fields(self):
+        self.assertTrue(hasattr(domain, 'AlleleFrequency'), 'AlleleFrequency is missing.')
+        before = timezone.now()
+        frequency = self.frequency()
+        created = frequency.created_at
+        frequency.full_clean()
+        frequency.save()
+        frequency.refresh_from_db()
+        self.assertIsInstance(frequency.pk, uuid.UUID)
+        self.assertEqual(frequency.pk.version, 4)
+        self.assertEqual(frequency.created_at, created)
+        self.assertTrue(timezone.is_aware(created))
+        self.assertLessEqual(before, created)
+        self.assertLessEqual(created, timezone.now())
+        for field in ('release_id', 'analysis_id', 'allele_count', 'allele_number', 'allele_frequency',
+                      'homozygote_count', 'heterozygote_count', 'sample_count', 'quality_flags'):
+            self.assertIsNone(getattr(frequency, field))
+
+    def release(self):
+        return domain.DataRelease.objects.create(
+            name=uuid.uuid4().hex, version='v1', status='unlisted', reference_assembly='synthetic',
+        )
+
+    def linked_frequency(self):
+        release = self.release()
+        analysis = domain.Analysis.objects.create(
+            release=self.release(), module='synthetic', pipeline_name='synthetic', pipeline_version='v1', status='unlisted',
+        )  # Frequency and analysis releases need not match.
+        frequency = self.frequency(release=release, analysis=analysis)
+        frequency.full_clean()
+        frequency.save()
+        return frequency, release, analysis
+
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT conname, confdeltype, confupdtype, condeferrable, condeferred FROM pg_constraint '
+                           "WHERE conrelid = 'allele_frequency'::regclass AND contype = 'f'")
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def test_exact_sixteen_columns_types_sizes_nullability_defaults_and_constraints(self):
+        columns = {
+            'frequency_id': ('uuid', None, None, None, 'NO', None),
+            'release_id': ('uuid', None, None, None, 'YES', None),
+            'variant_id': ('uuid', None, None, None, 'NO', None),
+            'population_id': ('uuid', None, None, None, 'NO', None),
+            'analysis_id': ('uuid', None, None, None, 'YES', None),
+            'source_name': ('character varying', 128, None, None, 'NO', None),
+            'source_version': ('character varying', 64, None, None, 'NO', None),
+            'allele': ('text', None, None, None, 'NO', None),
+            **{field: ('bigint', None, 64, 0, 'YES', None) for field in self.count_fields},
+            'allele_frequency': ('numeric', None, 12, 10, 'YES', None),
+            'quality_flags': ('jsonb', None, None, None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, None, None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        model = domain.AlleleFrequency
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('allele_frequency', 'frequency_id'))
+        self.assertEqual({field.column for field in model._meta.local_fields}, set(columns))
+        self.assertIs(model._meta.pk.default, uuid.uuid4)
+        self.assertFalse(model._meta.pk.editable)
+        for field in model._meta.local_fields:
+            _, length, _, _, nullable, _ = columns[field.column]
+            self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+            if length is not None:
+                self.assertEqual(field.max_length, length)
+            self.assertFalse(field.choices or field.db_index or field.unique and not field.primary_key)
+            self.assertEqual(field.has_default(), field.name in ('frequency_id', 'created_at'))
+            self.assertEqual(field.has_db_default(), field.name == 'created_at')
+        for name in self.count_fields:
+            self.assertEqual(model._meta.get_field(name).get_internal_type(), 'BigIntegerField')
+        value = model._meta.get_field('allele_frequency')
+        self.assertEqual((value.max_digits, value.decimal_places), (12, 10))
+        created = model._meta.get_field('created_at')
+        self.assertIs(created.default, timezone.now)
+        self.assertIsInstance(created.db_default, TransactionNow)
+        self.assertFalse(created.auto_now or created.auto_now_add)
+        indexes = {'idx_frequency_variant_population': ['variant', 'population'],
+                   'idx_frequency_source': ['source_name', 'source_version']}
+        self.assertEqual({index.name: index.fields for index in model._meta.indexes}, indexes)
+        unique, *checks = model._meta.constraints
+        unique_columns = ['release_id', 'variant_id', 'population_id', 'source_name', 'source_version', 'allele']
+        self.assertEqual((unique.name, list(unique.fields)),
+                         ('uq_allele_frequency_record', [name.removesuffix('_id') for name in unique_columns]))
+        self.assertIsNone(unique.nulls_distinct)
+        self.assertIsNone(unique.deferrable)
+        self.assertIsNone(unique.condition)
+        self.assertFalse(unique.expressions or unique.include or unique.opclasses)
+        check_columns = {f'allele_frequency_{field}_gte_0': {field} for field in self.count_fields}
+        check_columns['allele_frequency_value_range'] = {'allele_frequency'}
+        self.assertEqual({check.name for check in checks}, set(check_columns))
+        for field, target, key, _, action, _ in self.fk_specs:
+            relation = model._meta.get_field(field)
+            self.assertIs(relation.remote_field.model, target)
+            self.assertIs(relation.remote_field.on_delete, action)
+            self.assertEqual(relation.target_field.name, key)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale, '
+                           'is_nullable, column_default FROM information_schema.columns '
+                           "WHERE table_schema = current_schema() AND table_name = 'allele_frequency'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'allele_frequency')
+            cursor.execute('SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() '
+                           "AND tablename = 'allele_frequency'")
+            self.assertEqual({row[0] for row in cursor.fetchall()},
+                             {'allele_frequency_pkey', 'uq_allele_frequency_record', *indexes})
+            cursor.execute("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'allele_frequency'::regclass "
+                           "AND conname = 'uq_allele_frequency_record'")
+            self.assertEqual(cursor.fetchone()[0], f"UNIQUE ({', '.join(unique_columns)})")
+        self.assertEqual(set(constraints), {'allele_frequency_pkey', 'uq_allele_frequency_record', *indexes,
+                                           *check_columns, *[spec[3] for spec in self.fk_specs]})
+        self.assertEqual([info['columns'] for info in constraints.values() if info['primary_key']], [['frequency_id']])
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['unique'] and not info['primary_key']},
+                         {'uq_allele_frequency_record': unique_columns})
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']},
+                         indexes | {'idx_frequency_variant_population': ['variant_id', 'population_id']})
+        self.assertEqual({name: set(info['columns']) for name, info in constraints.items() if info['check']}, check_columns)
+        self.assertEqual({name: (info['columns'], info['foreign_key']) for name, info in constraints.items() if info['foreign_key']},
+                         {name: ([field + '_id'], (target._meta.db_table, key)) for field, target, key, name, _, _ in self.fk_specs})
+        self.assertEqual(self.fk_actions(), {name: (deletion, 'c', False, False) for _, _, _, name, _, deletion in self.fk_specs})
+
+    def test_raw_defaults_are_nullable_and_transaction_time_without_seeds_or_other_writes(self):
+        self.assertEqual(domain.AlleleFrequency.objects.count(), 0)
+        others = (SNP, UserSNP, domain.DataRelease, domain.Variant, domain.Population, domain.Analysis,
+                  domain.VariantPlacement, domain.VariantAnnotation, domain.ExternalIdentifier, domain.EpigeneticFeature)
+        before = {model: model.objects.count() for model in others}
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO allele_frequency (frequency_id, variant_id, population_id, source_name, source_version, allele) '
+                           'VALUES (%s, %s, %s, %s, %s, %s) RETURNING release_id, analysis_id, allele_count, allele_number, '
+                           'allele_frequency, homozygote_count, heterozygote_count, sample_count, quality_flags, '
+                           'created_at, transaction_timestamp()',
+                           [uuid.uuid4(), self.variant.pk, self.population.pk, 'custom-source', 'v1', 'synthetic'])
+            *optional, created, database_now = cursor.fetchone()
+        self.assertEqual(optional, [None] * 9)
+        self.assertTrue(timezone.is_aware(created))
+        self.assertEqual(created, database_now)
+        self.assertEqual({model: model.objects.count() for model in others}, before)
+
+    def test_required_columns_and_primary_key_reject_nulls_and_duplicates(self):
+        values = dict(frequency_id=uuid.uuid4(), variant_id=self.variant.pk, population_id=self.population.pk,
+                      source_name='synthetic', source_version='v1', allele='synthetic', created_at=timezone.now())
+        sql = f"INSERT INTO allele_frequency ({', '.join(values)}) VALUES ({', '.join(['%s'] * len(values))})"
+        for field in values:
+            with self.subTest(null_column=field):
+                if field != 'frequency_id':
+                    with self.assertRaises(ValidationError):
+                        self.frequency(**{field: None}).full_clean()
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(sql, [None if name == field else value for name, value in values.items()])
+                self.assertEqual(error.exception.__cause__.diag.column_name, field)
+        first = self.frequency()
+        first.save()
+        with self.assertRaises(ValidationError):
+            self.frequency(frequency_id=first.pk).full_clean()
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            domain.AlleleFrequency.objects.bulk_create([self.frequency(frequency_id=first.pk)])
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'allele_frequency_pkey')
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute(sql, list((values | {'frequency_id': first.pk}).values()))
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'allele_frequency_pkey')
+
+    def test_varchar_boundaries_and_unbounded_allele_text(self):
+        for field, length in (('source_name', 128), ('source_version', 64)):
+            with self.subTest(field=field):
+                boundary = self.frequency(**{field: 'x' * length})
+                boundary.full_clean()
+                boundary.save()
+                boundary.refresh_from_db()
+                self.assertEqual(getattr(boundary, field), 'x' * length)
+                too_long = self.frequency(**{field: 'x' * (length + 1)})
+                with self.assertRaises(ValidationError):
+                    too_long.full_clean()
+                with self.assertRaises(DataError), transaction.atomic():
+                    too_long.save()
+                with self.assertRaises(DataError), transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'UPDATE allele_frequency SET {field} = %s WHERE frequency_id = %s',
+                                       ['x' * (length + 1), boundary.pk])
+        frequency = self.frequency(allele='unlisted symbolic allele ' * 1000)
+        frequency.full_clean()
+        frequency.save()
+        frequency.refresh_from_db()
+        self.assertEqual(frequency.allele, 'unlisted symbolic allele ' * 1000)
+
+    def test_five_nullable_nonnegative_bigint_counts_enforce_bounds_on_inserts_and_updates(self):
+        for field in self.count_fields:
+            with self.subTest(field=field):
+                for value in (None, 0, 2**63 - 1):
+                    frequency = self.frequency(**{field: value})
+                    frequency.full_clean()
+                    frequency.save()
+                    frequency.refresh_from_db()
+                    self.assertEqual(getattr(frequency, field), value)
+                constraint = f'allele_frequency_{field}_gte_0'
+                with self.assertRaises(ValidationError) as error:
+                    self.frequency(**{field: -1}).full_clean()
+                self.assertIn(constraint, str(error.exception))
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    self.frequency(**{field: -1}).save()
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint)
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'UPDATE allele_frequency SET {field} = -1 WHERE frequency_id = %s', [frequency.pk])
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint)
+                for overflow in (2**63, -2**63 - 1):
+                    with self.assertRaises(ValidationError):
+                        self.frequency(**{field: overflow}).full_clean()
+                    with self.assertRaises(DataError), transaction.atomic():
+                        self.frequency(**{field: overflow}).save()
+
+    def test_nullable_numeric_precision_inclusive_range_rounding_and_overflow(self):
+        for value in (None, Decimal('0'), Decimal('1'), Decimal('0.0000000001'), Decimal('0.9999999999')):
+            with self.subTest(value=value):
+                frequency = self.frequency(allele_frequency=value)
+                frequency.full_clean()
+                frequency.save()
+                frequency.refresh_from_db()
+                self.assertEqual(frequency.allele_frequency, value)
+        for value in ('-0.0000000001', '1.0000000001', '99.9999999999'):
+            with self.subTest(out_of_range=value):
+                with self.assertRaises(ValidationError):
+                    self.frequency(allele_frequency=Decimal(value)).full_clean()
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    self.frequency(allele_frequency=Decimal(value)).save()
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, 'allele_frequency_value_range')
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute('UPDATE allele_frequency SET allele_frequency = %s WHERE frequency_id = %s',
+                                       [Decimal(value), frequency.pk])
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, 'allele_frequency_value_range')
+        for value in ('100', '-100'):
+            with self.subTest(overflow=value):
+                with self.assertRaises(ValidationError):
+                    self.frequency(allele_frequency=Decimal(value)).full_clean()
+                with self.assertRaises(DataError), transaction.atomic():
+                    self.frequency(allele_frequency=Decimal(value)).save()
+        for value, rounded in (('0.00000000001', '0'), ('0.00000000005', '0.0000000001'),
+                               ('-0.00000000004', '0'), ('1.00000000004', '1')):
+            with self.subTest(rounding=value):
+                with self.assertRaises(ValidationError):
+                    self.frequency(allele_frequency=Decimal(value)).full_clean()
+                with connection.cursor() as cursor:
+                    cursor.execute('UPDATE allele_frequency SET allele_frequency = %s WHERE frequency_id = %s RETURNING allele_frequency',
+                                   [Decimal(value), frequency.pk])
+                    self.assertEqual(cursor.fetchone()[0], Decimal(rounded))
+
+    def test_jsonb_explicit_timestamp_and_inconsistent_counts_have_no_inferred_semantics(self):
+        _, _, analysis = self.linked_frequency()
+        before = {model: model.objects.count() for model in (domain.Variant, domain.Population, domain.Analysis, domain.DataRelease)}
+        values = dict(analysis=analysis, allele='unlisted allele', allele_count=10, allele_number=0,
+                      allele_frequency=Decimal('1'), homozygote_count=500, heterozygote_count=600, sample_count=0,
+                      created_at=timezone.now() - timedelta(days=1))
+        for flags in ({'nested': {'flag': True, 'missing': None}}, ['unlisted', 3, False], 'custom', 42, True):
+            with self.subTest(flags=flags):
+                frequency = self.frequency(**(values | {'quality_flags': flags}))
+                frequency.full_clean()
+                frequency.save()
+                frequency.refresh_from_db()
+                self.assertEqual(frequency.quality_flags, flags)
+                self.assertEqual({field: getattr(frequency, field) for field in values}, values)
+        self.assertEqual({model: model.objects.count() for model in before}, before)
+        with self.assertRaises(ValidationError):
+            self.frequency(quality_flags={'unserializable': {1}}).full_clean()
+
+    def test_unique_record_uses_nulls_distinct_but_rejects_nonnull_duplicates(self):
+        for _ in range(2):
+            frequency = self.frequency()
+            frequency.full_clean()
+            frequency.save()
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO allele_frequency (frequency_id, variant_id, population_id, source_name, source_version, allele) '
+                           'VALUES (%s, %s, %s, %s, %s, %s)',
+                           [uuid.uuid4(), self.variant.pk, self.population.pk, 'custom-source', 'v1', 'synthetic'])
+        self.assertEqual(domain.AlleleFrequency.objects.count(), 3)
+        release = self.release()
+        first = self.frequency(release=release)
+        first.full_clean()
+        first.save()
+        analysis = domain.Analysis.objects.create(module='synthetic', pipeline_name='synthetic', pipeline_version='v1', status='unlisted')
+        for changes in ({}, {'analysis': analysis, 'allele_count': 99, 'quality_flags': ['different']}):
+            with self.subTest(changes=changes):
+                duplicate = self.frequency(**({'release': release} | changes))
+                with self.assertRaises(ValidationError):
+                    duplicate.full_clean()
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    duplicate.save()
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, 'uq_allele_frequency_record')
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('INSERT INTO allele_frequency (frequency_id, release_id, variant_id, population_id, source_name, source_version, allele) '
+                               'VALUES (%s, %s, %s, %s, %s, %s, %s)',
+                               [uuid.uuid4(), release.pk, self.variant.pk, self.population.pk, 'custom-source', 'v1', 'synthetic'])
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'uq_allele_frequency_record')
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            domain.AlleleFrequency.objects.filter(pk=frequency.pk).update(release=release)
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'uq_allele_frequency_record')
+        other_variant = domain.Variant.objects.create(variant_type='synthetic-other')
+        other_population = domain.Population.objects.create(code='synthetic-other', name='Other synthetic cohort')
+        for changes in ({'release': self.release()}, {'variant': other_variant}, {'population': other_population},
+                        {'source_name': 'other'}, {'source_version': 'v2'}, {'allele': 'other'}):
+            with self.subTest(distinct=changes):
+                distinct = self.frequency(**({'release': release} | changes))
+                distinct.full_clean()
+                distinct.save()
+
+    def test_raw_key_updates_cascade_and_deletes_only_null_optional_links_or_restrict(self):
+        frequency, release, analysis = self.linked_frequency()
+        untouched = self.frequency(
+            variant=domain.Variant.objects.create(variant_type='unrelated'),
+            population=domain.Population.objects.create(code='unrelated', name='Unrelated cohort'),
+        )
+        untouched.save()
+        before = domain.AlleleFrequency.objects.filter(pk=untouched.pk).values().get()
+        parents = {'release': release, 'variant': self.variant, 'population': self.population, 'analysis': analysis}
+        with connection.cursor() as cursor:
+            for field, target, key, _, _, _ in self.fk_specs:
+                parent, new_id = parents[field], uuid.uuid4()
+                cursor.execute(f'UPDATE {target._meta.db_table} SET {key} = %s WHERE {key} = %s', [new_id, parent.pk])
+                frequency.refresh_from_db()
+                self.assertEqual(getattr(frequency, field + '_id'), new_id)
+                parent.pk = new_id
+            for field in ('release', 'analysis'):
+                parent = parents[field]
+                cursor.execute(f'DELETE FROM {parent._meta.db_table} WHERE {parent._meta.pk.column} = %s', [parent.pk])
+                frequency.refresh_from_db()
+                self.assertIsNone(getattr(frequency, field + '_id'))
+                self.assertEqual((frequency.variant_id, frequency.population_id), (self.variant.pk, self.population.pk))
+            for field in ('variant', 'population'):
+                parent = parents[field]
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    cursor.execute('SET CONSTRAINTS ALL DEFERRED')
+                    cursor.execute(f'DELETE FROM {parent._meta.db_table} WHERE {parent._meta.pk.column} = %s', [parent.pk])
+                    self.fail('RESTRICT must reject the delete at the statement.')
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, f'fk_allele_frequency_{field}')
+                self.assertTrue(type(parent).objects.filter(pk=parent.pk).exists())
+        self.assertEqual(domain.AlleleFrequency.objects.filter(pk=untouched.pk).values().get(), before)
+        self.assertTrue(domain.AlleleFrequency.objects.filter(pk=frequency.pk).exists())
+
+    def test_orm_deletes_set_null_or_protect_without_cascading_frequency_rows(self):
+        frequency, release, analysis = self.linked_frequency()
+        release.delete()
+        analysis.delete()
+        frequency.refresh_from_db()
+        self.assertEqual((frequency.release_id, frequency.analysis_id), (None, None))
+        for parent in (self.variant, self.population):
+            with self.assertRaises(ProtectedError):
+                parent.delete()
+        self.assertTrue(domain.AlleleFrequency.objects.filter(pk=frequency.pk).exists())
+
+    def test_all_four_orphan_inserts_and_updates_fail_immediately_even_when_deferred(self):
+        frequency = self.frequency()
+        frequency.save()
+        for field, _, _, name, _, _ in self.fk_specs:
+            column, orphan = field + '_id', uuid.uuid4()
+            with self.subTest(field=field):
+                with self.assertRaises(ValidationError):
+                    self.frequency(**{column: orphan}).full_clean()
+                values = dict(frequency_id=uuid.uuid4(), variant_id=self.variant.pk, population_id=self.population.pk,
+                              source_name='custom-source', source_version='v1', allele='synthetic') | {column: orphan}
+                insert = f"INSERT INTO allele_frequency ({', '.join(values)}) VALUES ({', '.join(['%s'] * len(values))})"
+                for sql, args in ((insert, list(values.values())),
+                                  (f'UPDATE allele_frequency SET {column} = %s WHERE frequency_id = %s', [orphan, frequency.pk])):
+                    with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                        with connection.cursor() as cursor:
+                            cursor.execute('SET CONSTRAINTS ALL DEFERRED')
+                            cursor.execute(sql, args)
+                            self.fail('Frequency FK must reject an orphan at the statement, not transaction end.')
+                    self.assertEqual(error.exception.__cause__.diag.constraint_name, name)
+
+    def test_fk_reverse_restores_deferred_no_action_then_forward_restores_physical_actions(self):
+        operation = import_module('genetics.migrations.0010_allele_frequency').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0010_allele_frequency')])
+        frequency, release, analysis = self.linked_frequency()
+        parents = {'release': release, 'variant': self.variant, 'population': self.population, 'analysis': analysis}
+        # Flush the fixture's unrelated, deferred Analysis.release FK before schema DDL.
+        connection.check_constraints()
+        expected = self.fk_actions()
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            operation.database_backwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), {name: ('a', 'a', True, True) for name in expected})
+            for field, target, key, _, _, _ in self.fk_specs:
+                with self.subTest(field=field), transaction.atomic():
+                    # Both updates may temporarily violate a deferred FK; no cascade occurs on reversal.
+                    cursor.execute(f'UPDATE {target._meta.db_table} SET {key} = %s WHERE {key} = %s',
+                                   [uuid.uuid4(), parents[field].pk])
+                    frequency.refresh_from_db()
+                    self.assertEqual(getattr(frequency, field + '_id'), parents[field].pk)
+                    cursor.execute(f'UPDATE allele_frequency SET {field}_id = %s WHERE frequency_id = %s',
+                                   [uuid.uuid4(), frequency.pk])
+                    transaction.set_rollback(True)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected)
+
+    def test_every_missing_or_ambiguous_lookup_fails_before_any_fk_replacement_in_both_directions(self):
+        operation = import_module('genetics.migrations.0010_allele_frequency').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0010_allele_frequency')])
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected = self.fk_actions()
+            for apply in (operation.database_forwards, operation.database_backwards):
+                for field, target, key, name, _, _ in self.fk_specs:
+                    for case, sql in (
+                        ('missing', f'ALTER TABLE allele_frequency DROP CONSTRAINT {name}'),
+                        ('ambiguous', f'ALTER TABLE allele_frequency ADD CONSTRAINT duplicate_fk FOREIGN KEY ({field}_id) '
+                         f'REFERENCES {target._meta.db_table} ({key}) DEFERRABLE INITIALLY DEFERRED'),
+                    ):
+                        with self.subTest(direction=apply.__name__, field=field, case=case), transaction.atomic():
+                            cursor.execute(sql)
+                            before = self.fk_actions()
+                            with patch.object(editor, 'execute', wraps=editor.execute) as execute:
+                                with self.assertRaisesMessage(RuntimeError, 'Expected exactly one FK'):
+                                    apply('genetics', editor, state, state)
+                                execute.assert_not_called()
+                            self.assertEqual(self.fk_actions(), before)
+                            transaction.set_rollback(True)
+                operation.database_backwards('genetics', editor, state, state)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected)
+
+    def test_fk_lookup_matches_exact_relations_attnums_and_quotes_discovered_names(self):
+        operation = import_module('genetics.migrations.0010_allele_frequency').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0010_allele_frequency')])
+        with transaction.atomic(), connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected, decoys = self.fk_actions(), {}
+            for field, target, key, name, _, _ in self.fk_specs:
+                quoted = connection.ops.quote_name(f'generated "{field}" FK'.replace('"', '""'))
+                cursor.execute(f'ALTER TABLE allele_frequency RENAME CONSTRAINT {name} TO {quoted}')
+                cursor.execute(f'ALTER TABLE {target._meta.db_table} ADD COLUMN decoy_key uuid UNIQUE')
+                other_table, other_key = ('population', 'population_id') if field == 'variant' else ('variant', 'variant_id')
+                for kind, source, table, column in (
+                    ('source', 'frequency_id', target._meta.db_table, key),
+                    ('target', field + '_id', target._meta.db_table, 'decoy_key'),
+                    ('relation', field + '_id', other_table, other_key),
+                ):
+                    decoy = f'decoy_frequency_{kind}_{field}'
+                    cursor.execute(f'ALTER TABLE allele_frequency ADD CONSTRAINT {decoy} FOREIGN KEY ({source}) '
+                                   f'REFERENCES {table} ({column}) DEFERRABLE INITIALLY DEFERRED')
+                    decoys[decoy] = ('a', 'a', True, True)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected | decoys)
+            operation.database_backwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), {name: ('a', 'a', True, True) for name in expected} | decoys)
+            transaction.set_rollback(True)
+
+    def test_schema_only_migration_dependency_state_and_postgresql_index_deconstruction(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0010_allele_frequency')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0009_variant_annotation')])
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel', 'RunPython'])
+        self.assertEqual(migration.operations[0].name, 'AlleleFrequency')
+        self.assertTrue(migration.operations[1].reversible)
+        historical = MigrationLoader(connection).project_state([('genetics', '0010_allele_frequency')]).apps.get_model('genetics', 'AlleleFrequency')
+        self.assertEqual(historical._meta.db_table, domain.AlleleFrequency._meta.db_table)
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in domain.AlleleFrequency._meta.local_fields})
+        self.assertEqual(historical._meta.indexes, domain.AlleleFrequency._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.AlleleFrequency._meta.constraints)
+        index = domain.AlleleFrequency._meta.indexes[0]
+        self.assertIsInstance(index, domain.PostgreSQLIndex)
+        self.assertEqual(index.max_name_length, 63)
+        path, args, kwargs = index.deconstruct()
+        self.assertEqual(path, 'genetics.models.PostgreSQLIndex')
+        self.assertEqual(domain.PostgreSQLIndex(*args, **kwargs).deconstruct(), index.deconstruct())
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
+
+
 class VariantAnnotationTests(TestCase):
     fk_specs = (
         ('variant', domain.Variant, 'variant_id', 'fk_variant_annotation_variant', CASCADE, 'c'),
