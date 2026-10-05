@@ -83,6 +83,32 @@ class VariantPlacement(models.Model):
         ]
 
 
+class ExternalIdentifier(models.Model):
+    """External accessions and lifecycle links, not variant identity resolution."""
+
+    external_identifier_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        'genetics.Variant', on_delete=models.CASCADE, db_column='variant_id',
+        db_index=False, related_name='external_identifiers',
+    )
+    replaced_by_identifier = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, db_column='replaced_by_identifier_id',
+        null=True, blank=True, db_index=False, related_name='replaced_identifiers',
+    )
+    namespace = models.CharField(max_length=64)
+    accession = models.CharField(max_length=255)
+    version = models.CharField(max_length=64, null=True, blank=True)
+    status = models.CharField(max_length=32, default='active', db_default='active')
+    source_release = models.CharField(max_length=128, null=True, blank=True)
+    is_primary = models.BooleanField(default=False, db_default=False)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'external_identifier'
+        indexes = [models.Index(fields=['namespace', 'accession'], name='idx_external_identifier_lookup')]
+        constraints = [models.UniqueConstraint(fields=['namespace', 'accession', 'version'], name='uq_external_identifier')]
+
+
 class Analysis(models.Model):
     """Pipeline provenance with optional participant, sample, request and release links."""
 

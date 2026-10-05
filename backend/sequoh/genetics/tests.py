@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import DataError, IntegrityError, connection, transaction
 from django.db.migrations.loader import MigrationLoader
-from django.db.models.deletion import CASCADE, PROTECT, ProtectedError
+from django.db.models.deletion import CASCADE, PROTECT, SET_NULL, ProtectedError
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -28,6 +28,283 @@ from services.models import (
     Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
 )
+
+
+class ExternalIdentifierTests(TestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        self.variant = domain.Variant.objects.create(variant_type='synthetic-identifier')
+
+    def identifier(self, **changes):
+        return domain.ExternalIdentifier(**(dict(
+            variant=self.variant, namespace='custom-namespace', accession=uuid.uuid4().hex,
+        ) | changes))
+
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT conname, confdeltype, confupdtype, condeferrable, condeferred FROM pg_constraint '
+                           "WHERE conrelid = 'external_identifier'::regclass AND contype = 'f'")
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def test_minimal_identifier_has_orm_defaults_and_nullable_fields(self):
+        self.assertTrue(hasattr(domain, 'ExternalIdentifier'), 'ExternalIdentifier is missing.')
+        identifier = domain.ExternalIdentifier(variant=self.variant, namespace='custom-namespace', accession='synthetic')
+        identifier.full_clean()
+        identifier.save()
+        identifier.refresh_from_db()
+        self.assertIsInstance(identifier.pk, uuid.UUID)
+        self.assertEqual(identifier.pk.version, 4)
+        self.assertEqual(identifier.variant, self.variant)
+        self.assertEqual(identifier.status, 'active')
+        self.assertIs(identifier.is_primary, False)
+        self.assertTrue(timezone.is_aware(identifier.created_at))
+        for field in ('replaced_by_identifier_id', 'version', 'source_release'):
+            self.assertIsNone(getattr(identifier, field))
+
+    def test_exact_ten_columns_defaults_keys_unique_and_only_lookup_index(self):
+        columns = {
+            'external_identifier_id': ('uuid', None, 'NO', None),
+            'variant_id': ('uuid', None, 'NO', None),
+            'replaced_by_identifier_id': ('uuid', None, 'YES', None),
+            'namespace': ('character varying', 64, 'NO', None),
+            'accession': ('character varying', 255, 'NO', None),
+            'version': ('character varying', 64, 'YES', None),
+            'status': ('character varying', 32, 'NO', "'active'::character varying"),
+            'source_release': ('character varying', 128, 'YES', None),
+            'is_primary': ('boolean', None, 'NO', 'false'),
+            'created_at': ('timestamp with time zone', None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        model = domain.ExternalIdentifier
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('external_identifier', 'external_identifier_id'))
+        self.assertEqual({field.column for field in model._meta.local_fields}, set(columns))
+        self.assertIs(model._meta.pk.default, uuid.uuid4)
+        self.assertFalse(model._meta.pk.editable)
+        for field in model._meta.local_fields:
+            _, length, nullable, _ = columns[field.column]
+            self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+            if length is not None:
+                self.assertEqual(field.max_length, length)
+            self.assertFalse(field.choices)
+        status, primary, created = (model._meta.get_field(name) for name in ('status', 'is_primary', 'created_at'))
+        self.assertEqual((status.default, status.db_default), ('active', 'active'))
+        self.assertIs(primary.default, False)
+        self.assertIs(primary.db_default, False)
+        self.assertIs(created.default, timezone.now)
+        self.assertIsInstance(created.db_default, TransactionNow)
+        expected_fks = {('variant_id', ('variant', 'variant_id')),
+                        ('replaced_by_identifier_id', ('external_identifier', 'external_identifier_id'))}
+        for name, target, action in (('variant', domain.Variant, CASCADE), ('replaced_by_identifier', model, SET_NULL)):
+            relation = model._meta.get_field(name)
+            self.assertIs(relation.remote_field.model, target)
+            self.assertIs(relation.remote_field.on_delete, action)
+            self.assertFalse(relation.db_index)
+        self.assertEqual({index.name: index.fields for index in model._meta.indexes}, {
+            'idx_external_identifier_lookup': ['namespace', 'accession'],
+        })
+        unique, = model._meta.constraints
+        self.assertEqual((unique.name, unique.fields, unique.nulls_distinct),
+                         ('uq_external_identifier', ('namespace', 'accession', 'version'), None))
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable, column_default '
+                           'FROM information_schema.columns WHERE table_schema = current_schema() '
+                           "AND table_name = 'external_identifier'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'external_identifier')
+            cursor.execute("SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'external_identifier'")
+            self.assertEqual({row[0] for row in cursor.fetchall()}, {
+                'external_identifier_pkey', 'uq_external_identifier', 'idx_external_identifier_lookup',
+            })
+        self.assertEqual([info['columns'] for info in constraints.values() if info['primary_key']], [['external_identifier_id']])
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['unique'] and not info['primary_key']},
+                         {'uq_external_identifier': ['namespace', 'accession', 'version']})
+        self.assertEqual({(info['columns'][0], info['foreign_key']) for info in constraints.values() if info['foreign_key']}, expected_fks)
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']},
+                         {'idx_external_identifier_lookup': ['namespace', 'accession']})
+        self.assertEqual(self.fk_actions(), {'fk_external_identifier_variant': ('c', 'c', False, False),
+                                            'fk_external_identifier_replacement': ('n', 'c', False, False)})
+
+    def test_raw_sql_defaults_use_unquoted_active_false_and_transaction_timestamp(self):
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO external_identifier (external_identifier_id, variant_id, namespace, accession) '
+                           'VALUES (%s, %s, %s, %s) RETURNING status, is_primary, replaced_by_identifier_id, version, '
+                           'source_release, created_at, transaction_timestamp()',
+                           [uuid.uuid4(), self.variant.pk, 'synthetic-sql', 'synthetic'])
+            status, primary, *optional, created_at, database_now = cursor.fetchone()
+        self.assertEqual(status, 'active')  # SQL v01.5 triple-quoted literals would embed quote characters.
+        self.assertIs(primary, False)
+        self.assertEqual(optional, [None] * 3)
+        self.assertTrue(timezone.is_aware(created_at))
+        self.assertEqual(created_at, database_now)
+
+    def test_explicit_values_round_trip_without_legacy_side_effects_or_namespace_enum(self):
+        replacement = self.identifier()
+        replacement.save()
+        legacy = (SNP, UserSNP, domain.Analysis, domain.DataRelease, domain.Variant, domain.VariantPlacement)
+        before = {model: model.objects.count() for model in legacy}
+        values = dict(namespace='unlisted-namespace', accession='synthetic-accession', version='synthetic-version',
+                      status='custom-status', source_release='synthetic-release', is_primary=True,
+                      replaced_by_identifier=replacement, created_at=timezone.now())
+        identifier = self.identifier(**values)
+        identifier.full_clean()
+        identifier.save()
+        identifier.refresh_from_db()
+        self.assertEqual({field: getattr(identifier, field) for field in values}, values)
+        self.assertEqual({model: model.objects.count() for model in legacy}, before)
+
+    def test_composite_uniqueness_rejects_nonnull_duplicates_but_accepts_null_versions(self):
+        first = self.identifier(accession='shared-accession', version='v1')
+        first.save()
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            self.identifier(accession=first.accession, version=first.version).save()
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'uq_external_identifier')
+        for changes in ({'version': 'v2'}, {'accession': 'other'}, {'namespace': 'other'}, {'version': None}, {'version': None}):
+            identifier = self.identifier(**(dict(accession=first.accession, version=first.version) | changes))
+            identifier.full_clean()
+            identifier.save()
+        self.assertEqual(domain.ExternalIdentifier.objects.count(), 6)
+        self.assertEqual(domain.ExternalIdentifier.objects.filter(accession=first.accession, version__isnull=True).count(), 2)
+
+    def test_required_columns_primary_key_and_immediate_foreign_keys_are_enforced(self):
+        values = dict(external_identifier_id=uuid.uuid4(), variant_id=self.variant.pk, namespace='synthetic',
+                      accession='synthetic', status='active', is_primary=False, created_at=timezone.now())
+        columns, placeholders = ', '.join(connection.ops.quote_name(field) for field in values), ', '.join(['%s'] * len(values))
+        for field in values:
+            with self.subTest(null_column=field):
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'INSERT INTO external_identifier ({columns}) VALUES ({placeholders})',
+                                       [None if name == field else value for name, value in values.items()])
+                self.assertEqual(error.exception.__cause__.diag.column_name, field)
+        for field in ('variant', 'replaced_by_identifier'):
+            orphan = self.identifier(**{f'{field}_id': uuid.uuid4()})
+            with self.subTest(orphan=field):
+                with self.assertRaises(ValidationError) as error:
+                    orphan.full_clean()
+                self.assertIn(field, error.exception.message_dict)
+                with self.assertRaises(IntegrityError), transaction.atomic():
+                    orphan.save()
+                    self.fail('External identifier FK must reject missing references immediately.')
+        first = self.identifier()
+        first.save()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            domain.ExternalIdentifier.objects.bulk_create([self.identifier(external_identifier_id=first.pk)])
+
+    def test_all_varchar_boundaries_and_overflows_in_orm_and_database(self):
+        for field, length in (('namespace', 64), ('accession', 255), ('version', 64), ('status', 32), ('source_release', 128)):
+            with self.subTest(field=field):
+                boundary = self.identifier(**{field: 'x' * length})
+                boundary.full_clean()
+                boundary.save()
+                boundary.refresh_from_db()
+                self.assertEqual(getattr(boundary, field), 'x' * length)
+                too_long = self.identifier(**{field: 'x' * (length + 1)})
+                with self.assertRaises(ValidationError) as error:
+                    too_long.full_clean()
+                self.assertIn(field, error.exception.message_dict)
+                with self.assertRaises(DataError), transaction.atomic():
+                    too_long.save()
+
+    def test_raw_variant_update_delete_cascades_and_preserves_other_variant_identifiers(self):
+        identifier = self.identifier()
+        identifier.save()
+        other = domain.Variant.objects.create(variant_type='synthetic-other')
+        remaining = self.identifier(variant=other, replaced_by_identifier=identifier)
+        remaining.save()
+        new_id = uuid.uuid4()
+        with connection.cursor() as cursor:
+            cursor.execute('UPDATE variant SET variant_id = %s WHERE variant_id = %s', [new_id, self.variant.pk])
+            identifier.refresh_from_db()
+            self.assertEqual(identifier.variant_id, new_id)
+            cursor.execute('DELETE FROM variant WHERE variant_id = %s', [new_id])
+        remaining.refresh_from_db()
+        self.assertIsNone(remaining.replaced_by_identifier_id)
+        self.assertEqual(list(domain.ExternalIdentifier.objects.values_list('pk', flat=True)), [remaining.pk])
+        self.assertTrue(domain.Variant.objects.filter(pk=other.pk).exists())
+
+    def test_raw_replacement_update_cascades_and_delete_sets_references_null(self):
+        replacement = self.identifier()
+        replacement.save()
+        references = [self.identifier(replaced_by_identifier=replacement) for _ in range(2)]
+        domain.ExternalIdentifier.objects.bulk_create(references)
+        new_id = uuid.uuid4()
+        with connection.cursor() as cursor:
+            cursor.execute('UPDATE external_identifier SET external_identifier_id = %s WHERE external_identifier_id = %s', [new_id, replacement.pk])
+            self.assertEqual(list(domain.ExternalIdentifier.objects.exclude(pk=new_id).values_list('replaced_by_identifier_id', flat=True)), [new_id] * 2)
+            cursor.execute('DELETE FROM external_identifier WHERE external_identifier_id = %s', [new_id])
+        self.assertEqual(list(domain.ExternalIdentifier.objects.values_list('replaced_by_identifier_id', flat=True)), [None] * 2)
+        self.assertTrue(domain.Variant.objects.filter(pk=self.variant.pk).exists())
+
+    def test_orm_variant_cascade_and_replacement_set_null_match_database_actions(self):
+        replacement = self.identifier()
+        replacement.save()
+        other = domain.Variant.objects.create(variant_type='synthetic-other')
+        remaining = self.identifier(variant=other, replaced_by_identifier=replacement)
+        remaining.save()
+        replacement.delete()
+        remaining.refresh_from_db()
+        self.assertIsNone(remaining.replaced_by_identifier_id)
+        self.identifier().save()
+        self.variant.delete()
+        self.assertEqual(list(domain.ExternalIdentifier.objects.values_list('pk', flat=True)), [remaining.pk])
+
+    def test_fk_reverse_restores_django_defaults_and_lookup_fails_closed(self):
+        operation = import_module('genetics.migrations.0006_external_identifier').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0006_external_identifier')])
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected = self.fk_actions()
+            operation.database_backwards('genetics', editor, state, state)
+            restored = {name: ('a', 'a', True, True) for name in expected}
+            self.assertEqual(self.fk_actions(), restored)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected)
+            operation.database_backwards('genetics', editor, state, state)
+            for column, table, key, name in (
+                ('variant_id', 'variant', 'variant_id', 'fk_external_identifier_variant'),
+                ('replaced_by_identifier_id', 'external_identifier', 'external_identifier_id', 'fk_external_identifier_replacement'),
+            ):
+                for case, sql in (
+                    ('missing', f'ALTER TABLE external_identifier DROP CONSTRAINT {name}'),
+                    ('ambiguous', f'ALTER TABLE external_identifier ADD CONSTRAINT duplicate_fk FOREIGN KEY ({column}) '
+                     f'REFERENCES {table} ({key}) DEFERRABLE INITIALLY DEFERRED'),
+                ):
+                    with self.subTest(column=column, case=case), transaction.atomic():
+                        cursor.execute(sql)
+                        before = self.fk_actions()
+                        with self.assertRaisesMessage(RuntimeError, 'Expected exactly one FK'):
+                            operation.database_forwards('genetics', editor, state, state)
+                        self.assertEqual(self.fk_actions(), before)  # Neither FK changes if either lookup fails.
+                        transaction.set_rollback(True)
+            operation.database_forwards('genetics', editor, state, state)
+
+    def test_fk_lookup_matches_source_and_target_attnums_not_other_self_references(self):
+        operation = import_module('genetics.migrations.0006_external_identifier').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0006_external_identifier')])
+        with transaction.atomic(), connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected = self.fk_actions()
+            cursor.execute('ALTER TABLE external_identifier ADD CONSTRAINT decoy_unique UNIQUE (variant_id)')
+            for name, source, target in (('decoy_source', 'variant_id', 'external_identifier_id'),
+                                         ('decoy_target', 'replaced_by_identifier_id', 'variant_id')):
+                cursor.execute(f'ALTER TABLE external_identifier ADD CONSTRAINT {name} FOREIGN KEY ({source}) '
+                               f'REFERENCES external_identifier ({target}) DEFERRABLE INITIALLY DEFERRED')
+            operation.database_backwards('genetics', editor, state, state)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected | {name: ('a', 'a', True, True) for name in ('decoy_source', 'decoy_target')})
+            transaction.set_rollback(True)
+
+    def test_schema_only_migration_dependency_and_state_match_model(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0006_external_identifier')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0005_variant_placement')])
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel', 'RunPython'])
+        self.assertEqual(migration.operations[0].name, 'ExternalIdentifier')
+        historical = MigrationLoader(connection).project_state([('genetics', '0006_external_identifier')]).apps.get_model('genetics', 'ExternalIdentifier')
+        self.assertEqual(historical._meta.db_table, domain.ExternalIdentifier._meta.db_table)
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in domain.ExternalIdentifier._meta.local_fields})
+        self.assertEqual(historical._meta.indexes, domain.ExternalIdentifier._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.ExternalIdentifier._meta.constraints)
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
 
 
 class VariantPlacementTests(TestCase):
