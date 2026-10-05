@@ -533,28 +533,6 @@ function parseHtmlTemplate(htmlContent) {
   return { otherHead, styleContent, bodyContent };
 }
 
-// Concurrency helper
-async function runWithLimit(items, limit, fn) {
-  const results = [];
-  const executing = [];
-  for (const item of items) {
-    const p = Promise.resolve().then(async () => {
-        const res = await fn(item);
-        // Small pause to allow GC to catch up
-        if (global.gc) global.gc(); 
-        await new Promise(r => setTimeout(r, 100));
-        return res;
-    });
-    results.push(p);
-    const e = p.then(() => executing.splice(executing.indexOf(e), 1));
-    executing.push(e);
-    if (executing.length >= limit) {
-      await Promise.race(executing);
-    }
-  }
-  return Promise.all(results);
-}
-
 // === MAIN ===
 const args = parseArgs(process.argv.slice(2));
 const inputPath = args.input || defaultDataPath;
@@ -714,7 +692,7 @@ const rsidMasterTemplateEnd = `</body></html>`;
             bgDataUrl: coverBgDataUrl, logoDataUrl, name: escapeHtml(person.displayName ?? person.name ?? ""),
             reportId: escapeHtml(reportLabel), date: escapeHtml(person.date ?? ""), qrDataUrl,
         });
-        return { order: 0, buffer: await renderPdfSafe(html) };
+        return { buffer: await renderPdfSafe(html) };
     });
 
     // 2. Index
@@ -732,7 +710,7 @@ const rsidMasterTemplateEnd = `</body></html>`;
 
     tasks.push(async () => {
         const html = fillTemplate(indexTemplate, { indexRowsHtml: buildIndexRows(tocEntries) });
-        return { order: 1, buffer: await renderPdfSafe(html) };
+        return { buffer: await renderPdfSafe(html) };
     });
 
     // 3. Intro
@@ -742,7 +720,7 @@ const rsidMasterTemplateEnd = `</body></html>`;
             bgDataUrl, logoColorDataUrl, heroNumber: formatSectionNumber(1), reportId: escapeHtml(reportLabel),
             date: escapeHtml(person.date ?? ""), pageNumber: introPageNum, pageTotal: totalNumberedPages,
         });
-        return { order: 2, buffer: await renderPdfSafe(html) };
+        return { buffer: await renderPdfSafe(html) };
     });
 
     // 4. Report
@@ -756,7 +734,7 @@ const rsidMasterTemplateEnd = `</body></html>`;
             ancestryMainPct: ancestryInfo.mainPct, ancestrySecondaryRows: ancestryInfo.rowsHtml, highlightsHtml,
             areasOverviewHtml, pageNumber: reportPageNum, pageTotal: totalNumberedPages,
         });
-        return { order: 3, buffer: await renderPdfSafe(html) };
+        return { buffer: await renderPdfSafe(html) };
     });
 
     // 5. Ancestry
@@ -769,26 +747,22 @@ const rsidMasterTemplateEnd = `</body></html>`;
             date: escapeHtml(person.date ?? ""), ancestryDataJson, indigenousDataJson,
             pageNumber: ancestryPageNum, pageTotal: totalNumberedPages,
         });
-        return { order: 4, buffer: await renderPdfSafe(html, { waitForSelector: ".country" }) };
+        return { buffer: await renderPdfSafe(html, { waitForSelector: ".country" }) };
     });
-
-    let globalOrder = 5;
 
     // 6. Categories
     for (const data of categoryData) {
         const secPageNum = nextNumberedPage();
-        const localOrder = globalOrder++;
         tasks.push(async () => {
             const html = fillTemplate(coverSectionTemplate, {
                 sectionNumber: data.sectionNumber, sectionTitle: escapeHtml(data.sectionMeta.label),
                 pageNumber: secPageNum, pageTotal: totalNumberedPages,
             });
-            return { order: localOrder, buffer: await renderPdfSafe(html) };
+            return { buffer: await renderPdfSafe(html) };
         });
 
         for (const chunk of data.summaryChunks) {
             const sumPageNum = nextNumberedPage();
-            const sumOrder = globalOrder++;
             tasks.push(async () => {
                 const html = fillTemplate(summaryTemplate, {
                     bgDataUrl, logoColorDataUrl, sectionNumber: data.sectionNumber, sectionTitle: data.sectionMeta.label,
@@ -797,7 +771,7 @@ const rsidMasterTemplateEnd = `</body></html>`;
                     summaryContent: buildSummaryContent(chunk), reportId: escapeHtml(reportLabel),
                     date: escapeHtml(person.date ?? ""), pageNumber: sumPageNum, pageTotal: totalNumberedPages,
                 });
-                return { order: sumOrder, buffer: await renderPdfSafe(html) };
+                return { buffer: await renderPdfSafe(html) };
             });
         }
 
@@ -806,7 +780,6 @@ const rsidMasterTemplateEnd = `</body></html>`;
             const chunks = chunkItems(data.rsidItems, RSID_CHUNK_SIZE);
             for (const chunk of chunks) {
                 const pagesData = chunk.map(item => ({ item, pageNum: nextNumberedPage() }));
-                const chunkOrder = globalOrder++;
                 tasks.push(async () => {
                     let inner = "";
                     for (const { item, pageNum } of pagesData) {
@@ -825,7 +798,7 @@ const rsidMasterTemplateEnd = `</body></html>`;
                         inner += `<div class="rsid-page">${pageHtml}</div>`;
                     }
                     const fullHtml = `${rsidMasterTemplateStart}${inner}${rsidMasterTemplateEnd}`;
-                    return { order: chunkOrder, buffer: await renderPdfSafe(fullHtml) };
+                    return { buffer: await renderPdfSafe(fullHtml) };
                 });
             }
         }
@@ -833,20 +806,24 @@ const rsidMasterTemplateEnd = `</body></html>`;
 
     // 7. Closing
     const closingPageNum = nextNumberedPage();
-    const closingOrder = globalOrder++;
     tasks.push(async () => {
         const html = fillTemplate(closingTemplate, {
             bgDataUrl: coverBgDataUrl, logoDataUrl, displayName: escapeHtml(person.displayName ?? person.name ?? ""),
             reportId: escapeHtml(reportLabel), date: escapeHtml(person.date ?? ""), link: escapeHtml(person.link ?? ""),
             qrDataUrl, pageNumber: closingPageNum, pageTotal: totalNumberedPages,
         });
-        return { order: closingOrder, buffer: await renderPdfSafe(html) };
+        return { buffer: await renderPdfSafe(html) };
     });
 
-    // === EXECUTE PARALLEL ===
-    const CONCURRENCY_LIMIT = 1; // Limit 1 for 512MB RAM stability in production
-    const results = await runWithLimit(tasks, CONCURRENCY_LIMIT, t => t());
-    results.sort((a, b) => a.order - b.order);
+    // === EXECUTE SEQUENTIALLY ===
+    // Process one task at a time for 512MB RAM stability in production.
+    const results = [];
+    for (const task of tasks) {
+        results.push(await task());
+        // Small pause to allow GC to catch up
+        if (global.gc) global.gc();
+        await new Promise(r => setTimeout(r, 100));
+    }
 
     for (const res of results) {
         const chunkDoc = await PDFDocument.load(res.buffer);

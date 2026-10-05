@@ -24,12 +24,8 @@ def status_view(request):
     return JsonResponse({"status": "ok"})
 
 
-def index(request):
-    return JsonResponse({"status": "ok"})
-
-
 urlpatterns = [
-    path('', index, name='index'),
+    path('', status_view, name='index'),
     path('api/status/', status_view, name='api_status'),
     path('ciff/', admin.site.urls),
     path('CIFF/', admin.site.urls),
