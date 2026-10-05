@@ -10,9 +10,9 @@ from django.contrib.auth.models import Group, User
 from django.contrib.postgres.functions import TransactionNow
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.db import DataError, IntegrityError, connection, transaction
+from django.db import DataError, IntegrityError, connection, models, transaction
 from django.db.migrations.loader import MigrationLoader
-from django.db.models.deletion import CASCADE, PROTECT, SET_NULL, ProtectedError
+from django.db.models.deletion import CASCADE, PROTECT, RESTRICT, SET_NULL, ProtectedError, RestrictedError
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -29,6 +29,399 @@ from services.models import (
     Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
 )
+
+
+class ReleaseVariantTests(TestCase):
+    fk_specs = (
+        ('release', domain.DataRelease, 'release_id', 'fk_release_variant_release', CASCADE, 'c'),
+        ('variant', domain.Variant, 'variant_id', 'fk_release_variant_variant', RESTRICT, 'r'),
+        ('placement', domain.VariantPlacement, 'placement_id', 'fk_release_variant_placement', RESTRICT, 'r'),
+        ('included_by_analysis', domain.Analysis, 'analysis_id', 'fk_release_variant_analysis', SET_NULL, 'n'),
+    )
+
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        self.release = self.new_release()
+        self.variant = domain.Variant.objects.create(variant_type='synthetic-membership')
+
+    def new_release(self):
+        return domain.DataRelease.objects.create(
+            name=uuid.uuid4().hex, version='v1', status='unlisted', reference_assembly='synthetic',
+        )
+
+    def membership(self, **changes):
+        return domain.ReleaseVariant(**(dict(release_id=self.release.pk, variant_id=self.variant.pk) | changes))
+
+    def linked_membership(self):
+        placement = domain.VariantPlacement.objects.create(
+            variant=domain.Variant.objects.create(variant_type='other-variant'),
+            reference_assembly='other-assembly', contig='synthetic', start_pos=1, end_pos=1,
+        )
+        analysis = domain.Analysis.objects.create(
+            release=self.new_release(), module='synthetic', pipeline_name='synthetic', pipeline_version='v1', status='unlisted',
+        )
+        membership = self.membership(placement_id=placement.pk, included_by_analysis_id=analysis.pk)
+        membership.full_clean()  # SQL does not require placement variant/assembly or analysis release consistency.
+        membership.save()
+        return membership, {'release': self.release, 'variant': self.variant,
+                            'placement': placement, 'included_by_analysis': analysis}
+
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT conname, confdeltype, confupdtype, condeferrable, condeferred FROM pg_constraint '
+                           "WHERE conrelid = 'release_variant'::regclass AND contype = 'f'")
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def fk_operation(self):
+        migration = import_module('genetics.migrations.0011_release_variant').Migration
+        return migration.operations[1], MigrationLoader(connection).project_state([('genetics', '0011_release_variant')])
+
+    def test_minimal_membership_uses_ordered_native_key_and_nullable_defaults(self):
+        self.assertTrue(hasattr(domain, 'ReleaseVariant'), 'ReleaseVariant is missing.')
+        before = timezone.now()
+        membership = self.membership()
+        created = membership.created_at
+        membership.full_clean()
+        membership.save()
+        membership.refresh_from_db()
+        self.assertEqual(membership.pk, (self.release.pk, self.variant.pk))
+        self.assertEqual(domain.ReleaseVariant.objects.get(pk=membership.pk), membership)
+        self.assertFalse(domain.ReleaseVariant.objects.filter(pk=tuple(reversed(membership.pk))).exists())
+        self.assertEqual(membership.inclusion_status, 'included')
+        self.assertEqual((membership.placement_id, membership.included_by_analysis_id), (None, None))
+        self.assertEqual(membership.created_at, created)
+        self.assertTrue(timezone.is_aware(created))
+        self.assertLessEqual(before, created)
+        self.assertLessEqual(created, timezone.now())
+
+    def test_exact_six_columns_ordered_native_pk_four_fks_defaults_and_only_variant_index(self):
+        columns = {
+            'release_id': ('uuid', None, 'NO', None),
+            'variant_id': ('uuid', None, 'NO', None),
+            'placement_id': ('uuid', None, 'YES', None),
+            'included_by_analysis_id': ('uuid', None, 'YES', None),
+            'inclusion_status': ('character varying', 32, 'NO', "'included'::character varying"),
+            'created_at': ('timestamp with time zone', None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        model = domain.ReleaseVariant
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('release_variant', 'pk'))
+        self.assertIsInstance(model._meta.pk, models.CompositePrimaryKey)
+        self.assertEqual(model._meta.pk.field_names, ('release_id', 'variant_id'))
+        self.assertEqual(tuple(field.attname for field in model._meta.pk.fields), ('release_id', 'variant_id'))
+        self.assertIsNone(model._meta.pk.column)
+        self.assertFalse(model._meta.pk.editable or model._meta.pk.has_default() or model._meta.pk.has_db_default())
+        self.assertEqual([field.column for field in model._meta.local_fields if field.column], list(columns))
+        self.assertEqual({field.name for field in model._meta.local_fields},
+                         {'pk', 'release', 'variant', 'placement', 'included_by_analysis', 'inclusion_status', 'created_at'})
+        for field in model._meta.local_fields:
+            if field.column:
+                _, length, nullable, _ = columns[field.column]
+                self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+                if length:
+                    self.assertEqual(field.max_length, length)
+                self.assertFalse(field.choices or field.db_index or field.unique or field.primary_key)
+                self.assertEqual(field.has_default(), field.name in ('inclusion_status', 'created_at'))
+                self.assertEqual(field.has_db_default(), field.name in ('inclusion_status', 'created_at'))
+        status, created = model._meta.get_field('inclusion_status'), model._meta.get_field('created_at')
+        self.assertEqual((status.default, status.db_default), ('included', 'included'))
+        self.assertIs(created.default, timezone.now)
+        self.assertIsInstance(created.db_default, TransactionNow)
+        self.assertFalse(created.auto_now or created.auto_now_add)
+        self.assertEqual(model._meta.constraints, [])
+        self.assertEqual({index.name: index.fields for index in model._meta.indexes}, {'idx_release_variant_variant': ['variant']})
+        for field, target, key, _, action, _ in self.fk_specs:
+            relation = model._meta.get_field(field)
+            self.assertIs(relation.remote_field.model, target)
+            self.assertIs(relation.remote_field.on_delete, action)
+            self.assertEqual((relation.column, relation.db_column, relation.target_field.name), (field + '_id', field + '_id', key))
+            self.assertTrue(relation.db_constraint)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable, column_default '
+                           'FROM information_schema.columns WHERE table_schema = current_schema() '
+                           "AND table_name = 'release_variant' ORDER BY ordinal_position")
+            self.assertEqual(cursor.fetchall(), [(name, *spec) for name, spec in columns.items()])
+            constraints = connection.introspection.get_constraints(cursor, 'release_variant')
+            cursor.execute("SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'release_variant'")
+            self.assertEqual({row[0] for row in cursor.fetchall()}, {'release_variant_pkey', 'idx_release_variant_variant'})
+            cursor.execute("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'release_variant'::regclass AND contype = 'p'")
+            self.assertEqual(cursor.fetchone()[0], 'PRIMARY KEY (release_id, variant_id)')
+        self.assertEqual(set(constraints), {'release_variant_pkey', 'idx_release_variant_variant', *[spec[3] for spec in self.fk_specs]})
+        self.assertEqual([info['columns'] for info in constraints.values() if info['primary_key']], [['release_id', 'variant_id']])
+        self.assertFalse(any(info['check'] or info['unique'] and not info['primary_key'] for info in constraints.values()))
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']},
+                         {'idx_release_variant_variant': ['variant_id']})
+        self.assertEqual({name: (info['columns'], info['foreign_key']) for name, info in constraints.items() if info['foreign_key']},
+                         {name: ([field + '_id'], (target._meta.db_table, key)) for field, target, key, name, _, _ in self.fk_specs})
+        self.assertEqual(self.fk_actions(), {name: (deletion, 'c', False, False) for _, _, _, name, _, deletion in self.fk_specs})
+
+    def test_raw_minimal_insert_uses_unquoted_included_nullable_links_and_transaction_time_only(self):
+        self.assertEqual(domain.ReleaseVariant.objects.count(), 0)
+        others = (SNP, UserSNP, domain.DataRelease, domain.Variant, domain.VariantPlacement, domain.Analysis,
+                  domain.VariantAnnotation, domain.AlleleFrequency, domain.ExternalIdentifier, domain.Population, domain.EpigeneticFeature)
+        before = {model: model.objects.count() for model in others}
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO release_variant (release_id, variant_id) VALUES (%s, %s) '
+                           'RETURNING placement_id, included_by_analysis_id, inclusion_status, created_at, transaction_timestamp()',
+                           [self.release.pk, self.variant.pk])
+            placement, analysis, status, created, database_now = cursor.fetchone()
+        self.assertEqual((placement, analysis, status), (None, None, 'included'))
+        self.assertTrue(timezone.is_aware(created))
+        self.assertEqual(created, database_now)
+        self.assertEqual({model: model.objects.count() for model in others}, before)
+
+    def test_pair_uniqueness_allows_both_distinct_components_and_native_lookup_update_delete(self):
+        first = self.membership()
+        first.save()
+        with self.assertRaises(ValidationError):
+            self.membership(inclusion_status='custom').full_clean()
+        for insert in (lambda: domain.ReleaseVariant.objects.create(release=self.release, variant=self.variant),
+                       lambda: domain.ReleaseVariant.objects.bulk_create([self.membership(inclusion_status='custom')])):
+            with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                insert()
+            self.assertEqual(error.exception.__cause__.diag.constraint_name, 'release_variant_pkey')
+        with self.assertRaises(IntegrityError) as error, transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute('INSERT INTO release_variant (release_id, variant_id) VALUES (%s, %s)', list(first.pk))
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'release_variant_pkey')
+        second = self.membership(variant_id=domain.Variant.objects.create(variant_type='other').pk)
+        third = self.membership(release_id=self.new_release().pk)
+        for membership in (second, third):
+            membership.full_clean()
+            membership.save()
+        self.assertEqual(set(domain.ReleaseVariant.objects.values_list('pk', flat=True)), {first.pk, second.pk, third.pk})
+        self.assertEqual(domain.ReleaseVariant.objects.filter(pk=first.pk).update(inclusion_status='custom'), 1)
+        first.refresh_from_db()
+        self.assertEqual(first.inclusion_status, 'custom')
+        first.delete()
+        self.assertEqual(set(domain.ReleaseVariant.objects.values_list('pk', flat=True)), {second.pk, third.pk})
+
+    def test_required_columns_reject_explicit_nulls_in_orm_and_sql(self):
+        values = dict(release_id=self.release.pk, variant_id=self.variant.pk, inclusion_status='included', created_at=timezone.now())
+        sql = f"INSERT INTO release_variant ({', '.join(values)}) VALUES ({', '.join(['%s'] * len(values))})"
+        for field in values:
+            with self.subTest(field=field):
+                with self.assertRaises(ValidationError):
+                    self.membership(**{field: None}).full_clean()
+                with self.assertRaises(IntegrityError) as error, transaction.atomic(), connection.cursor() as cursor:
+                    cursor.execute(sql, [None if name == field else value for name, value in values.items()])
+                self.assertEqual(error.exception.__cause__.diag.column_name, field)
+
+    def test_free_text_boundary_explicit_timestamp_and_unrelated_placement_analysis_have_no_inferred_rules(self):
+        membership, _ = self.linked_membership()
+        created = timezone.now() - timedelta(days=90)
+        membership.inclusion_status, membership.created_at = 'custom-unlisted-status', created
+        membership.full_clean()
+        membership.save(update_fields=['inclusion_status', 'created_at'])
+        membership.refresh_from_db()
+        self.assertEqual((membership.inclusion_status, membership.created_at), ('custom-unlisted-status', created))
+        membership.inclusion_status = 'x' * 32
+        membership.full_clean()
+        membership.save()
+        membership.refresh_from_db()
+        self.assertEqual(membership.inclusion_status, 'x' * 32)
+        membership.inclusion_status = 'x' * 33
+        with self.assertRaises(ValidationError):
+            membership.full_clean()
+        with self.assertRaises(DataError), transaction.atomic():
+            membership.save()
+        with self.assertRaises(DataError), transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute('UPDATE release_variant SET inclusion_status = %s WHERE release_id = %s AND variant_id = %s',
+                           ['x' * 33, *membership.pk])
+        with connection.cursor() as cursor:
+            cursor.execute('UPDATE release_variant SET inclusion_status = %s WHERE release_id = %s AND variant_id = %s', ['', *membership.pk])
+        membership.refresh_from_db()
+        self.assertEqual(membership.inclusion_status, '')  # SQL has no status enum or nonempty CHECK.
+
+    def test_raw_updates_of_all_four_parent_keys_cascade_including_both_pk_components(self):
+        membership, parents = self.linked_membership()
+        untouched = self.membership(release_id=self.new_release().pk, variant_id=domain.Variant.objects.create(variant_type='unrelated').pk)
+        untouched.save()
+        before = domain.ReleaseVariant.objects.filter(pk=untouched.pk).values().get()
+        with connection.cursor() as cursor:
+            for field, target, key, _, _, _ in self.fk_specs:
+                parent, new_id, old_pair = parents[field], uuid.uuid4(), membership.pk
+                cursor.execute(f'UPDATE {target._meta.db_table} SET {key} = %s WHERE {key} = %s', [new_id, parent.pk])
+                parent.pk = new_id
+                setattr(membership, field + '_id', new_id)
+                membership.refresh_from_db()
+                self.assertEqual(getattr(membership, field + '_id'), new_id)
+                self.assertEqual(membership.pk, (self.release.pk, self.variant.pk))
+                if field in ('release', 'variant'):
+                    self.assertFalse(domain.ReleaseVariant.objects.filter(pk=old_pair).exists())
+        self.assertEqual(domain.ReleaseVariant.objects.filter(pk=untouched.pk).values().get(), before)
+
+    def test_raw_deletes_set_analysis_null_restrict_variant_placement_and_cascade_only_release_memberships(self):
+        membership, parents = self.linked_membership()
+        untouched = self.membership(release_id=self.new_release().pk)
+        untouched.save()
+        before = domain.ReleaseVariant.objects.filter(pk=untouched.pk).values().get()
+        with connection.cursor() as cursor:
+            analysis = parents['included_by_analysis']
+            cursor.execute('DELETE FROM analysis WHERE analysis_id = %s', [analysis.pk])
+            membership.refresh_from_db()
+            self.assertIsNone(membership.included_by_analysis_id)
+            for field in ('variant', 'placement'):
+                parent = parents[field]
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    cursor.execute('SET CONSTRAINTS ALL DEFERRED')
+                    cursor.execute(f'DELETE FROM {parent._meta.db_table} WHERE {parent._meta.pk.column} = %s', [parent.pk])
+                    self.fail('RESTRICT must reject the delete at the statement.')
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, f'fk_release_variant_{field}')
+                self.assertTrue(type(parent).objects.filter(pk=parent.pk).exists())
+            cursor.execute('DELETE FROM data_release WHERE release_id = %s', [self.release.pk])
+        self.assertFalse(domain.ReleaseVariant.objects.filter(pk=membership.pk).exists())
+        self.assertTrue(domain.Variant.objects.filter(pk=self.variant.pk).exists())
+        self.assertTrue(domain.VariantPlacement.objects.filter(pk=parents['placement'].pk).exists())
+        self.assertEqual(domain.ReleaseVariant.objects.filter(pk=untouched.pk).values().get(), before)
+
+    def test_orm_reverse_relations_and_deletions_match_cascade_restrict_and_set_null(self):
+        membership, parents = self.linked_membership()
+        for parent, related in ((self.release, 'variant_memberships'), (self.variant, 'release_memberships'),
+                                (parents['placement'], 'release_memberships'), (parents['included_by_analysis'], 'included_variant_memberships')):
+            self.assertEqual(list(getattr(parent, related).all()), [membership])
+        for field in ('variant', 'placement'):
+            parent = parents[field]
+            for delete in (parent.delete, lambda: type(parent).objects.filter(pk=parent.pk).delete()):
+                with self.assertRaises(RestrictedError):
+                    delete()
+        parents['included_by_analysis'].delete()
+        membership.refresh_from_db()
+        self.assertIsNone(membership.included_by_analysis_id)
+        pair = membership.pk
+        self.release.delete()
+        self.assertFalse(domain.ReleaseVariant.objects.filter(pk=pair).exists())
+        self.assertTrue(domain.Variant.objects.filter(pk=self.variant.pk).exists())
+        self.assertTrue(domain.VariantPlacement.objects.filter(pk=parents['placement'].pk).exists())
+
+    def test_all_four_orphan_inserts_and_updates_fail_immediately_even_when_constraints_are_deferred(self):
+        membership = self.membership()
+        membership.save()
+        insert_release = self.new_release()
+        for field, _, _, name, _, _ in self.fk_specs:
+            column, orphan = field + '_id', uuid.uuid4()
+            with self.subTest(field=field):
+                with self.assertRaises(ValidationError):
+                    self.membership(**{column: orphan}).full_clean()
+                values = dict(release_id=insert_release.pk, variant_id=self.variant.pk) | {column: orphan}
+                insert = f"INSERT INTO release_variant ({', '.join(values)}) VALUES ({', '.join(['%s'] * len(values))})"
+                for sql, args in ((insert, list(values.values())),
+                                  (f'UPDATE release_variant SET {column} = %s WHERE release_id = %s AND variant_id = %s', [orphan, *membership.pk])):
+                    with self.assertRaises(IntegrityError) as error, transaction.atomic(), connection.cursor() as cursor:
+                        cursor.execute('SET CONSTRAINTS ALL DEFERRED')
+                        cursor.execute(sql, args)
+                        self.fail('Membership FK must reject an orphan at the statement, not transaction end.')
+                    self.assertEqual(error.exception.__cause__.diag.constraint_name, name)
+
+    def test_fk_reverse_restores_deferred_no_action_for_each_parent_then_forward_restores_actions(self):
+        operation, state = self.fk_operation()
+        membership, parents = self.linked_membership()
+        connection.check_constraints()  # Flush Analysis.release's deferred trigger before DDL.
+        expected = self.fk_actions()
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            operation.database_backwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), {name: ('a', 'a', True, True) for name in expected})
+            for field, target, key, name, _, _ in self.fk_specs:
+                with self.subTest(field=field), self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    new_id = uuid.uuid4()
+                    cursor.execute(f'UPDATE {target._meta.db_table} SET {key} = %s WHERE {key} = %s', [new_id, parents[field].pk])
+                    membership.refresh_from_db()
+                    self.assertEqual(getattr(membership, field + '_id'), parents[field].pk)
+                    cursor.execute(f'DELETE FROM {target._meta.db_table} WHERE {key} = %s', [new_id])
+                    self.assertTrue(domain.ReleaseVariant.objects.filter(pk=membership.pk).exists())
+                    connection.check_constraints()  # NO ACTION is deferred, not a cascade, restrict or set-null.
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, name)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected)
+
+    def test_every_missing_or_ambiguous_lookup_fails_before_any_replacement_in_both_directions(self):
+        operation, state = self.fk_operation()
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected = self.fk_actions()
+            for apply in (operation.database_forwards, operation.database_backwards):
+                for field, target, key, name, _, _ in self.fk_specs:
+                    for case, sql in (
+                        ('missing', f'ALTER TABLE release_variant DROP CONSTRAINT {name}'),
+                        ('ambiguous', f'ALTER TABLE release_variant ADD CONSTRAINT duplicate_fk FOREIGN KEY ({field}_id) '
+                         f'REFERENCES {target._meta.db_table} ({key}) DEFERRABLE INITIALLY DEFERRED'),
+                    ):
+                        with self.subTest(direction=apply.__name__, field=field, case=case), transaction.atomic():
+                            cursor.execute(sql)
+                            before = self.fk_actions()
+                            with patch.object(editor, 'execute', wraps=editor.execute) as execute:
+                                with self.assertRaisesMessage(RuntimeError, 'Expected exactly one FK'):
+                                    apply('genetics', editor, state, state)
+                                execute.assert_not_called()
+                            self.assertEqual(self.fk_actions(), before)
+                            transaction.set_rollback(True)
+                operation.database_backwards('genetics', editor, state, state)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected)
+
+    def test_lookup_matches_exact_relations_and_attnums_and_quotes_discovered_names(self):
+        operation, state = self.fk_operation()
+        with transaction.atomic(), connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected, decoys = self.fk_actions(), {}
+            for field, target, key, name, _, _ in self.fk_specs:
+                quoted = connection.ops.quote_name(f'generated "{field}" FK'.replace('"', '""'))
+                cursor.execute(f'ALTER TABLE release_variant RENAME CONSTRAINT {name} TO {quoted}')
+                cursor.execute(f'ALTER TABLE {target._meta.db_table} ADD COLUMN decoy_key uuid UNIQUE')
+                other_table, other_key = ('data_release', 'release_id') if field == 'variant' else ('variant', 'variant_id')
+                other_source = 'variant_id' if field == 'release' else 'release_id'
+                for kind, source, table, column in (
+                    ('source', other_source, target._meta.db_table, key),
+                    ('target', field + '_id', target._meta.db_table, 'decoy_key'),
+                    ('relation', field + '_id', other_table, other_key),
+                ):
+                    decoy = f'decoy_membership_{kind}_{field}'
+                    cursor.execute(f'ALTER TABLE release_variant ADD CONSTRAINT {decoy} FOREIGN KEY ({source}) '
+                                   f'REFERENCES {table} ({column}) DEFERRABLE INITIALLY DEFERRED')
+                    decoys[decoy] = ('a', 'a', True, True)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected | decoys)
+            operation.database_backwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), {name: ('a', 'a', True, True) for name in expected} | decoys)
+            transaction.set_rollback(True)
+
+    def test_entire_migration_reverses_table_then_recreates_exact_schema_and_accepts_native_keys(self):
+        migration = import_module('genetics.migrations.0011_release_variant').Migration('0011_release_variant', 'genetics')
+        prior = MigrationLoader(connection).project_state([('genetics', '0010_allele_frequency')])
+        membership = self.membership()
+        membership.save()
+        connection.check_constraints()
+        expected = self.fk_actions()
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, 'release_variant')
+        with connection.schema_editor() as editor:
+            migration.unapply(prior, editor)
+        with connection.cursor() as cursor:
+            self.assertNotIn('release_variant', connection.introspection.table_names(cursor))
+        self.assertTrue(domain.DataRelease.objects.filter(pk=self.release.pk).exists())
+        self.assertTrue(domain.Variant.objects.filter(pk=self.variant.pk).exists())
+        with connection.schema_editor() as editor:
+            migration.apply(prior.clone(), editor)
+        self.assertEqual(domain.ReleaseVariant.objects.count(), 0)
+        self.assertEqual(self.fk_actions(), expected)
+        with connection.cursor() as cursor:
+            self.assertEqual(connection.introspection.get_constraints(cursor, 'release_variant'), constraints)
+        membership.save(force_insert=True)
+        self.assertEqual(domain.ReleaseVariant.objects.get(pk=membership.pk), membership)
+
+    def test_schema_only_migration_dependency_and_exact_state_match_native_composite_model(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0011_release_variant')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0010_allele_frequency')])
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel', 'RunPython'])
+        self.assertEqual(migration.operations[0].name, 'ReleaseVariant')
+        self.assertTrue(migration.operations[1].reversible)
+        historical = MigrationLoader(connection).project_state([('genetics', '0011_release_variant')]).apps.get_model('genetics', 'ReleaseVariant')
+        current = domain.ReleaseVariant
+        self.assertEqual(historical._meta.db_table, current._meta.db_table)
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in current._meta.local_fields})
+        self.assertEqual(historical._meta.pk.field_names, ('release_id', 'variant_id'))
+        self.assertEqual(historical._meta.indexes, current._meta.indexes)
+        self.assertEqual(historical._meta.constraints, current._meta.constraints)
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
 
 
 class AlleleFrequencyTests(TestCase):

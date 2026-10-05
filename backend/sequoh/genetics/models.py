@@ -38,6 +38,34 @@ class DataRelease(models.Model):
         constraints = [models.UniqueConstraint(fields=['name', 'version'], name='uq_data_release_name_version')]
 
 
+class ReleaseVariant(models.Model):
+    """Variant membership with optional placement and inclusion provenance."""
+
+    pk = models.CompositePrimaryKey('release_id', 'variant_id')
+    release = models.ForeignKey(
+        'genetics.DataRelease', on_delete=models.CASCADE, db_column='release_id',
+        db_index=False, related_name='variant_memberships',
+    )
+    variant = models.ForeignKey(
+        'genetics.Variant', on_delete=models.RESTRICT, db_column='variant_id',
+        db_index=False, related_name='release_memberships',
+    )
+    placement = models.ForeignKey(
+        'genetics.VariantPlacement', on_delete=models.RESTRICT, db_column='placement_id',
+        null=True, blank=True, db_index=False, related_name='release_memberships',
+    )
+    included_by_analysis = models.ForeignKey(
+        'genetics.Analysis', on_delete=models.SET_NULL, db_column='included_by_analysis_id',
+        null=True, blank=True, db_index=False, related_name='included_variant_memberships',
+    )
+    inclusion_status = models.CharField(max_length=32, default='included', db_default='included')
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'release_variant'
+        indexes = [models.Index(fields=['variant'], name='idx_release_variant_variant')]
+
+
 class Variant(models.Model):
     """Stable variant concept independent of genomic placements."""
 
