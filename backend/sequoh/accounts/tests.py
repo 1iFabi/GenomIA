@@ -556,6 +556,234 @@ class FunctionalRoleReadSurfaceTests(TestCase):
         self.assertEqual(fallback.data['total_users'], 2)
 
 
+class LegacyServiceStatusPostTests(TestCase):
+    """The userId-only endpoint is Profile-only and cannot select a paid service."""
+
+    def setUp(self):
+        self.target = User.objects.create_user(username='legacy-status-target')
+        self.admin = User.objects.create_user(username='legacy-status-admin')
+        grant_admin_role(self.admin)
+        self.analyst = User.objects.create_user(username='legacy-status-analyst')
+        grant_analyst_role(self.analyst)
+
+    def client_as(self, actor, *, csrf=True):
+        client = APIClient()
+        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(actor.pk)})
+        if csrf:
+            client.cookies['csrftoken'] = 'legacy-status-csrf'
+        return client
+
+    def post_status(self, status, *, actor=None, csrf=True):
+        return self.post_user_id(self.target.pk, status, actor=actor, csrf=csrf)
+
+    def post_user_id(self, user_id, status='PENDING', *, actor=None, csrf=True):
+        return self.client_as(actor or self.admin, csrf=csrf).post(
+            '/api/auth/service/status/',
+            data=json.dumps({'userId': user_id, 'status': status}),
+            content_type='application/json',
+            **({'HTTP_X_CSRFTOKEN': 'legacy-status-csrf'} if csrf else {}),
+        )
+
+    def purchase(self, code='PAID', *, purchased_at=None):
+        return Purchase.objects.create(
+            owner=self.target.app_user, status=PurchaseStatus.objects.get(code=code),
+            purchased_at=purchased_at if purchased_at is not None else timezone.now(),
+        )
+
+    def test_truthy_mapping_user_id_is_400_without_profile_or_service_mutation(self):
+        purchase = self.purchase()
+        waiting = RequestStatus.objects.get(code='WAITING_SAMPLE')
+        service = ServiceRequest.objects.create(purchase=purchase, status=waiting)
+        ServiceStatusLog.objects.create(request=service, status=waiting, actor=self.admin.app_user)
+
+        response = self.post_user_id({'id': self.target.pk})
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertFalse(Profile.objects.exists())
+        self.assertEqual(Purchase.objects.filter(pk=purchase.pk, status__code='PAID').count(), 1)
+        self.assertEqual(ServiceRequest.objects.filter(pk=service.pk, status=waiting).count(), 1)
+        self.assertEqual(ServiceStatusLog.objects.filter(request=service).count(), 1)
+
+    def test_malformed_user_ids_are_400_without_updating_existing_rows(self):
+        profile = Profile.objects.create(user=self.target, service_status='PENDING')
+        purchase = self.purchase()
+        waiting = RequestStatus.objects.get(code='WAITING_SAMPLE')
+        service = ServiceRequest.objects.create(purchase=purchase, status=waiting)
+        log = ServiceStatusLog.objects.create(request=service, status=waiting, actor=self.admin.app_user)
+        before_profile = (profile.service_status, profile.service_updated_at)
+        before_purchase = (purchase.status_id, purchase.purchased_at)
+        before_service = service.status_id
+        before_log = (log.status_id, log.changed_at)
+        invalid = (
+            True, False, [self.target.pk], {'id': self.target.pk}, 1.0,
+            1.5, -1, 0, None, [], {}, '', '-1', '0', 'not-an-id',
+            f'0{self.target.pk}', f' {self.target.pk}', f'{self.target.pk} ',
+            f'+{self.target.pk}', f'{self.target.pk}.0', '1e2', '\u0661',
+            2**63, str(2**63), '9' * 50,
+        )
+        for raw_id in invalid:
+            with self.subTest(user_id=raw_id):
+                response = self.post_user_id(raw_id)
+                self.assertEqual(response.status_code, 400, response.data)
+                self.assertIn('error', response.data)
+                profile.refresh_from_db()
+                purchase.refresh_from_db()
+                service.refresh_from_db()
+                log.refresh_from_db()
+                self.assertEqual((profile.service_status, profile.service_updated_at), before_profile)
+                self.assertEqual((purchase.status_id, purchase.purchased_at), before_purchase)
+                self.assertEqual(service.status_id, before_service)
+                self.assertEqual((log.status_id, log.changed_at), before_log)
+        self.assertEqual(Profile.objects.count(), 1)
+        self.assertEqual(Purchase.objects.count(), 1)
+        self.assertEqual(ServiceRequest.objects.count(), 1)
+        self.assertEqual(ServiceStatusLog.objects.count(), 1)
+
+    def test_canonical_decimal_string_id_preserves_legacy_write_and_paid_rejection(self):
+        for requested in ('PENDING', 'NO_PURCHASED'):
+            with self.subTest(status=requested):
+                response = self.post_user_id(str(self.target.pk), requested)
+                self.assertEqual(response.status_code, 200, response.data)
+                profile = Profile.objects.get(user=self.target)
+                self.assertEqual(response.data, {
+                    'user_id': self.target.pk, 'service_status': requested,
+                    'updated_at': profile.service_updated_at,
+                })
+        profile_updated_at = profile.service_updated_at
+        self.purchase()
+        response = self.post_user_id(str(self.target.pk))
+        self.assertEqual(response.status_code, 409, response.data)
+        profile.refresh_from_db()
+        self.assertEqual((profile.service_status, profile.service_updated_at),
+                         ('NO_PURCHASED', profile_updated_at))
+
+    def test_any_status_rejects_one_paid_service_without_touching_profile_or_domain_rows(self):
+        profile = Profile.objects.create(user=self.target, service_status='COMPLETED')
+        purchase = self.purchase()
+        waiting = RequestStatus.objects.get(code='WAITING_SAMPLE')
+        service = ServiceRequest.objects.create(purchase=purchase, status=waiting)
+        ServiceStatusLog.objects.create(request=service, status=waiting, actor=self.admin.app_user)
+        original_updated_at = profile.service_updated_at
+
+        for requested in ('NO_PURCHASED', 'PENDING', 'COMPLETED'):
+            with self.subTest(status=requested):
+                response = self.post_status(requested, actor=self.analyst)
+                self.assertEqual(response.status_code, 409, response.data)
+                profile.refresh_from_db()
+                service.refresh_from_db()
+                purchase.refresh_from_db()
+                self.assertEqual((profile.service_status, profile.service_updated_at),
+                                 ('COMPLETED', original_updated_at))
+                self.assertEqual(service.status_id, waiting.pk)
+                self.assertEqual(purchase.status.code, 'PAID')
+                self.assertEqual(ServiceStatusLog.objects.filter(request=service).count(), 1)
+
+    def test_multiple_paid_services_reject_even_when_newest_is_inconsistent(self):
+        profile = Profile.objects.create(user=self.target, service_status='PENDING')
+        older = self.purchase(purchased_at=timezone.now() - timedelta(days=1))
+        waiting = RequestStatus.objects.get(code='WAITING_SAMPLE')
+        service = ServiceRequest.objects.create(purchase=older, status=waiting)
+        ServiceStatusLog.objects.create(request=service, status=waiting, actor=self.admin.app_user)
+        newer = self.purchase()  # Missing request/history cannot select the older paid service.
+        before = (profile.service_status, profile.service_updated_at)
+
+        for requested in ('NO_PURCHASED', 'PENDING', 'COMPLETED'):
+            with self.subTest(status=requested):
+                response = self.post_status(requested)
+                self.assertEqual(response.status_code, 409, response.data)
+                profile.refresh_from_db()
+                self.assertEqual((profile.service_status, profile.service_updated_at), before)
+        self.assertEqual(Purchase.objects.filter(owner=self.target.app_user, status__code='PAID').count(), 2)
+        self.assertFalse(ServiceRequest.objects.filter(purchase=newer).exists())
+        self.assertEqual(ServiceStatusLog.objects.filter(request=service).count(), 1)
+
+    def test_two_consistent_paid_services_still_require_an_explicit_service_id(self):
+        waiting = RequestStatus.objects.get(code='WAITING_SAMPLE')
+        for _ in range(2):
+            purchase = self.purchase()
+            service = ServiceRequest.objects.create(purchase=purchase, status=waiting)
+            ServiceStatusLog.objects.create(request=service, status=waiting, actor=self.admin.app_user)
+        for requested in ('NO_PURCHASED', 'PENDING', 'COMPLETED'):
+            with self.subTest(status=requested):
+                response = self.post_status(requested)
+                self.assertEqual(response.status_code, 409, response.data)
+                self.assertFalse(Profile.objects.filter(user=self.target).exists())
+        self.assertEqual(Purchase.objects.filter(owner=self.target.app_user).count(), 2)
+        self.assertEqual(ServiceStatusLog.objects.filter(request__purchase__owner=self.target.app_user).count(), 2)
+
+    def test_inconsistent_paid_purchase_never_creates_a_profile(self):
+        purchase = self.purchase()
+        waiting = RequestStatus.objects.get(code='WAITING_SAMPLE')
+        service = ServiceRequest.objects.create(purchase=purchase, status=waiting)
+        # Missing initial history and then missing payment timestamp both remain paid.
+        for requested in ('NO_PURCHASED', 'PENDING', 'COMPLETED'):
+            with self.subTest(status=requested):
+                response = self.post_status(requested)
+                self.assertEqual(response.status_code, 409, response.data)
+                self.assertFalse(Profile.objects.filter(user=self.target).exists())
+        self.assertFalse(ServiceStatusLog.objects.filter(request=service).exists())
+        purchase.purchased_at = None
+        purchase.save(update_fields=['purchased_at'])
+        self.assertEqual(self.post_status('PENDING').status_code, 409)
+        self.assertFalse(Profile.objects.filter(user=self.target).exists())
+        service.refresh_from_db()
+        self.assertEqual(service.status_id, waiting.pk)
+        purchase.refresh_from_db()
+        self.assertIsNone(purchase.purchased_at)
+
+    def test_no_paid_purchase_allows_pending_and_no_purchased_profile_only_writes(self):
+        self.purchase('PENDING')
+        other = User.objects.create_user(username='other-paid-owner')
+        Purchase.objects.create(owner=other.app_user, status=PurchaseStatus.objects.get(code='PAID'))
+        for requested in ('PENDING', 'NO_PURCHASED'):
+            with self.subTest(status=requested):
+                response = self.post_status(requested)
+                self.assertEqual(response.status_code, 200, response.data)
+                profile = Profile.objects.get(user=self.target)
+                self.assertEqual(set(response.data), {'user_id', 'service_status', 'updated_at'})
+                self.assertEqual(response.data, {
+                    'user_id': self.target.pk, 'service_status': requested,
+                    'updated_at': profile.service_updated_at,
+                })
+                self.assertEqual(profile.service_status, requested)
+        self.assertFalse(ServiceRequest.objects.filter(purchase__owner=self.target.app_user).exists())
+        self.assertFalse(ServiceStatusLog.objects.filter(request__purchase__owner=self.target.app_user).exists())
+
+    def test_no_paid_completion_is_rejected_without_creating_or_updating_profile(self):
+        self.assertEqual(self.post_status('COMPLETED').status_code, 409)
+        self.assertFalse(Profile.objects.filter(user=self.target).exists())
+        self.purchase('PENDING')
+        profile = Profile.objects.create(user=self.target, service_status='COMPLETED')
+        original_updated_at = profile.service_updated_at
+        response = self.post_status('COMPLETED')
+        self.assertEqual(response.status_code, 409, response.data)
+        profile.refresh_from_db()
+        self.assertEqual((profile.service_status, profile.service_updated_at),
+                         ('COMPLETED', original_updated_at))
+        # Existing legacy completions remain visible on GET until the read cutover.
+        self.assertEqual(self.client_as(self.target).get('/api/auth/service/status/').data, {
+            'user_id': self.target.pk, 'service_status': 'COMPLETED',
+            'can_view_results': True, 'updated_at': original_updated_at,
+        })
+
+    def test_existing_role_and_csrf_barriers_still_precede_status_writes(self):
+        self.assertEqual(self.post_status('PENDING', actor=self.target).status_code, 403)
+        self.assertEqual(self.post_status('PENDING', actor=self.admin, csrf=False).status_code, 403)
+        self.assertFalse(Profile.objects.filter(user=self.target).exists())
+        self.assertEqual(self.post_status('PENDING', actor=self.analyst).status_code, 200)
+
+    def test_invalid_status_and_unknown_target_keep_validation_and_lookup_responses(self):
+        self.assertEqual(self.post_status('INVALID').status_code, 400)
+        client = self.client_as(self.admin)
+        response = client.post(
+            '/api/auth/service/status/',
+            data=json.dumps({'userId': self.target.pk + 10000, 'status': 'PENDING'}),
+            content_type='application/json', HTTP_X_CSRFTOKEN='legacy-status-csrf',
+        )
+        self.assertEqual(response.status_code, 404, response.data)
+        self.assertFalse(Profile.objects.filter(user=self.target).exists())
+
+
 class SelfServiceProjectionTests(TestCase):
     def test_paid_waiting_overrides_legacy_completion_across_self_reads(self):
         user = User.objects.create_user(username='self-paid-waiting')

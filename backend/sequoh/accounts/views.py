@@ -25,6 +25,7 @@ from .jwt_utils import encode_jwt, decode_jwt
 from .authentication import JWTAuthentication
 from profiles.models import Profile, ServiceStatus
 from services.legacy_profile import get_legacy_service_projection
+from services.models import Purchase
 from genetics.models import SNP
 from .models import AppUser, RevokedToken, Role, WelcomeStatus
 from .email_validation import is_valid_registration_name, validate_registration_email
@@ -48,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 
 class UserServiceStatusAPIView(CSRFDoubleSubmitMixin, APIView):
-    """Permite consultar tu estado y a admin/staff actualizar el estado de otro usuario."""
+    """Read own status; admin/analyst may write only unpaid legacy Profile states."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -64,7 +65,7 @@ class UserServiceStatusAPIView(CSRFDoubleSubmitMixin, APIView):
         })
 
     def post(self, request):
-        """Actualiza el estado de servicio de un usuario (solo staff). Body: {userId, status} """
+        """Update an unpaid legacy Profile only. Body: {userId, status}."""
         if not is_admin_or_analyst(request.user):
             return Response({"error": "No tienes permisos"}, status=status.HTTP_403_FORBIDDEN)
         try:
@@ -77,20 +78,35 @@ class UserServiceStatusAPIView(CSRFDoubleSubmitMixin, APIView):
             return Response({"error": "userId y status son obligatorios"}, status=status.HTTP_400_BAD_REQUEST)
         if status_str not in {s.value for s in ServiceStatus}:
             return Response({"error": f"status inválido. Usa uno de: {[s.value for s in ServiceStatus]}"}, status=status.HTTP_400_BAD_REQUEST)
+        # Accept the legacy decimal-string client ID, but never coerce booleans,
+        # floats or containers through the ORM's integer field conversion.
+        if type(user_id) is str:
+            if len(user_id) > 19 or not re.fullmatch(r'[1-9][0-9]*', user_id):
+                return Response({"error": "userId inválido"}, status=status.HTTP_400_BAD_REQUEST)
+            user_id = int(user_id)
+        if type(user_id) is not int or not 0 < user_id <= 2**63 - 1:
+            return Response({"error": "userId inválido"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             target = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
-        # Asegurar que el profile exista
-        from profiles.models import Profile
-        profile, _ = Profile.objects.get_or_create(user=target)
-        profile.service_status = status_str
-        profile.save(update_fields=["service_status", "service_updated_at"])
-        return Response({
-            "user_id": target.id,
-            "service_status": profile.service_status,
-            "updated_at": profile.service_updated_at,
-        })
+        with transaction.atomic():
+            # Serialize with payment, which locks the owner before marking a purchase PAID.
+            AppUser.objects.select_for_update(of=('self',)).filter(django_user_id=target.pk).first()
+            if Purchase.objects.filter(owner__django_user_id=target.pk, status__code='PAID').exists():
+                return Response({"error": "Selecciona un servicio pagado específico"},
+                                status=status.HTTP_409_CONFLICT)
+            if status_str == ServiceStatus.COMPLETED:
+                return Response({"error": "La publicación requiere revisión del analista"},
+                                status=status.HTTP_409_CONFLICT)
+            profile, _ = Profile.objects.get_or_create(user=target)
+            profile.service_status = status_str
+            profile.save(update_fields=["service_status", "service_updated_at"])
+            return Response({
+                "user_id": target.id,
+                "service_status": profile.service_status,
+                "updated_at": profile.service_updated_at,
+            })
 
 
 def normalize_cl_phone(raw: str):
