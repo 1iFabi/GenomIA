@@ -10,13 +10,18 @@ from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.loader import MigrationLoader
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 import uuid
 from rest_framework.test import APIClient
 
 from .jwt_utils import encode_jwt, decode_jwt
 from .models import AppUser, RevokedToken, Role
 from .signals import assign_new_user_client_role
+from .roles import (
+    grant_admin_role, grant_analyst_role, grant_reception_role,
+    is_admin, is_analyst, is_reception, revoke_analyst_role, revoke_reception_role,
+)
+from profiles.models import Profile
 
 
 @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
@@ -287,6 +292,207 @@ class AuthHttpOnlyCookieTests(TestCase):
 
         self.assertEqual(me.status_code, 200)
         self.assertEqual(me.data["user"]["username"], "ana_handle")
+
+
+class FunctionalRoleAuthorizationTests(TestCase):
+    """Only the one explicit AppUser role authorizes privileged API actions."""
+
+    def setUp(self):
+        self.target = User.objects.create_user(username='target', email='target@example.com')
+        Profile.objects.create(user=self.target)
+        self.routes = (
+            ('GET', '/api/admin/users/', None, {'ADMIN', 'ANALISTA'}, 200),
+            ('GET', '/api/admin/stats/', None, {'ADMIN', 'ANALISTA'}, 200),
+            ('POST', '/api/auth/service/status/',
+             {'userId': self.target.pk, 'status': 'PENDING'}, {'ADMIN', 'ANALISTA'}, 200),
+            ('POST', '/api/admin/analysts/',
+             {'userId': self.target.pk, 'grant': False}, {'ADMIN'}, 200),
+            ('GET', '/api/reception/search/?email=target@example.com',
+             None, {'ADMIN', 'RECEPCION'}, 200),
+            ('POST', '/api/reception/arrival/',
+             {'userId': self.target.pk}, {'ADMIN', 'RECEPCION'}, 200),
+            ('POST', '/api/genetics/variantes/', {}, {'ADMIN', 'ANALISTA'}, 400),
+        )
+
+    def request_as(self, user, method, path, payload):
+        client = APIClient()
+        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
+        client.cookies['csrftoken'] = 'valid-test-csrf'
+        if method == 'POST':
+            return client.post(path, data=json.dumps(payload), content_type='application/json',
+                               HTTP_X_CSRFTOKEN='valid-test-csrf')
+        return client.get(path)
+
+    def test_flags_legacy_groups_cliente_and_unmapped_never_elevate(self):
+        users = [
+            User.objects.create_user(username='staff-only', is_staff=True),
+            User.objects.create_user(username='superuser-only', is_superuser=True),
+            User.objects.create_user(username='client'),
+        ]
+        for role_code in ('ADMIN', 'ANALISTA', 'RECEPCION'):
+            user = User.objects.create_user(username=f'legacy-{role_code.lower()}')
+            user.groups.add(Group.objects.get_or_create(name=role_code)[0])
+            users.append(user)
+        unmapped = User.objects.bulk_create([User(username='unmapped')])[0]
+        users.append(unmapped)
+        for user in users:
+            with self.subTest(user=user.username):
+                self.assertFalse(is_admin(user))
+                self.assertFalse(is_analyst(user))
+                self.assertFalse(is_reception(user))
+                for method, path, payload, _, _ in self.routes:
+                    response = self.request_as(user, method, path, payload)
+                    self.assertEqual(response.status_code, 403, (user.username, path, response.data))
+                    self.assertNotIn('CSRF', str(response.data))
+
+    def test_explicit_role_admits_only_its_routes_even_without_staff_or_groups(self):
+        for code in ('ADMIN', 'ANALISTA', 'RECEPCION'):
+            user = User.objects.create_user(username=code.lower())
+            user.app_user.role = Role.objects.get(code=code)
+            user.app_user.save(update_fields=['role'])
+            self.assertFalse(user.is_staff)
+            self.assertFalse(user.groups.exists())
+            for method, path, payload, permitted, expected in self.routes:
+                with self.subTest(role=code, path=path):
+                    response = self.request_as(user, method, path, payload)
+                    self.assertEqual(response.status_code, expected if code in permitted else 403,
+                                     (code, path, response.data))
+                    self.assertNotIn('CSRF', str(response.data))
+
+    def test_grants_and_revokes_change_one_role_without_changing_django_flags_or_groups(self):
+        user = User.objects.create_user(username='mutated')
+        legacy = Group.objects.get_or_create(name='ANALISTA')[0]
+        user.groups.add(legacy)
+        grant_admin_role(user)
+        user.refresh_from_db()
+        self.assertEqual(user.app_user.role.code, 'ADMIN')
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_superuser)
+        revoke_analyst_role(user)
+        self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'ADMIN')
+        grant_reception_role(user)
+        self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'RECEPCION')
+        revoke_analyst_role(user)
+        self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'RECEPCION')
+        grant_analyst_role(user)
+        self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'ANALISTA')
+        revoke_reception_role(user)
+        self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'ANALISTA')
+        revoke_analyst_role(user)
+        self.assertEqual(AppUser.objects.get(django_user=user).role.code, 'CLIENTE')
+        self.assertEqual(list(user.groups.values_list('name', flat=True)), ['ANALISTA'])
+        self.assertFalse(User.objects.get(pk=user.pk).is_staff)
+
+    def test_unmapped_target_is_not_implicitly_assigned_a_privileged_role(self):
+        admin = User.objects.create_user(username='mapped-admin')
+        grant_admin_role(admin)
+        unmapped = User.objects.bulk_create([User(username='unmapped-target')])[0]
+        response = self.request_as(admin, 'POST', '/api/admin/analysts/',
+                                   {'userId': unmapped.pk, 'grant': True, 'role': 'analyst'})
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertFalse(AppUser.objects.filter(django_user=unmapped).exists())
+
+    def test_conflicting_legacy_group_does_not_override_explicit_role(self):
+        admin = User.objects.create_user(username='mapped-admin')
+        admin.groups.add(Group.objects.get_or_create(name='RECEPCION')[0])
+        grant_admin_role(admin)
+        self.assertTrue(is_admin(admin))
+        self.assertFalse(is_reception(admin))
+        response = self.request_as(admin, 'GET', '/api/reception/search/?email=target@example.com', None)
+        self.assertEqual(response.status_code, 200)
+
+    def test_manage_role_rejects_non_boolean_grant_without_mutation(self):
+        admin = User.objects.create_user(username='boolean-admin')
+        grant_admin_role(admin)
+        path = '/api/admin/analysts/'
+        invalid_values = ('false', 'true', 0, 1, 2, [], [False], {}, None)
+        for role, code in (('analyst', 'ANALISTA'), ('reception', 'RECEPCION')):
+            for original in ('CLIENTE', code):
+                for value in invalid_values:
+                    with self.subTest(role=role, original=original, grant=value):
+                        AppUser.objects.filter(django_user=self.target).update(
+                            role=Role.objects.get(code=original)
+                        )
+                        response = self.request_as(admin, 'POST', path, {
+                            'userId': self.target.pk, 'grant': value, 'role': role,
+                        })
+                        self.assertEqual(response.status_code, 400, response.data)
+                        self.assertEqual(
+                            AppUser.objects.get(django_user=self.target).role.code, original
+                        )
+
+    def test_manage_role_accepts_json_true_and_false_for_both_roles(self):
+        admin = User.objects.create_user(username='boolean-admin')
+        grant_admin_role(admin)
+        for role, code in (('analyst', 'ANALISTA'), ('reception', 'RECEPCION')):
+            for value, expected in ((True, code), (False, 'CLIENTE')):
+                with self.subTest(role=role, grant=value):
+                    response = self.request_as(admin, 'POST', '/api/admin/analysts/', {
+                        'userId': self.target.pk, 'grant': value, 'role': role,
+                    })
+                    self.assertEqual(response.status_code, 200, response.data)
+                    self.assertEqual(response.data['roles'], [expected])
+                    self.assertEqual(
+                        AppUser.objects.get(django_user=self.target).role.code, expected
+                    )
+
+    def test_manage_role_preserves_response_but_reports_only_functional_role(self):
+        admin = User.objects.create_user(username='functional-admin')
+        grant_admin_role(admin)
+        self.target.groups.add(Group.objects.get_or_create(name='ADMIN')[0])
+        path = '/api/admin/analysts/'
+        for role, expected in (('analyst', 'ANALISTA'), ('reception', 'RECEPCION')):
+            response = self.request_as(admin, 'POST', path,
+                                       {'userId': self.target.pk, 'grant': True, 'role': role})
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(response.data['role'], role)
+            self.assertEqual(response.data['roles'], [expected])
+            self.assertEqual(AppUser.objects.get(django_user=self.target).role.code, expected)
+            self.assertEqual(response.data['is_analyst'], role == 'analyst')
+            self.assertEqual(response.data['is_reception'], role == 'reception')
+        response = self.request_as(admin, 'POST', path,
+                                   {'userId': self.target.pk, 'grant': False, 'role': 'analyst'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['roles'], ['RECEPCION'])
+        response = self.request_as(admin, 'POST', path,
+                                   {'userId': self.target.pk, 'grant': False, 'role': 'reception'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['roles'], ['CLIENTE'])
+        self.assertEqual(list(self.target.groups.values_list('name', flat=True)), ['ADMIN'])
+
+
+class ManageAnalystRoleAtomicResponseTests(TransactionTestCase):
+    def test_role_mutation_and_response_snapshot_share_outer_transaction(self):
+        admin = User.objects.create_user(username='atomic-admin')
+        target = User.objects.create_user(username='atomic-target')
+        grant_admin_role(admin)
+        client = APIClient()
+        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(admin.pk)})
+        client.cookies['csrftoken'] = 'valid-test-csrf'
+        original_grant = grant_analyst_role
+        original_select_related = AppUser.objects.select_related
+        observed = []
+
+        def observe_grant(user):
+            observed.append(('mutation', connection.in_atomic_block))
+            return original_grant(user)
+
+        def observe_snapshot(*fields):
+            observed.append(('snapshot', connection.in_atomic_block))
+            return original_select_related(*fields)
+
+        with patch('accounts.views.grant_analyst_role', side_effect=observe_grant), \
+                patch.object(AppUser.objects, 'select_related', side_effect=observe_snapshot):
+            response = client.post(
+                '/api/admin/analysts/',
+                data=json.dumps({'userId': target.pk, 'grant': True, 'role': 'analyst'}),
+                content_type='application/json',
+                HTTP_X_CSRFTOKEN='valid-test-csrf',
+            )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['roles'], ['ANALISTA'])
+        self.assertEqual(observed, [('mutation', True), ('snapshot', True)])
 
 
 class RoleBackfillMigrationTests(TestCase):

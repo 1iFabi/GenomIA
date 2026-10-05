@@ -25,7 +25,7 @@ from .jwt_utils import encode_jwt, decode_jwt
 from .authentication import JWTAuthentication
 from profiles.models import Profile, ServiceStatus
 from genetics.models import SNP
-from .models import RevokedToken, WelcomeStatus
+from .models import AppUser, RevokedToken, Role, WelcomeStatus
 from .email_validation import is_valid_registration_name, validate_registration_email
 from .username_validation import normalize_registration_username
 from .csrf import CSRFDoubleSubmitMixin
@@ -904,7 +904,7 @@ class ManageAnalystRoleAPIView(CSRFDoubleSubmitMixin, APIView):
 
         user_id = data.get("userId") or data.get("user_id")
         grant = data.get("grant")
-        if user_id is None or grant is None:
+        if user_id is None or type(grant) is not bool:
             return Response(
                 {"error": "userId y grant (true/false) son obligatorios"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -926,26 +926,30 @@ class ManageAnalystRoleAPIView(CSRFDoubleSubmitMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        ensure_default_groups()
-        if target_role == "analyst":
-            if grant:
-                revoke_reception_role(target)
-                grant_analyst_role(target)
-            else:
-                revoke_analyst_role(target)
-        else:
-            if grant:
-                revoke_analyst_role(target)
-                grant_reception_role(target)
-            else:
-                revoke_reception_role(target)
-        return Response({
-            "user_id": target.id,
-            "is_analyst": is_analyst(target),
-            "is_reception": is_reception(target),
-            "role": target_role,
-            "roles": list(target.groups.values_list("name", flat=True)),
-        })
+        try:
+            # Keep the helper's row lock through the response snapshot.
+            with transaction.atomic():
+                if target_role == "analyst":
+                    if grant:
+                        grant_analyst_role(target)
+                    else:
+                        revoke_analyst_role(target)
+                else:
+                    if grant:
+                        grant_reception_role(target)
+                    else:
+                        revoke_reception_role(target)
+                functional_role = AppUser.objects.select_related("role").get(django_user=target).role.code
+                response_data = {
+                    "user_id": target.id,
+                    "is_analyst": functional_role == Role.Code.ANALISTA,
+                    "is_reception": functional_role == Role.Code.RECEPCION,
+                    "role": target_role,
+                    "roles": [functional_role],
+                }
+        except AppUser.DoesNotExist:
+            return Response({"error": "Usuario sin rol funcional"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(response_data)
 
 
 class GetUsersAPIView(APIView):
