@@ -1,27 +1,21 @@
 import { useEffect, useState } from 'react';
-import { API_ENDPOINTS, apiRequest } from '../config/api';
+import { useAuthSession } from '../contexts/AuthContext';
 
 /**
- * Determina si hay una sesión activa consultando /me.
- * El token vive en cookie HttpOnly (ilegible por JS), así que la única forma
- * de saber si el usuario está logueado es preguntarle al backend.
+ * La cookie HttpOnly se verifica con /me una vez por sesión compartida.
+ * Un guard puede pasar su ruta para reintentar una comprobación fallida al navegar.
  */
-export const useSession = () => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+export const useSession = (checkKey) => {
+  const session = useAuthSession();
+  const [checked, setChecked] = useState(null);
 
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const res = await apiRequest(API_ENDPOINTS.ME, { method: 'GET' });
-      if (!mounted) return;
-      if (res.ok && res.data.user) {
-        setUser(res.data.user);
-      }
-      setLoading(false);
-    })();
-    return () => { mounted = false; };
-  }, []);
+    session.ensureSession();
+    setChecked({ key: checkKey });
+  }, [session.ensureSession, checkKey]);
 
-  return { user, isLoggedIn: !!user, loading };
+  // A new consumer must start its check before acting on an earlier failure.
+  // Authenticated consumers reuse the cached user immediately.
+  const loading = session.loading || (!session.user && (!checked || checked.key !== checkKey));
+  return { user: session.user, isLoggedIn: !!session.user, loading };
 };

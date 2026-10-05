@@ -29,9 +29,23 @@ export const API_ENDPOINTS = {
   RECEPTION_SAMPLE_STATUS: `${API_BASE}/reception/sample-status/`,
 };
 
+// Session lifecycle notifications contain no user data; consumers stay lazy.
+const authListeners = new Set();
+let authRevision = 0;
+export const subscribeAuthChanges = (listener) => {
+  authListeners.add(listener);
+  return () => authListeners.delete(listener);
+};
+const notifyAuthChange = (change) => {
+  authRevision += 1;
+  authListeners.forEach((listener) => listener(change));
+};
+
 // Logout: revoca la sesión en el servidor (cookie HttpOnly) y limpia lo que se pueda sin JS.
 // Se mantiene el nombre `clearToken` para no romper los llamadores existentes.
 export const clearToken = async () => {
+  // Invalidate immediately, even when revocation is slow or fails.
+  notifyAuthChange({ type: 'logout' });
   try {
     await apiRequest(API_ENDPOINTS.LOGOUT, { method: 'POST' });
   } catch {
@@ -77,6 +91,7 @@ const ensureCsrfCookie = async (signal) => {
 // Función helper para hacer peticiones a la API
 export const apiRequest = async (endpoint, options = {}) => {
   const method = (options.method || 'GET').toUpperCase();
+  const requestAuthRevision = authRevision;
   const headers = {
     ...(options.headers || {}),
   };
@@ -99,11 +114,21 @@ export const apiRequest = async (endpoint, options = {}) => {
     const isJson = contentType.includes('application/json');
     const data = isJson ? await response.json() : {};
 
-    return {
+    const result = {
       ok: response.ok,
       status: response.status,
       data,
     };
+    if (endpoint === API_ENDPOINTS.LOGIN && method === 'POST' && response.ok
+      && requestAuthRevision === authRevision) {
+      // A login started before logout must not reopen the shared session.
+      // The next session consumer loads ME after the existing login navigation delay.
+      notifyAuthChange({ type: 'login' });
+    } else if (response.status === 401 && requestAuthRevision === authRevision
+      && endpoint !== API_ENDPOINTS.LOGIN && endpoint !== API_ENDPOINTS.LOGOUT) {
+      notifyAuthChange({ type: 'expired' });
+    }
+    return result;
   } catch (error) {
     console.error('API request error:', error);
     return {
