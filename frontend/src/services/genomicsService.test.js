@@ -9,7 +9,6 @@ const serviceId = 'request/a b?#%+á';
 const readCases = [
   ['getGenomicsServices', [], '/api/genoma/v1/services/'],
   ['getGenomicsServiceResults', ['service-123'], '/api/genoma/v1/services/service-123/results/'],
-  ['getGenomicsServiceMetrics', ['service-123'], '/api/genoma/v1/services/service-123/metrics/'],
 ];
 let api;
 
@@ -67,7 +66,6 @@ describe('owner-scoped genoma v1 URLs', () => {
 
   it('preserves account, user, service-status and reception endpoints', () => {
     expect(api.API_ENDPOINTS).toMatchObject({
-      BASE_URL: '',
       CSRF: '/api/auth/csrf/',
       LOGIN: '/api/auth/login/',
       REGISTER: '/api/auth/register/',
@@ -172,7 +170,6 @@ describe('genomics GET helpers', () => {
 
   it.each([
     ['getGenomicsServiceResults', 'results'],
-    ['getGenomicsServiceMetrics', 'metrics'],
   ])('%s requests an encoded service ID', async (helper, resource) => {
     globalThis.fetch.mockResolvedValue(mockJson({ items: [] }));
 

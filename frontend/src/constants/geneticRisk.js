@@ -17,13 +17,6 @@ export const getImpactLevel = (magnitud) => {
   return 'bajo';
 };
 
-export const getImpactLabel = (magnitud) => {
-  const level = getImpactLevel(magnitud);
-  if (level === 'alto') return 'Alto Impacto';
-  if (level === 'medio') return 'Impacto Medio';
-  return 'Bajo Impacto';
-};
-
 export const getImpactColor = (magnitud) => RISK_COLORS[getImpactLevel(magnitud)];
 
 // Map an impact key ('high' | 'medium' | 'low') to its risk color.

@@ -5,6 +5,3 @@ export const getGenomicsServices = () =>
 
 export const getGenomicsServiceResults = (serviceRequestId) =>
   apiRequest(API_ENDPOINTS.GENOMICS_SERVICE_RESULTS(serviceRequestId), { method: 'GET' });
-
-export const getGenomicsServiceMetrics = (serviceRequestId) =>
-  apiRequest(API_ENDPOINTS.GENOMICS_SERVICE_METRICS(serviceRequestId), { method: 'GET' });

@@ -4,8 +4,6 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export const API_ENDPOINTS = {
-  // Origen (sin /api) para construir URLs absolutas en llamadas puntuales.
-  BASE_URL: API_BASE.replace(/\/api\/?$/, ''),
   CSRF: `${API_BASE}/auth/csrf/`,
   LOGIN: `${API_BASE}/auth/login/`,
   REGISTER: `${API_BASE}/auth/register/`,
