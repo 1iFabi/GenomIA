@@ -15,9 +15,10 @@ from accounts.roles import is_admin, is_reception
 from profiles.utils import ensure_sample_code
 from accounts.email_utils import send_email, build_branded_html
 from services.models import Purchase
-from services.legacy_profile import (
-    get_legacy_service_projection, get_paid_legacy_service_projections,
-)
+from services.legacy_profile import get_paid_legacy_service_projections
+
+
+_UNRESOLVED_PAID_PROJECTION = object()
 
 
 def has_reception_access(user) -> bool:
@@ -36,13 +37,20 @@ def legacy_mutation_conflict(profile: Profile):
     return None
 
 
-def serialize_reception_profile(profile: Profile, *, service_status=None) -> dict:
-    """Serializa datos permitidos para recepción (sin genéticos)."""
+def serialize_reception_profile(profile: Profile, *, service_status=None,
+                                paid_projection=_UNRESOLVED_PAID_PROJECTION) -> dict:
+    """Serialize operational reception fields, never legacy samples for paid owners."""
     user = profile.user
-    sample_code = profile.sample_code or ensure_sample_code(profile)
-    sample_status = profile.sample_status or SampleStatus.PENDING_COLLECTION
-    if service_status is None:
-        service_status = get_legacy_service_projection(user).service_status
+    # None means the bulk caller already established there is no paid purchase.
+    if paid_projection is _UNRESOLVED_PAID_PROJECTION:
+        paid_projection = get_paid_legacy_service_projections([user.pk], include_samples=True).get(user.pk)
+    has_paid = paid_projection is not None
+    sample_code = None if has_paid else profile.sample_code or ensure_sample_code(profile)
+    sample_status = None if has_paid else profile.sample_status or SampleStatus.PENDING_COLLECTION
+    if has_paid:
+        service_status = paid_projection.service_status
+    elif service_status is None:
+        service_status = profile.service_status
 
     return {
         "user_id": user.id,
@@ -54,10 +62,15 @@ def serialize_reception_profile(profile: Profile, *, service_status=None) -> dic
         "sample_code": sample_code,
         "sample_status": sample_status,
         "sample_status_display": SampleStatus(sample_status).label if sample_status else "",
-        "arrival_confirmed_at": profile.arrival_confirmed_at,
-        "sample_taken_at": profile.sample_taken_at,
-        "sample_sent_at": profile.sample_sent_at,
+        "arrival_confirmed_at": None if has_paid else profile.arrival_confirmed_at,
+        "sample_taken_at": None if has_paid else profile.sample_taken_at,
+        "sample_sent_at": None if has_paid else profile.sample_sent_at,
         "service_status": service_status,
+        "service_samples": [
+            {field: getattr(sample, field) for field in (
+                'sample_code', 'sample_type', 'status', 'collected_at', 'created_at',
+            )} for sample in paid_projection.service_samples
+        ] if has_paid else [],
     }
 
 
@@ -90,12 +103,12 @@ class ReceptionSearchAPIView(APIView):
             qs = qs.filter(sample_code__iexact=sample_code)
 
         profiles = list(qs[:25])
-        paid = get_paid_legacy_service_projections(profile.user_id for profile in profiles)
+        paid = get_paid_legacy_service_projections(
+            (profile.user_id for profile in profiles), include_samples=True,
+        )
         results = [
-            serialize_reception_profile(
-                profile, service_status=paid[profile.user_id].service_status
-                if profile.user_id in paid else profile.service_status,
-            ) for profile in profiles
+            serialize_reception_profile(profile, paid_projection=paid.get(profile.user_id))
+            for profile in profiles
         ]
         return Response({"results": results})
 

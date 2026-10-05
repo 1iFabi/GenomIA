@@ -1,18 +1,19 @@
 """Read-only projection of a client's newest paid service into legacy Profile status."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from django.db.models import F
 
 from profiles.models import Profile, ServiceStatus as LegacyStatus
-from services.models import Purchase, ServiceRequest, ServiceStatusLog
+from services.models import Purchase, Sample, ServiceRequest, ServiceStatusLog
 
 
 @dataclass(frozen=True)
 class LegacyServiceProjection:
     service_status: str
     updated_at: datetime | None
+    service_samples: tuple[Sample, ...] = ()
 
     @property
     def can_view_results(self):
@@ -35,11 +36,12 @@ def _project_paid(purchase, service, *, has_initial, latest_log, participant_own
     return unavailable
 
 
-def get_paid_legacy_service_projections(user_ids):
+def get_paid_legacy_service_projections(user_ids, *, include_samples=False):
     """Bulk paid overrides keyed by Django User ID; callers supply their own legacy fallback.
 
     PostgreSQL DISTINCT ON chooses one newest PAID purchase per owner. The two
     history queries cover initial and latest state without a query per account.
+    Reception can opt into one sample query limited to the selected trusted requests.
     """
     ids = list(user_ids)
     if not ids:
@@ -61,6 +63,7 @@ def get_paid_legacy_service_projections(user_ids):
         .order_by('request_id', '-changed_at', '-pk').distinct('request_id')
     )} if request_ids else {}
     projections = {}
+    request_owners = {}
     for purchase, service in services:
         owner_id = purchase.owner.django_user_id
         projections[owner_id] = _project_paid(
@@ -70,6 +73,21 @@ def get_paid_legacy_service_projections(user_ids):
             participant_owned=service is None or service.participant_id is None
             or purchase.participant_owner_id == owner_id,
         )
+        if (include_samples and projections[owner_id].service_status != LegacyStatus.NO_PURCHASED
+                and service.participant_id is not None):
+            request_owners[service.pk] = owner_id
+    if request_owners:
+        samples = {request_id: [] for request_id in request_owners}
+        # Recheck persisted ownership: bulk/upstream writes bypass Sample.clean().
+        for sample in (Sample.objects.filter(
+            service_request_id__in=request_owners,
+            participant_id=F('service_request__participant_id'),
+            participant__user_id=F('service_request__purchase__owner__django_user_id'),
+        ).only('service_request_id', 'sample_code', 'sample_type', 'status', 'collected_at', 'created_at')
+                .order_by('service_request_id', 'created_at', 'pk')):
+            samples[sample.service_request_id].append(sample)
+        for request_id, owner_id in request_owners.items():
+            projections[owner_id] = replace(projections[owner_id], service_samples=tuple(samples[request_id]))
     return projections
 
 

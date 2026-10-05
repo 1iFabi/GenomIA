@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -42,8 +43,11 @@ class ReceptionServiceProjectionTests(APITestCase):
             purchased_at=paid_at, created_at=created_at or paid_at,
         )
         state = domain.ServiceStatus.objects.get(code=code)
+        participant, _ = Participant.objects.get_or_create(
+            user=user, defaults={'participant_code': f'reception-{user.pk}'},
+        )
         service = domain.ServiceRequest.objects.create(
-            purchase=purchase, status=state, started_at=paid_at,
+            purchase=purchase, participant=participant, status=state, started_at=paid_at,
             completed_at=paid_at + timedelta(seconds=1) if code == 'COMPLETED' else None,
         )
         if initial:
@@ -58,76 +62,125 @@ class ReceptionServiceProjectionTests(APITestCase):
             )
         return service
 
-    def snapshot(self):
-        return {model._meta.label: list(model.objects.order_by('pk').values()) for model in (
-            Profile, domain.Purchase, domain.ServiceRequest, domain.ServiceStatusLog,
+    def sample(self, service, code, **values):
+        return domain.Sample.objects.create(
+            service_request=service, participant_id=service.participant_id,
+            sample_code=code, sample_type='saliva', collected_at=self.now, created_at=self.now,
+            storage_location='private-storage', metadata={'private': 'not-operational'}, **values,
+        )
+
+    def sample_payload(self, sample):
+        return {field: getattr(sample, field) for field in (
+            'sample_code', 'sample_type', 'status', 'collected_at', 'created_at',
         )}
 
-    def expected_payload(self, service_status):
+    def snapshot(self):
+        return {model._meta.label: list(model.objects.order_by('pk').values()) for model in (
+            Profile, Participant, domain.Purchase, domain.ServiceRequest, domain.ServiceStatusLog, domain.Sample,
+        )}
+
+    def expected_payload(self, service_status, *, paid=False, samples=()):
         return {
             'user_id': self.owner.pk, 'first_name': self.owner.first_name,
             'last_name': self.owner.last_name, 'email': self.owner.email,
             'phone': self.profile.phone, 'rut': self.profile.rut,
-            'sample_code': self.profile.sample_code, 'sample_status': self.profile.sample_status,
-            'sample_status_display': SampleStatus(self.profile.sample_status).label,
-            'arrival_confirmed_at': self.profile.arrival_confirmed_at,
-            'sample_taken_at': self.profile.sample_taken_at, 'sample_sent_at': self.profile.sample_sent_at,
-            'service_status': service_status,
+            'sample_code': None if paid else self.profile.sample_code,
+            'sample_status': None if paid else self.profile.sample_status,
+            'sample_status_display': '' if paid else SampleStatus(self.profile.sample_status).label,
+            'arrival_confirmed_at': None if paid else self.profile.arrival_confirmed_at,
+            'sample_taken_at': None if paid else self.profile.sample_taken_at,
+            'sample_sent_at': None if paid else self.profile.sample_sent_at,
+            'service_status': service_status, 'service_samples': [self.sample_payload(sample) for sample in samples],
         }
 
-    def assert_projection(self, service_status):
+    def assert_projection(self, service_status, *, paid=True, samples=()):
         before = self.snapshot()
-        expected = self.expected_payload(service_status)
-        response = self.client.get('/api/reception/search/', {'email': self.owner.email})
-        self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response.data, {'results': [expected]})
-        self.assertEqual(serialize_reception_profile(self.profile), expected)
+        expected = self.expected_payload(service_status, paid=paid, samples=samples)
+        with patch('reception.views.ensure_sample_code', wraps=ensure_sample_code) as sample_code:
+            response = self.client.get('/api/reception/search/', {'email': self.owner.email})
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(response.data, {'results': [expected]})
+            self.assertEqual(serialize_reception_profile(self.profile), expected)
+            if paid:
+                self.assertEqual(serialize_reception_profile(self.profile, service_status=ServiceStatus.COMPLETED),
+                                 expected)
+                sample_code.assert_not_called()
         self.assertEqual(self.snapshot(), before)
 
-    def test_paid_waiting_overrides_stale_profile_completion(self):
-        self.paid_service()
-        self.assert_projection(ServiceStatus.PENDING)
+    def test_paid_waiting_returns_only_operational_samples_without_legacy_fallback(self):
+        service = self.paid_service()
+        sample = self.sample(service, 'PAID-SAMPLE')
+        second = self.sample(service, 'SECOND-PAID-SAMPLE', status='stored')
+        samples = sorted([sample, second], key=lambda item: (item.created_at, item.pk))
+        self.assert_projection(ServiceStatus.PENDING, samples=samples)
+        # GDB03c2 will add lookup by service sample code; this slice keeps legacy lookup only.
+        self.assertEqual(self.client.get('/api/reception/search/', {'sample_code': sample.sample_code}).data,
+                         {'results': []})
 
     def test_legacy_only_fallback_including_pending_purchase_preserves_contract(self):
-        self.assert_projection(ServiceStatus.COMPLETED)
-        domain.Purchase.objects.create(
-            owner=self.owner.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
+        self.assert_projection(ServiceStatus.COMPLETED, paid=False)
+        pending = self.paid_service()
+        self.sample(pending, 'LEGACY-ONLY-PENDING')
+        domain.Purchase.objects.filter(pk=pending.purchase_id).update(
+            status=domain.PurchaseStatus.objects.get(code='PENDING'), purchased_at=None,
             created_at=self.now + timedelta(days=10),
         )
         for legacy in ServiceStatus.values:
             with self.subTest(legacy=legacy):
                 Profile.objects.filter(pk=self.profile.pk).update(service_status=legacy)
                 self.profile.refresh_from_db()
-                self.assert_projection(legacy)
+                self.assert_projection(legacy, paid=False)
 
-    def test_paid_states_project_without_replacing_profile_sample_summary(self):
+    def test_paid_states_project_samples_while_hiding_profile_sample_summary(self):
         for index, code in enumerate(('WAITING_SAMPLE', 'SAMPLE_RECEIVED', 'PROCESSING', 'COMPLETED')):
             with self.subTest(code=code):
-                self.paid_service(code, paid_at=self.now + timedelta(days=index))
-                self.assert_projection(ServiceStatus.COMPLETED if code == 'COMPLETED' else ServiceStatus.PENDING)
+                service = self.paid_service(code, paid_at=self.now + timedelta(days=index))
+                sample = self.sample(service, f'STATE-{code}')
+                self.assert_projection(ServiceStatus.COMPLETED if code == 'COMPLETED' else ServiceStatus.PENDING,
+                                       samples=[sample])
 
     def test_newest_paid_overrides_older_completed_even_with_older_creation_time(self):
-        self.paid_service('COMPLETED', paid_at=self.now - timedelta(days=1),
-                          created_at=self.now + timedelta(days=10))
-        self.paid_service(created_at=self.now - timedelta(days=2))
-        self.assert_projection(ServiceStatus.PENDING)
+        older = self.paid_service('COMPLETED', paid_at=self.now - timedelta(days=1),
+                                  created_at=self.now + timedelta(days=10))
+        self.sample(older, 'OLDER-COMPLETED')
+        newer = self.paid_service(created_at=self.now - timedelta(days=2))
+        sample = self.sample(newer, 'NEWER-WAITING')
+        self.assert_projection(ServiceStatus.PENDING, samples=[sample])
         Profile.objects.filter(pk=self.profile.pk).update(service_status=ServiceStatus.NO_PURCHASED)
         self.profile.refresh_from_db()
         self.paid_service('COMPLETED', paid_at=self.now + timedelta(days=1))
         self.assert_projection(ServiceStatus.COMPLETED)
 
+    def test_paid_sample_ranking_breaks_ties_by_creation_and_purchase_uuid(self):
+        first = self.paid_service('COMPLETED', created_at=self.now)
+        self.sample(first, 'FIRST-TIE')
+        later = self.paid_service(created_at=self.now + timedelta(seconds=1))
+        sample = self.sample(later, 'LATER-TIE')
+        self.assert_projection(ServiceStatus.PENDING, samples=[sample])
+        domain.Purchase.objects.create(
+            pk=uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'), owner=self.owner.app_user,
+            status=domain.PurchaseStatus.objects.get(code='PAID'), purchased_at=self.now,
+            created_at=later.purchase.created_at,
+        )
+        self.assert_projection(ServiceStatus.NO_PURCHASED)
+
     def test_newer_pending_purchase_does_not_shadow_paid_completion(self):
         Profile.objects.filter(pk=self.profile.pk).update(service_status=ServiceStatus.PENDING)
         self.profile.refresh_from_db()
-        self.paid_service('COMPLETED')
-        domain.Purchase.objects.create(
-            owner=self.owner.app_user, status=domain.PurchaseStatus.objects.get(code='PENDING'),
-            created_at=self.now + timedelta(days=10),
+        paid = self.paid_service('COMPLETED')
+        sample = self.sample(paid, 'PAID-COMPLETED')
+        pending = self.paid_service(paid_at=self.now + timedelta(days=10))
+        self.sample(pending, 'PENDING-PURCHASE')
+        domain.Purchase.objects.filter(pk=pending.purchase_id).update(
+            status=domain.PurchaseStatus.objects.get(code='PENDING'),
         )
-        self.assert_projection(ServiceStatus.COMPLETED)
+        self.assert_projection(ServiceStatus.COMPLETED, samples=[sample])
 
     def test_malformed_newest_paid_never_falls_back_to_older_completion(self):
-        self.paid_service('COMPLETED', paid_at=self.now - timedelta(days=1))
+        older = self.paid_service('COMPLETED', paid_at=self.now - timedelta(days=1))
+        self.sample(older, 'MALFORMED-OLDER')
+        Profile.objects.filter(pk=self.profile.pk).update(sample_code=None, sample_code_created_at=None)
+        self.profile.refresh_from_db()
         other = User.objects.create_user(username='projection-other')
         participant = Participant.objects.create(user=other, participant_code='reception-other')
         defects = ('missing_request', 'missing_initial', 'missing_current', 'history_mismatch',
@@ -145,6 +198,7 @@ class ReceptionServiceProjectionTests(APITestCase):
                         'COMPLETED' if defect in ('missing_current', 'missing_completion') else 'PROCESSING',
                         paid_at=paid_at, initial=defect != 'missing_initial', current=defect != 'missing_current',
                     )
+                    self.sample(service, f'MALFORMED-{defect}')
                     if defect == 'history_mismatch':
                         domain.ServiceStatusLog.objects.create(
                             request=service, status=domain.ServiceStatus.objects.get(code='WAITING_SAMPLE'),
@@ -157,6 +211,34 @@ class ReceptionServiceProjectionTests(APITestCase):
                     elif defect == 'missing_payment_time':
                         domain.Purchase.objects.filter(pk=service.purchase_id).update(purchased_at=None)
                 self.assert_projection(ServiceStatus.NO_PURCHASED)
+
+    def test_dirty_sample_and_upstream_ownership_are_filtered_at_read_time(self):
+        service = self.paid_service()
+        sample = self.sample(service, 'VALID-SAMPLE')
+        other = User.objects.create_user(username='dirty-other')
+        foreign = Participant.objects.create(user=other, participant_code='dirty-other')
+        domain.Sample.objects.bulk_create([domain.Sample(
+            service_request=service, participant=foreign, sample_code='DIRTY-BULK', sample_type='blood',
+        )])
+        self.assert_projection(ServiceStatus.PENDING, samples=[sample])
+        domain.Sample.objects.filter(pk=sample.pk).update(participant=foreign)
+        self.assert_projection(ServiceStatus.PENDING)
+        # Even matching dirty sample/request participants cannot bypass purchase ownership.
+        domain.ServiceRequest.objects.filter(pk=service.pk).update(participant=foreign)
+        self.assert_projection(ServiceStatus.NO_PURCHASED)
+        domain.ServiceRequest.objects.filter(pk=service.pk).update(participant_id=service.participant_id)
+        domain.Sample.objects.filter(pk=sample.pk).update(participant_id=service.participant_id)
+        new_owner = User.objects.create_user(username='dirty-reassigned-owner')
+        Participant.objects.filter(pk=service.participant_id).update(user=new_owner)
+        self.assert_projection(ServiceStatus.NO_PURCHASED)
+        domain.ServiceRequest.objects.filter(pk=service.pk).update(participant=None)
+        self.assert_projection(ServiceStatus.PENDING)
+
+    def test_missing_paid_legacy_sample_code_is_never_generated_or_written(self):
+        self.paid_service()
+        Profile.objects.filter(pk=self.profile.pk).update(sample_code=None, sample_code_created_at=None, sample_status='')
+        self.profile.refresh_from_db()
+        self.assert_projection(ServiceStatus.PENDING)
 
     def test_search_keeps_case_insensitive_combined_filters_and_username_lookup(self):
         before = self.snapshot()
@@ -174,7 +256,7 @@ class ReceptionServiceProjectionTests(APITestCase):
         self.assertEqual(self.snapshot(), before)
 
     def test_search_caps_active_clients_at_25_without_per_profile_queries(self):
-        self.paid_service()
+        self.sample(self.paid_service(), 'SINGLE-BULK')
         with CaptureQueriesContext(connection) as single:
             response = self.client.get('/api/reception/search/', {'email': self.owner.email})
         self.assertEqual(response.status_code, 200, response.data)
@@ -191,7 +273,7 @@ class ReceptionServiceProjectionTests(APITestCase):
                 service_status=ServiceStatus.COMPLETED if index % 2 == 0 else ServiceStatus.PENDING,
             )
             if index % 2 == 0:
-                self.paid_service(user=user)
+                self.sample(self.paid_service(user=user), f'BULK-SAMPLE-{index}')
             client_ids.add(user.pk)
         before = self.snapshot()
         with CaptureQueriesContext(connection) as many:
@@ -202,11 +284,15 @@ class ReceptionServiceProjectionTests(APITestCase):
         self.assertTrue({row['user_id'] for row in rows} <= client_ids)
         self.assertTrue(all(row['service_status'] == ServiceStatus.PENDING for row in rows))
         self.assertTrue(all(set(row) == set(self.expected_payload(ServiceStatus.PENDING)) for row in rows))
+        self.assertTrue(all(len(row['service_samples']) == (1 if row['sample_code'] is None else 0) for row in rows))
+        sample_queries = [query['sql'] for query in many.captured_queries if 'FROM "sample"' in query['sql']]
+        self.assertEqual(len(sample_queries), 1)
+        self.assertNotIn('metadata', sample_queries[0])
+        self.assertNotIn('storage_location', sample_queries[0])
         self.assertEqual(len(many), len(single), f'1 profile: {len(single)} queries; 25 profiles: {len(many)}')
         self.assertEqual(self.snapshot(), before)
 
-    def test_missing_sample_code_is_generated_once_without_changing_other_profile_fields(self):
-        self.paid_service()
+    def test_missing_legacy_only_sample_code_is_generated_once_without_changing_other_profile_fields(self):
         Profile.objects.filter(pk=self.profile.pk).update(sample_code=None, sample_code_created_at=None, sample_status='')
         before = Profile.objects.filter(pk=self.profile.pk).values().get()
         response = self.client.get('/api/reception/search/', {'email': self.owner.email})
@@ -214,7 +300,8 @@ class ReceptionServiceProjectionTests(APITestCase):
         row = response.data['results'][0]
         self.assertTrue(row['sample_code'].startswith(f'SC-{self.owner.pk:05d}-'))
         self.assertEqual(row['sample_status'], SampleStatus.PENDING_COLLECTION)
-        self.assertEqual(row['service_status'], ServiceStatus.PENDING)
+        self.assertEqual(row['service_status'], ServiceStatus.COMPLETED)
+        self.assertEqual(row['service_samples'], [])
         after = Profile.objects.filter(pk=self.profile.pk).values().get()
         self.assertEqual(after['sample_code'], row['sample_code'])
         self.assertIsNotNone(after['sample_code_created_at'])
@@ -241,6 +328,7 @@ class ReceptionServiceProjectionTests(APITestCase):
         analyst = User.objects.create_user(username='projection-analyst')
         AppUser.objects.filter(django_user=analyst).update(role=Role.objects.get(code='ANALISTA'))
         unmapped = User.objects.bulk_create([User(username='projection-unmapped')])[0]
+        sample = self.sample(self.paid_service(), 'ROLE-PAID-SAMPLE')
         before = self.snapshot()
         for actor in (None, self.owner, flagged, analyst, unmapped):
             with self.subTest(actor=actor), patch('reception.views.ensure_sample_code') as sample_code:
@@ -254,7 +342,7 @@ class ReceptionServiceProjectionTests(APITestCase):
         grant_admin_role(admin)
         for actor in (self.receptionist, admin):
             self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(actor.pk)})
-            self.assert_projection(ServiceStatus.COMPLETED)
+            self.assert_projection(ServiceStatus.PENDING, samples=[sample])
         self.assertEqual(self.snapshot(), before)
 
 
@@ -523,6 +611,7 @@ class ReceptionMutationTargetTests(APITestCase):
                         expected_payload.update(
                             user_id=user.pk, first_name=user.first_name, last_name=user.last_name, email=user.email,
                             sample_status=sample_status, sample_status_display=SampleStatus(sample_status).label,
+                            service_samples=[],
                         )
                         if extra.get('resend'):
                             expected_payload['sample_code_sent'] = True
