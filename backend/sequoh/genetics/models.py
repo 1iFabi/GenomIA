@@ -109,6 +109,44 @@ class ExternalIdentifier(models.Model):
         constraints = [models.UniqueConstraint(fields=['namespace', 'accession', 'version'], name='uq_external_identifier')]
 
 
+class VariantAnnotation(models.Model):
+    """Versioned source annotations without inferred clinical or biological rules."""
+
+    annotation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        'genetics.Variant', on_delete=models.CASCADE, db_column='variant_id',
+        db_index=False, related_name='annotations',
+    )
+    placement = models.ForeignKey(
+        'genetics.VariantPlacement', on_delete=models.SET_NULL, db_column='placement_id',
+        null=True, blank=True, db_index=False, related_name='annotations',
+    )
+    analysis = models.ForeignKey(
+        'genetics.Analysis', on_delete=models.SET_NULL, db_column='analysis_id',
+        null=True, blank=True, db_index=False, related_name='annotations',
+    )
+    source_name = models.CharField(max_length=128)
+    source_version = models.CharField(max_length=64)
+    annotation_type = models.CharField(max_length=96)
+    gene_symbol = models.CharField(max_length=64, null=True, blank=True)
+    transcript_id = models.CharField(max_length=128, null=True, blank=True)
+    consequence = models.CharField(max_length=128, null=True, blank=True)
+    clinical_significance = models.CharField(max_length=128, null=True, blank=True)
+    evidence_level = models.CharField(max_length=64, null=True, blank=True)
+    score = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    citation_id = models.CharField(max_length=128, null=True, blank=True)
+    payload = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'variant_annotation'
+        indexes = [
+            models.Index(fields=['variant'], name='idx_variant_annotation_variant'),
+            models.Index(fields=['source_name', 'source_version'], name='idx_variant_annotation_source'),
+            models.Index(fields=['gene_symbol'], name='idx_variant_annotation_gene'),
+        ]
+
+
 class Population(models.Model):
     """Hierarchical population reference without inferred biological semantics."""
 

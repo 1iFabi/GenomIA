@@ -1,6 +1,7 @@
 import json
 import uuid
 from datetime import timedelta
+from decimal import Decimal
 from importlib import import_module, reload
 from unittest.mock import patch
 
@@ -28,6 +29,340 @@ from services.models import (
     Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
 )
+
+
+class VariantAnnotationTests(TestCase):
+    fk_specs = (
+        ('variant', domain.Variant, 'variant_id', 'fk_variant_annotation_variant', CASCADE, 'c'),
+        ('placement', domain.VariantPlacement, 'placement_id', 'fk_variant_annotation_placement', SET_NULL, 'n'),
+        ('analysis', domain.Analysis, 'analysis_id', 'fk_variant_annotation_analysis', SET_NULL, 'n'),
+    )
+
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+        self.variant = domain.Variant.objects.create(variant_type='synthetic-annotation')
+
+    def annotation(self, **changes):
+        return domain.VariantAnnotation(**(dict(
+            variant=self.variant, source_name='custom-source', source_version='v1', annotation_type='unlisted-type',
+        ) | changes))
+
+    def test_minimal_annotation_has_orm_defaults_and_nullable_fields(self):
+        self.assertTrue(hasattr(domain, 'VariantAnnotation'), 'VariantAnnotation is missing.')
+        before = timezone.now()
+        annotation = self.annotation()
+        created = annotation.created_at
+        self.assertLessEqual(before, created)
+        self.assertLessEqual(created, timezone.now())
+        annotation.full_clean()
+        annotation.save()
+        annotation.refresh_from_db()
+        self.assertIsInstance(annotation.pk, uuid.UUID)
+        self.assertEqual(annotation.pk.version, 4)
+        self.assertEqual(annotation.variant, self.variant)
+        self.assertEqual(annotation.created_at, created)
+        self.assertTrue(timezone.is_aware(created))
+        for field in ('placement_id', 'analysis_id', 'gene_symbol', 'transcript_id', 'consequence',
+                      'clinical_significance', 'evidence_level', 'score', 'citation_id', 'payload'):
+            self.assertIsNone(getattr(annotation, field))
+
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT conname, confdeltype, confupdtype, condeferrable, condeferred FROM pg_constraint '
+                           "WHERE conrelid = 'variant_annotation'::regclass AND contype = 'f'")
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def linked_annotation(self):
+        other = domain.Variant.objects.create(variant_type='synthetic-other')
+        placement = domain.VariantPlacement.objects.create(
+            variant=other, reference_assembly='synthetic', contig='1', start_pos=1, end_pos=1,
+        )  # SQL does not require the annotation and placement to reference the same variant.
+        analysis = domain.Analysis.objects.create(
+            module='synthetic', pipeline_name='synthetic', pipeline_version='v1', status='unlisted-status',
+        )
+        annotation = self.annotation(placement=placement, analysis=analysis)
+        annotation.full_clean()
+        annotation.save()
+        return annotation, placement, analysis
+
+    def test_exact_sixteen_columns_precision_defaults_pk_fks_and_only_three_indexes(self):
+        columns = {
+            'annotation_id': ('uuid', None, None, None, 'NO', None),
+            'variant_id': ('uuid', None, None, None, 'NO', None),
+            'placement_id': ('uuid', None, None, None, 'YES', None),
+            'analysis_id': ('uuid', None, None, None, 'YES', None),
+            'source_name': ('character varying', 128, None, None, 'NO', None),
+            'source_version': ('character varying', 64, None, None, 'NO', None),
+            'annotation_type': ('character varying', 96, None, None, 'NO', None),
+            'gene_symbol': ('character varying', 64, None, None, 'YES', None),
+            'transcript_id': ('character varying', 128, None, None, 'YES', None),
+            'consequence': ('character varying', 128, None, None, 'YES', None),
+            'clinical_significance': ('character varying', 128, None, None, 'YES', None),
+            'evidence_level': ('character varying', 64, None, None, 'YES', None),
+            'score': ('numeric', None, 20, 10, 'YES', None),
+            'citation_id': ('character varying', 128, None, None, 'YES', None),
+            'payload': ('jsonb', None, None, None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, None, None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        model = domain.VariantAnnotation
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('variant_annotation', 'annotation_id'))
+        self.assertEqual({field.column for field in model._meta.local_fields}, set(columns))
+        self.assertIs(model._meta.pk.default, uuid.uuid4)
+        self.assertFalse(model._meta.pk.editable)
+        for field in model._meta.local_fields:
+            _, length, _, _, nullable, _ = columns[field.column]
+            self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+            if length is not None:
+                self.assertEqual(field.max_length, length)
+            self.assertFalse(field.choices or field.db_index or field.unique and not field.primary_key)
+            self.assertEqual(field.has_default(), field.name in ('annotation_id', 'created_at'))
+            self.assertEqual(field.has_db_default(), field.name == 'created_at')
+        score, created = (model._meta.get_field(name) for name in ('score', 'created_at'))
+        self.assertEqual((score.max_digits, score.decimal_places), (20, 10))
+        self.assertIs(created.default, timezone.now)
+        self.assertIsInstance(created.db_default, TransactionNow)
+        self.assertFalse(created.auto_now or created.auto_now_add)
+        indexes = {'idx_variant_annotation_variant': ['variant'],
+                   'idx_variant_annotation_source': ['source_name', 'source_version'],
+                   'idx_variant_annotation_gene': ['gene_symbol']}
+        self.assertEqual({index.name: index.fields for index in model._meta.indexes}, indexes)
+        self.assertEqual(model._meta.constraints, [])
+        for field, target, key, _, action, _ in self.fk_specs:
+            relation = model._meta.get_field(field)
+            self.assertIs(relation.remote_field.model, target)
+            self.assertIs(relation.remote_field.on_delete, action)
+            self.assertEqual(relation.target_field.name, key)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale, '
+                           'is_nullable, column_default FROM information_schema.columns '
+                           "WHERE table_schema = current_schema() AND table_name = 'variant_annotation'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'variant_annotation')
+            cursor.execute('SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() '
+                           "AND tablename = 'variant_annotation'")
+            self.assertEqual({row[0] for row in cursor.fetchall()}, {'variant_annotation_pkey', *indexes})
+        self.assertEqual(set(constraints), {'variant_annotation_pkey', *indexes, *[spec[3] for spec in self.fk_specs]})
+        self.assertEqual([info['columns'] for info in constraints.values() if info['primary_key']], [['annotation_id']])
+        self.assertEqual({name: (info['columns'], info['foreign_key']) for name, info in constraints.items() if info['foreign_key']},
+                         {name: ([field + '_id'], (target._meta.db_table, key)) for field, target, key, name, _, _ in self.fk_specs})
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']},
+                         indexes | {'idx_variant_annotation_variant': ['variant_id']})
+        self.assertFalse(any(info['check'] or info['unique'] and not info['primary_key'] for info in constraints.values()))
+        self.assertEqual(self.fk_actions(), {name: (deletion, 'c', False, False) for _, _, _, name, _, deletion in self.fk_specs})
+
+    def test_raw_defaults_are_nullable_and_transaction_time_without_seeds_or_other_writes(self):
+        self.assertEqual(domain.VariantAnnotation.objects.count(), 0)
+        others = (SNP, UserSNP, domain.Variant, domain.VariantPlacement, domain.Analysis,
+                  domain.DataRelease, domain.ExternalIdentifier, domain.Population, domain.EpigeneticFeature)
+        before = {model: model.objects.count() for model in others}
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO variant_annotation (annotation_id, variant_id, source_name, source_version, annotation_type) '
+                           'VALUES (%s, %s, %s, %s, %s) RETURNING placement_id, analysis_id, gene_symbol, transcript_id, consequence, '
+                           'clinical_significance, evidence_level, score, citation_id, payload, created_at, transaction_timestamp()',
+                           [uuid.uuid4(), self.variant.pk, 'custom-source', 'v1', 'unlisted-type'])
+            *optional, created, database_now = cursor.fetchone()
+        self.assertEqual(optional, [None] * 10)
+        self.assertTrue(timezone.is_aware(created))
+        self.assertEqual(created, database_now)
+        self.annotation().save()  # Identical provenance is allowed; no inferred uniqueness or enums.
+        self.assertEqual(domain.VariantAnnotation.objects.count(), 2)
+        self.assertEqual({model: model.objects.count() for model in others}, before)
+
+    def test_required_columns_and_primary_key_reject_nulls_and_duplicates(self):
+        values = dict(annotation_id=uuid.uuid4(), variant_id=self.variant.pk, source_name='synthetic',
+                      source_version='v1', annotation_type='synthetic', created_at=timezone.now())
+        columns = ', '.join(connection.ops.quote_name(field) for field in values)
+        sql = f"INSERT INTO variant_annotation ({columns}) VALUES ({', '.join(['%s'] * len(values))})"
+        for field in values:
+            with self.subTest(null_column=field):
+                if field != 'annotation_id':
+                    with self.assertRaises(ValidationError):
+                        self.annotation(**{field: None}).full_clean()
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(sql, [None if name == field else value for name, value in values.items()])
+                self.assertEqual(error.exception.__cause__.diag.column_name, field)
+        first = self.annotation()
+        first.save()
+        with self.assertRaises(ValidationError):
+            self.annotation(annotation_id=first.pk).full_clean()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            domain.VariantAnnotation.objects.bulk_create([self.annotation(annotation_id=first.pk)])
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute(sql, list((values | {'annotation_id': first.pk}).values()))
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'variant_annotation_pkey')
+
+    def test_all_varchar_boundaries_and_overflows(self):
+        for field, length in (('source_name', 128), ('source_version', 64), ('annotation_type', 96), ('gene_symbol', 64),
+                              ('transcript_id', 128), ('consequence', 128), ('clinical_significance', 128),
+                              ('evidence_level', 64), ('citation_id', 128)):
+            with self.subTest(field=field):
+                boundary = self.annotation(**{field: 'x' * length})
+                boundary.full_clean()
+                boundary.save()
+                boundary.refresh_from_db()
+                self.assertEqual(getattr(boundary, field), 'x' * length)
+                too_long = self.annotation(**{field: 'x' * (length + 1)})
+                with self.assertRaises(ValidationError):
+                    too_long.full_clean()
+                with self.assertRaises(DataError), transaction.atomic():
+                    too_long.save()
+
+    def test_numeric_precision_extremes_rounding_and_overflow_without_score_limits(self):
+        for value in ('9999999999.9999999999', '-9999999999.9999999999', '0.0000000001', '-0.0000000001', '0'):
+            with self.subTest(value=value):
+                annotation = self.annotation(score=Decimal(value))
+                annotation.full_clean()
+                annotation.save()
+                annotation.refresh_from_db()
+                self.assertEqual(annotation.score, Decimal(value))
+        annotation = self.annotation()
+        annotation.save()
+        for value in ('10000000000', '-10000000000', '9999999999.99999999995', '-9999999999.99999999995'):
+            with self.subTest(overflow=value):
+                with self.assertRaises(ValidationError):
+                    self.annotation(score=Decimal(value)).full_clean()
+                with self.assertRaises(DataError), transaction.atomic():
+                    self.annotation(score=Decimal(value)).save()
+        for value, rounded in (('0.00000000001', '0'), ('0.00000000005', '0.0000000001'), ('-0.00000000005', '-0.0000000001')):
+            with self.subTest(rounding=value):
+                with self.assertRaises(ValidationError):
+                    self.annotation(score=Decimal(value)).full_clean()
+                with connection.cursor() as cursor:
+                    cursor.execute('UPDATE variant_annotation SET score = %s WHERE annotation_id = %s RETURNING score',
+                                   [Decimal(value), annotation.pk])
+                    self.assertEqual(cursor.fetchone()[0], Decimal(rounded))
+
+    def test_json_and_explicit_timestamp_round_trip_without_payload_schema_rules(self):
+        created = timezone.now() - timedelta(days=1)
+        for payload in ({'tags': ['synthetic'], 'nested': {'flag': True, 'missing': None}}, ['synthetic', 3, False], 'custom', 42, True):
+            with self.subTest(payload=payload):
+                annotation = self.annotation(payload=payload, created_at=created)
+                annotation.full_clean()
+                annotation.save()
+                annotation.refresh_from_db()
+                self.assertEqual((annotation.payload, annotation.created_at), (payload, created))
+        with self.assertRaises(ValidationError):
+            self.annotation(payload={'unserializable': {1}}).full_clean()
+
+    def test_raw_pk_updates_cascade_and_deletes_cascade_or_set_null_only_linked_rows(self):
+        annotation, placement, analysis = self.linked_annotation()
+        other = domain.Variant.objects.create(variant_type='synthetic-unrelated')
+        untouched = self.annotation(variant=other)
+        untouched.save()
+        with connection.cursor() as cursor:
+            for field, target, key, _, _, _ in self.fk_specs:
+                obj = {'variant': self.variant, 'placement': placement, 'analysis': analysis}[field]
+                new_id = uuid.uuid4()
+                cursor.execute(f'UPDATE {connection.ops.quote_name(target._meta.db_table)} SET {key} = %s WHERE {key} = %s', [new_id, obj.pk])
+                annotation.refresh_from_db()
+                self.assertEqual(getattr(annotation, field + '_id'), new_id)
+                obj.pk = new_id
+            for obj, field in ((placement, 'placement'), (analysis, 'analysis')):
+                cursor.execute(f'DELETE FROM {connection.ops.quote_name(obj._meta.db_table)} WHERE {obj._meta.pk.column} = %s', [obj.pk])
+                annotation.refresh_from_db()
+                self.assertIsNone(getattr(annotation, field + '_id'))
+                self.assertEqual(annotation.variant_id, self.variant.pk)
+            cursor.execute('DELETE FROM variant WHERE variant_id = %s', [self.variant.pk])
+        self.assertEqual(list(domain.VariantAnnotation.objects.values_list('pk', flat=True)), [untouched.pk])
+        self.assertTrue(domain.Variant.objects.filter(pk=other.pk).exists())
+
+    def test_orm_deletion_matches_physical_actions(self):
+        annotation, placement, analysis = self.linked_annotation()
+        placement.delete()
+        analysis.delete()
+        annotation.refresh_from_db()
+        self.assertEqual((annotation.placement_id, annotation.analysis_id), (None, None))
+        self.variant.delete()
+        self.assertFalse(domain.VariantAnnotation.objects.filter(pk=annotation.pk).exists())
+
+    def test_all_orphan_inserts_and_updates_fail_at_statement_even_when_deferred(self):
+        annotation = self.annotation()
+        annotation.save()
+        for field, _, _, name, _, _ in self.fk_specs:
+            column, orphan = field + '_id', uuid.uuid4()
+            with self.subTest(field=field):
+                with self.assertRaises(ValidationError):
+                    self.annotation(**{column: orphan}).full_clean()
+                values = dict(annotation_id=uuid.uuid4(), variant_id=self.variant.pk, source_name='custom-source',
+                              source_version='v1', annotation_type='unlisted-type') | {column: orphan}
+                columns = ', '.join(connection.ops.quote_name(name) for name in values)
+                insert = f"INSERT INTO variant_annotation ({columns}) VALUES ({', '.join(['%s'] * len(values))})"
+                for sql, args in (
+                    (insert, list(values.values())),
+                    (f'UPDATE variant_annotation SET {column} = %s WHERE annotation_id = %s', [orphan, annotation.pk]),
+                ):
+                    with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                        with connection.cursor() as cursor:
+                            cursor.execute('SET CONSTRAINTS ALL DEFERRED')
+                            cursor.execute(sql, args)
+                            self.fail('Annotation FK must reject an orphan at the statement, not transaction end.')
+                    self.assertEqual(error.exception.__cause__.diag.constraint_name, name)
+
+    def test_fk_reverse_and_every_missing_or_ambiguous_lookup_fail_before_any_replacement(self):
+        operation = import_module('genetics.migrations.0009_variant_annotation').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0009_variant_annotation')])
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected = self.fk_actions()
+            operation.database_backwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), {name: ('a', 'a', True, True) for name in expected})
+            for apply in (operation.database_forwards, operation.database_backwards):
+                for field, target, key, name, _, _ in self.fk_specs:
+                    for case, sql in (
+                        ('missing', f'ALTER TABLE variant_annotation DROP CONSTRAINT {name}'),
+                        ('ambiguous', f'ALTER TABLE variant_annotation ADD CONSTRAINT duplicate_fk FOREIGN KEY ({field}_id) '
+                         f'REFERENCES {target._meta.db_table} ({key}) DEFERRABLE INITIALLY DEFERRED'),
+                    ):
+                        with self.subTest(direction=apply.__name__, field=field, case=case), transaction.atomic():
+                            cursor.execute(sql)
+                            before = self.fk_actions()
+                            with self.assertRaisesMessage(RuntimeError, 'Expected exactly one FK'):
+                                apply('genetics', editor, state, state)
+                            self.assertEqual(self.fk_actions(), before)
+                            transaction.set_rollback(True)
+                operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected)
+
+    def test_fk_lookup_uses_exact_relations_attnums_and_quotes_discovered_names(self):
+        operation = import_module('genetics.migrations.0009_variant_annotation').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0009_variant_annotation')])
+        with transaction.atomic(), connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected, decoys = self.fk_actions(), {}
+            for field, target, key, name, _, _ in self.fk_specs:
+                quoted = connection.ops.quote_name(f'generated "{field}" FK'.replace('"', '""'))
+                cursor.execute(f'ALTER TABLE variant_annotation RENAME CONSTRAINT {name} TO {quoted}')
+                cursor.execute(f'ALTER TABLE {target._meta.db_table} ADD COLUMN decoy_key uuid UNIQUE')
+                for kind, source, table, column in (
+                    ('source', 'annotation_id', target._meta.db_table, key),
+                    ('target', field + '_id', target._meta.db_table, 'decoy_key'),
+                    ('relation', field + '_id', 'population', 'population_id'),
+                ):
+                    decoy = f'decoy_{kind}_{field}'
+                    cursor.execute(f'ALTER TABLE variant_annotation ADD CONSTRAINT {decoy} FOREIGN KEY ({source}) '
+                                   f'REFERENCES {table} ({column}) DEFERRABLE INITIALLY DEFERRED')
+                    decoys[decoy] = ('a', 'a', True, True)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected | decoys)
+            operation.database_backwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), {name: ('a', 'a', True, True) for name in expected} | decoys)
+            transaction.set_rollback(True)
+
+    def test_schema_only_migration_dependency_and_state_match_model(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0009_variant_annotation')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0008_epigenetic_feature')])
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel', 'RunPython'])
+        self.assertEqual(migration.operations[0].name, 'VariantAnnotation')
+        self.assertTrue(migration.operations[1].reversible)
+        historical = MigrationLoader(connection).project_state([('genetics', '0009_variant_annotation')]).apps.get_model('genetics', 'VariantAnnotation')
+        self.assertEqual(historical._meta.db_table, domain.VariantAnnotation._meta.db_table)
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in domain.VariantAnnotation._meta.local_fields})
+        self.assertEqual(historical._meta.indexes, domain.VariantAnnotation._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.VariantAnnotation._meta.constraints)
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
 
 
 class EpigeneticFeatureTests(TestCase):
