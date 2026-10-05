@@ -1,78 +1,73 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, X, ChevronDown, AlertCircle, AlertTriangle, Info, Zap, Activity, HelpCircle, FilterX } from 'lucide-react';
+import { Menu, X, Zap } from 'lucide-react';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
+import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import SectionHeader from '../../components/SectionHeader/SectionHeader';
-import GeneticTraitBar from '../../components/GeneticTraitBar/GeneticTraitBar';
-import SunburstChart from '../../components/SunburstChart/SunburstChart';
-import Tooltip from '../../components/Tooltip/Tooltip';
-import { cn } from '../../lib/utils';
-import { getImpactLevel, getImpactLabel } from '../../constants/geneticRisk';
-import "./Farmacogenetica.css";
+import './Farmacogenetica.css';
 
-const hexToRgba = (hex, alpha) => {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+const knownModules = new Set([
+  'global_ancestry', 'local_ancestry', 'polygenic_risk', 'monogenic_risk', 'traits', 'pharmacogenetics',
+]);
+const demoProvenance = {
+  synthetic: true, non_clinical: true, clinically_reviewed: false, display_only: true,
+  numeric_semantics: 'arbitrary_demo_only_not_evaluated',
+};
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isText = (value) => typeof value === 'string' && value.trim().length > 0;
+
+// Read only the explicit demo display. Invalid bundles and v1 placeholders
+// stay unavailable; legacy fields and other modules never supply a value.
+const readPharmacogeneticsDisplay = (data) => {
+  const invalid = { status: 'invalid', display: null };
+  if (!isObject(data) || !Array.isArray(data.results)
+    || !Object.entries(demoProvenance).every(([key, expected]) => data[key] === expected)) return invalid;
+  const seen = new Set();
+  let pharmacogenetics = null;
+  for (const result of data.results) {
+    if (!isObject(result) || !knownModules.has(result.module) || seen.has(result.module)) return invalid;
+    seen.add(result.module);
+    if (result.module === 'pharmacogenetics') pharmacogenetics = result;
+  }
+  if (!data.results.length) return { status: 'empty', display: null };
+  if (!pharmacogenetics) return { status: 'missing', display: null };
+
+  const payload = pharmacogenetics.payload;
+  if (!isObject(payload) || payload.state !== 'not_evaluated' || !isObject(payload.display)
+    || payload.display.kind !== 'demo_interactions' || !Array.isArray(payload.display.items)
+    || !payload.display.items.length) return invalid;
+  const labels = new Set();
+  for (const item of payload.display.items) {
+    if (!isObject(item) || !isText(item.label) || labels.has(item.label)
+      || typeof item.display_value !== 'number' || !Number.isFinite(item.display_value)) return invalid;
+    labels.add(item.label);
+  }
+  return { status: 'ready', display: payload.display };
 };
 
-const farmacoPriorityConfig = {
-  alto: { icon: AlertCircle, accentColor: "#ef4444", label: "Precaución Alta", sub: "Requieren supervisión" },
-  medio: { icon: AlertTriangle, accentColor: "#f59e0b", label: "Precaución Media", sub: "Posible ajuste de dosis" },
-  bajo: { icon: Info, accentColor: "#10b981", label: "Uso Estándar", sub: "Respuesta típica esperada" },
+// Localize known categories and neutralize other display prefixes without mutating data.
+const formatInteractionLabel = (label) => label
+  .replace(/^(\s*)Demo interaction ([A-Z]+)(\s*)$/, '$1Interacción $2$3')
+  .replace(/^(\s*)Demo\s+/i, '$1');
+
+const resultMessages = {
+  loading: 'Cargando datos…',
+  noService: 'No hay un servicio disponible para mostrar resultados.',
+  empty: 'El servicio seleccionado no tiene resultados.',
+  missing: 'El módulo de farmacogenética no está disponible en los resultados del servicio seleccionado.',
+  invalid: 'El módulo de farmacogenética no está disponible: los datos no son válidos.',
+  permission: 'No tienes permiso para consultar estos resultados.',
+  error: 'No fue posible cargar los datos. Puedes reintentar.',
+  ready: 'Datos disponibles.',
 };
-
-const systemColors = {
-  cardiologia: '#3b82f6',
-  'salud mental y neurologia': '#8b5cf6',
-  gastroenterologia: '#10b981',
-  'salud osea y reumatologia': '#f59e0b',
-  oncologia: '#ef4444',
-  otros: '#607d8b',
-  // Claves con tilde por si el backend las envía acentuadas
-  'cardiología': '#3b82f6',
-  'salud mental y neurología': '#8b5cf6',
-  'gastroenterología': '#10b981',
-  'salud ósea y reumatología': '#f59e0b',
-  'oncología': '#ef4444',
-  'otros (sin sistema asignado)': '#607d8b',
-};
-
-const fallbackPalette = ['#0ea5e9', '#f97316', '#22c55e', '#a855f7', '#6366f1', '#14b8a6', '#f43f5e', '#f59e0b'];
-
-const normalizeName = (str = '') => (
-  str
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
-);
-
-const ImpactSummaryCard = ({ level, count, onClick, isActive }) => {
-  const config = farmacoPriorityConfig[level];
-  const Icon = config.icon;
-  return (
-    <div 
-      className={cn(
-        `impact-summary-card-minimal impact-summary-card-minimal--${level}`,
-        isActive && "impact-card-active"
-      )}
-      onClick={onClick}
-      style={{ cursor: 'pointer' }}
-    >
-      <div className="impact-minimal-header">
-        <Icon size={20} color={config.accentColor} />
-        <span className="impact-minimal-count" style={{ color: config.accentColor }}>{count}</span>
-      </div>
-      <div className="impact-minimal-content">
-        <span className="impact-minimal-label">{config.label}</span>
-        <span className="impact-minimal-sub">{config.sub}</span>
-      </div>
-    </div>
-  );
+const getPharmacogeneticsResult = (results) => {
+  if (results.loading || results.status === 'loading') return { status: 'loading', display: null };
+  if (results.status === 'permission') return { status: 'permission', display: null };
+  if (!['ready', 'empty'].includes(results.status)) return { status: 'error', display: null };
+  if (!results.service) return { status: 'noService', display: null };
+  if (results.status === 'empty') return { status: 'empty', display: null };
+  return readPharmacogeneticsDisplay(results.data);
 };
 
 const Farmacogenetica = () => {
@@ -80,212 +75,108 @@ const Farmacogenetica = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
-  const [expandedGroups, setExpandedGroups] = useState({});
-  const [pharmaData, setPharmaData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedRiskFilter, setSelectedRiskFilter] = useState('all');
+  const results = useLatestGenomicsResults();
+  const { status, display } = getPharmacogeneticsResult(results);
+  const failed = ['permission', 'error', 'invalid'].includes(status);
 
-  const toggleGroup = (groupName) => {
-    setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
+  useEffect(() => {
+    let active = true;
+    const fetchUser = async () => {
+      try {
+        const response = await apiRequest(API_ENDPOINTS.ME, { method: 'GET' });
+        if (active && response.ok && response.data) setUser(response.data.user || response.data);
+      } catch {
+        // A profile failure must not block the independent results display.
+      }
+    };
+    void fetchUser();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth <= 1024;
+      setIsMobile(mobile);
+      if (!mobile) setIsMobileMenuOpen(false);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await apiRequest(API_ENDPOINTS.LOGOUT, { method: 'POST' });
+    } catch {
+      // Logout is best effort; clear the local session below.
+    }
+    clearToken();
+    navigate('/');
   };
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      const uResp = await apiRequest(API_ENDPOINTS.ME, { method: 'GET' });
-      if (uResp.ok) setUser(uResp.data.user || uResp.data);
-      
-      const hashString = (str) => {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-          hash = ((hash << 5) - hash) + str.charCodeAt(i);
-          hash |= 0; // Convert to 32bit int
-        }
-        return Math.abs(hash);
-      };
-
-      const pResp = await apiRequest(API_ENDPOINTS.PHARMACOGENETICS, { method: 'GET' });
-      if (pResp.ok && pResp.data && pResp.data.data) {
-        setPharmaData(pResp.data.data.map(sys => {
-          const key = normalizeName(sys.name || sys.system_name || '');
-          const apiColor = sys.color || sys.system_color || sys.system?.color;
-          const paletteColor = systemColors[key];
-          const hashedColor = fallbackPalette[hashString(key) % fallbackPalette.length];
-          const color = apiColor || paletteColor || hashedColor || '#64748b';
-          return { ...sys, color };
-        }));
-      }
-      setLoading(false);
-    };
-    fetchAll();
-  }, []);
-
-  useEffect(() => {
-    const checkMobile = () => { setIsMobile(window.innerWidth <= 1024); if (window.innerWidth > 1024) setIsMobileMenuOpen(false); };
-    checkMobile(); window.addEventListener('resize', checkMobile); return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  const riskSummary = useMemo(() => {
-    let alto = 0, medio = 0, bajo = 0;
-    pharmaData.forEach(sys => { sys.drugs.forEach(drug => {
-      const level = getImpactLevel(drug.magnitud);
-      if (level === 'alto') alto++; else if (level === 'medio') medio++; else bajo++;
-    }); });
-    return { alto, medio, bajo };
-  }, [pharmaData]);
-
-  const filteredData = useMemo(() => {
-    if (selectedRiskFilter === 'all') return pharmaData;
-
-    return pharmaData.map(system => {
-      const filteredDrugs = system.drugs.filter(drug => getImpactLevel(drug.magnitud) === selectedRiskFilter);
-      if (filteredDrugs.length === 0) return null;
-      return { ...system, drugs: filteredDrugs };
-    }).filter(Boolean);
-  }, [pharmaData, selectedRiskFilter]);
+  const sidebarItems = useMemo(() => [
+    { label: 'Ancestría', href: '/dashboard/ancestria' },
+    { label: 'Rasgos', href: '/dashboard/rasgos' },
+    { label: 'Farmacogenética', href: '/dashboard/farmacogenetica' },
+    { label: 'Enfermedades', href: '/dashboard/enfermedades' },
+  ], []);
 
   return (
     <div className="farmacogenetica-layout-new">
       {isMobile && (
-        <button className="farmaco-burger" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-          {isMobileMenuOpen ? <X size={24} color="white" /> : <Menu size={24} color="white" />}
+        <button
+          type="button"
+          className="farmaco-burger"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          aria-label={isMobileMenuOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
+          aria-expanded={isMobileMenuOpen}
+          aria-controls="farmaco-navigation"
+        >
+          {isMobileMenuOpen ? <X size={24} color="white" aria-hidden="true" /> : <Menu size={24} color="white" aria-hidden="true" />}
         </button>
       )}
-
-      <aside className="farmaco-sidebar-area">
-        <Sidebar items={useMemo(() => [
-          { label: 'Ancestría', href: '/dashboard/ancestria' },
-          { label: 'Rasgos', href: '/dashboard/rasgos' },
-          { label: 'Farmacogenética', href: '/dashboard/farmacogenetica' },
-          { label: 'Biomarcadores', href: '/dashboard/biomarcadores' },
-          { label: 'Biométricas', href: '/dashboard/biometricas' },
-          { label: 'Enfermedades', href: '/dashboard/enfermedades' },
-        ], [])} onLogout={async () => { await apiRequest(API_ENDPOINTS.LOGOUT, { method: 'POST' }); clearToken(); navigate('/'); }} user={user} isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} />
+      <aside className="farmaco-sidebar-area" id="farmaco-navigation">
+        <Sidebar
+          items={sidebarItems}
+          onLogout={handleLogout}
+          user={user}
+          isMobileMenuOpen={isMobileMenuOpen}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+        />
       </aside>
-
       <main className="farmaco-main-content">
         <div className="farmaco-page-container">
-          <SectionHeader title="Farmacogenética" subtitle="Impacto de tu genética en la respuesta a tratamientos médicos por sistema." icon={Zap} />
-
+          <SectionHeader title="Farmacogenética" subtitle="Consulta los valores del módulo de farmacogenética." icon={Zap} />
           <div className="farmaco-grid-wrapper">
-            {loading ? (
-              <div className="loading-state"><div className="spinner-blue"></div></div>
-            ) : (
-              <>
-                <section className="farmaco-list-section">
-                  <div className="filter-header">
-                    <Tooltip content="Haz clic en las tarjetas para filtrar los resultados por nivel de riesgo.">
-                      <div className="filter-help-trigger">
-                        <Info size={14} />
-                        <span>Filtros interactivos</span>
+            <div className="farmaco-list-section farmaco-demo-content">
+              <div className="no-results-message">
+                <p
+                  role={failed ? 'alert' : 'status'}
+                  aria-label="Estado de los resultados"
+                  aria-busy={status === 'loading'}
+                >
+                  {resultMessages[status]}
+                </p>
+                {status !== 'loading' && (
+                  <button type="button" className="filter-reset-btn" aria-label="Reintentar carga de resultados" onClick={results.retry}>
+                    Reintentar
+                  </button>
+                )}
+              </div>
+              {display && (
+                <section className="system-card-new farmaco-demo-panel" aria-labelledby="pharmacogenetics-demo-title">
+                  <h2 id="pharmacogenetics-demo-title">Módulo de farmacogenética</h2>
+                  <dl className="farmaco-demo-values">
+                    {display.items.map((item) => (
+                      <div key={item.label}>
+                        <dt>{formatInteractionLabel(item.label)}</dt>
+                        <dd>{item.display_value}</dd>
                       </div>
-                    </Tooltip>
-                    {selectedRiskFilter !== 'all' && (
-                      <button className="filter-reset-btn" onClick={() => setSelectedRiskFilter('all')}>
-                        <FilterX size={14} />
-                        Mostrar todos
-                      </button>
-                    )}
-                  </div>
-                  <div className="impact-summary-row">
-                    <ImpactSummaryCard 
-                      level="alto" 
-                      count={riskSummary.alto} 
-                      onClick={() => setSelectedRiskFilter(selectedRiskFilter === 'alto' ? 'all' : 'alto')}
-                      isActive={selectedRiskFilter === 'alto'}
-                    />
-                    <ImpactSummaryCard 
-                      level="medio" 
-                      count={riskSummary.medio} 
-                      onClick={() => setSelectedRiskFilter(selectedRiskFilter === 'medio' ? 'all' : 'medio')}
-                      isActive={selectedRiskFilter === 'medio'}
-                    />
-                    <ImpactSummaryCard 
-                      level="bajo" 
-                      count={riskSummary.bajo} 
-                      onClick={() => setSelectedRiskFilter(selectedRiskFilter === 'bajo' ? 'all' : 'bajo')}
-                      isActive={selectedRiskFilter === 'bajo'}
-                    />
-                  </div>
-
-                  <div className="systems-stack">
-                    {filteredData.length > 0 ? (
-                      filteredData.map((system, idx) => (
-                        <div key={idx} className="system-card-new" style={{ '--accent': system.color }}>
-                          <div className="system-card-header" onClick={() => toggleGroup(system.name)}>
-                            <div className="system-card-title-group">
-                              <div className="system-dot" />
-                              <h3>{system.name}</h3>
-                            </div>
-                            <div className="system-card-meta">
-                              <span
-                                className="drug-count-badge"
-                                style={{ color: system.color, backgroundColor: hexToRgba(system.color, 0.1) }}
-                              >
-                                <strong style={{ fontWeight: 800 }}>{system.drugs.length}</strong>
-                                <span style={{ opacity: 0.85 }}>fármacos</span>
-                              </span>
-
-                              <span className="system-toggle-icon" aria-hidden="true">
-                                <ChevronDown className={cn("chevron-icon", expandedGroups[system.name] && "open")} />
-                              </span>
-                            </div>
-                          </div>
-                          {expandedGroups[system.name] && (
-                            <div className="system-drug-list">
-                              {system.drugs.map((drug, dIdx) => (
-                                <GeneticTraitBar 
-                                  key={dIdx} 
-                                  title={drug.name}
-                                  rsid={drug.rsid}
-                                  genotype={drug.genotipo}
-                                  percentage={drug.percentage}
-                                  impactLabel={getImpactLabel(drug.magnitud)}
-                                  impactColor={system.color}
-                                  details={{
-                                      cromosoma: drug.cromosoma,
-                                      posicion: drug.posicion,
-                                      categoria: system.name,
-                                      magnitud: drug.magnitud
-                                  }}
-                                  freqChile={drug.freq_chile_percent}
-                                  explanation={drug.phenotype_description || drug.fenotipo || "Sin descripción adicional."}
-                                  delay={dIdx * 50}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="no-results-message">
-                        <p>No se encontraron resultados para el filtro seleccionado.</p>
-                      </div>
-                    )}
-                  </div>
+                    ))}
+                  </dl>
                 </section>
-
-                <aside className="farmaco-chart-section">
-                  <div className="chart-sticky-box">
-                    <div className="chart-header-minimal">
-                      <h4>Resumen Visual</h4>
-                      <Tooltip content={
-                        <div className="chart-tooltip-content">
-                          <p><strong>Guía del Gráfico:</strong></p>
-                          <ul className="text-xs space-y-1 mt-1">
-                            <li>• <strong>Anillo Interior:</strong> Sistemas del cuerpo.</li>
-                            <li>• <strong>Anillo Exterior:</strong> Fármacos individuales (al pasar el cursor).</li>
-                            <li>• <strong>Colores:</strong> <span className="text-green-500">Bajo</span>, <span className="text-yellow-500">Medio</span>, <span className="text-red-500">Alto</span> riesgo.</li>
-                          </ul>
-                        </div>
-                      }>
-                        <HelpCircle size={16} className="help-icon-minimal" />
-                      </Tooltip>
-                    </div>
-                    <SunburstChart data={pharmaData} />
-                  </div>
-                </aside>
-              </>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </main>

@@ -8,7 +8,6 @@ import './Dashboard.css';
 const Dashboard = ({ user, onLogout }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -108,52 +107,6 @@ const Dashboard = ({ user, onLogout }) => {
         }
       },
       {
-        id: 'postlogin-biomarcadores',
-        navLabel: 'Biomarcadores',
-        title: 'Biomarcadores',
-        description:
-          'Identifica biomarcadores genéticos que revelan factores clave de tu salud, bienestar y predisposición.',
-        cta: {
-          label: 'Explorar ahora',
-          href: '/dashboard/biomarcadores',
-          ariaLabel: 'Explorar Biomarcadores'
-        },
-        className: 'card--biomarcadores',
-        textColor: '#5F3A1C',
-        descriptionColor: '#845C2E',
-        ctaColor: '#5F3A1C',
-        style: {
-          backgroundColor: '#F8E8D4',
-          backgroundImage: 'url(\'/Dashboard/naranjo.png\')',
-          backgroundSize: '45% auto',
-          backgroundPosition: 'calc(100% + 60px) calc(100% + 15px)',
-          backgroundRepeat: 'no-repeat'
-        }
-      },
-      {
-        id: 'postlogin-biometricas',
-        navLabel: 'Biométricas',
-        title: 'Biométricas',
-        description:
-          'Analiza tus datos biométricos para entender cómo tus características físicas influyen en tu salud general.',
-        cta: {
-          label: 'Explorar ahora',
-          href: '/dashboard/biometricas',
-          ariaLabel: 'Explorar Biométricas'
-        },
-        className: 'card--biometricas',
-        textColor: '#5F1C3E',
-        descriptionColor: '#842D5A',
-        ctaColor: '#5F1C3E',
-        style: {
-          backgroundColor: '#f8e0edff',
-          backgroundImage: 'url(\'/Dashboard/estrella.png\')',
-          backgroundSize: '47% auto',
-          backgroundPosition: 'calc(100% + 120px) calc(100% + 25px)',
-          backgroundRepeat: 'no-repeat'
-        }
-      },
-      {
         id: 'postlogin-enfermedades',
         navLabel: 'Enfermedades',
         title: 'Enfermedades',
@@ -226,11 +179,7 @@ const Dashboard = ({ user, onLogout }) => {
             </p>
           </div>
           <div className="dashboard__actions">
-            <Buttondownload 
-              userName={displayName} 
-              isDownloading={isDownloading} 
-              setIsDownloading={setIsDownloading} 
-            />
+            <Buttondownload />
           </div>
         </header>
 

@@ -5,7 +5,6 @@ export const useAdminStats = () => {
   const [stats, setStats] = useState({
     totalUsers: 0,
     pendingReports: 0,
-    variantsInDB: 0,
     completedAnalysis: 0,
     userGrowth: '+12%',
     reportGrowth: '+8%',
@@ -31,7 +30,6 @@ export const useAdminStats = () => {
           setStats({
             totalUsers: data.total_users || 0,
             pendingReports: data.pending_reports || 0,
-            variantsInDB: data.variants_count || 0,
             completedAnalysis: data.analysis_count || 0,
             userGrowth: data.user_growth || '+0%',
             reportGrowth: data.report_growth || '+0%',

@@ -5,8 +5,6 @@ import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import Ancestria from '../Ancestria/Ancestria';
 import Rasgos from '../Rasgos/Rasgos';
 import Enfermedades from '../Enfermedades/Enfermedades';
-import Biometrics from '../Biometrics/Biometrics';
-import Biomarcadores from '../Biomarcadores/Biomarcadores';
 import Farmacogenetica from '../Farmacogenetica/Farmacogenetica';
 
 const PostloginUser = ({ user: initialUser }) => {
@@ -34,8 +32,6 @@ const PostloginUser = ({ user: initialUser }) => {
       <Route path="rasgos" element={<Rasgos />} />
       <Route path="enfermedades" element={<Enfermedades />} />
       <Route path="farmacogenetica" element={<Farmacogenetica/>} />
-      <Route path="biomarcadores" element={<Biomarcadores/>} />
-      <Route path="biometricas" element={<Biometrics />} />
     </Routes>
   );
 };

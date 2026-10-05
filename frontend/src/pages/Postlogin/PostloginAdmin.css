@@ -135,7 +135,7 @@
 
 .postlogin-admin__stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 
@@ -201,7 +201,7 @@
 
 .postlogin-admin__grid-wrapper {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 30px;
 }
 
@@ -229,51 +229,6 @@
 .postlogin-admin__card:hover {
   transform: translateY(-3px);
   box-shadow: 0 16px 36px rgba(24, 39, 75, 0.18);
-}
-
-/* ===== CARD ORANGE ===== */
-.postlogin-admin__card--orange {
-  background-color: #F8E8D4;
-  background-image: url('/Dashboard/naranjo.png');
-  background-size: 60% auto;
-  background-position: calc(100% + 120px) center; /* Adjusted position */
-  background-repeat: no-repeat;
-}
-
-.postlogin-admin__card--orange .postlogin-admin__card-title {
-  color: #5F3A1C;
-}
-
-.postlogin-admin__card--orange .postlogin-admin__card-description {
-  color: #845C2E;
-}
-
-
-/* ===== CARD PURPLE ===== */
-.postlogin-admin__card--purple {
-  background-color: #E8D4F0;
-  background-image: url('/Dashboard/ojo.png');
-  background-size: 70% auto;
-  background-position: calc(100% + 200px) center; /* Adjusted position */
-  background-repeat: no-repeat;
-}
-
-.postlogin-admin__card--purple .postlogin-admin__card-title {
-  color: #4A1C5F;
-}
-
-.postlogin-admin__card--purple .postlogin-admin__card-description {
-  color: #6B2E84;
-}
-
-.postlogin-admin__card--purple .postlogin-admin__card-link {
-  background-color: #4A1C5F;
-}
-
-.postlogin-admin__card--purple .postlogin-admin__card-link:hover {
-  background-color: #381549;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(74, 28, 95, 0.3);
 }
 
 /* ===== CARD BLUE ===== */
@@ -355,27 +310,8 @@
   white-space: nowrap;
 }
 
-.postlogin-admin__card--orange .postlogin-admin__card-link {
-  background-color: #5F3A1C;
-}
-
-.postlogin-admin__card--orange .postlogin-admin__card-link:hover {
-  background-color: #4a2d16;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(95, 58, 28, 0.3);
-}
-
 .postlogin-admin__card-link::after {
   content: ' →';
-}
-
-.postlogin-admin__card--purple .postlogin-admin__card-link {
-  background-color: #4A1C5F;
-}
-
-.postlogin-admin__card--purple .postlogin-admin__card-link:hover {
-  background-color: #381549;
-  box-shadow: 0 4px 12px rgba(74, 28, 95, 0.3);
 }
 
 

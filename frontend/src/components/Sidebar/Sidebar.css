@@ -397,85 +397,6 @@
   opacity: 1;
 }
 
-/* Admin Section */
-.sidebar__admin-section {
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar__admin-toggle {
-  justify-content: space-between;
-  position: relative;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.sidebar--folded .sidebar__admin-toggle {
-  justify-content: center;
-}
-
-.sidebar__admin-toggle:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.sidebar__admin-content {
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  animation: slideDown 0.3s ease;
-}
-
-.sidebar__admin-menu {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.sidebar__admin-item {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background-color var(--genomia-motion-duration-fast) ease, color var(--genomia-motion-duration-fast) ease, border-color var(--genomia-motion-duration-fast) ease;
-  cursor: pointer;
-  background: rgba(255, 215, 0, 0.1);
-  border: 1px solid rgba(255, 215, 0, 0.2);
-}
-
-.sidebar__admin-item:hover {
-  background: rgba(255, 215, 0, 0.2);
-  color: #ffffff;
-  border-color: rgba(255, 215, 0, 0.3);
-}
-
-.sidebar__admin-icon {
-  flex-shrink: 0;
-  opacity: 0.85;
-}
-
-.sidebar__admin-item:hover .sidebar__admin-icon {
-  opacity: 1;
-}
-
-.sidebar__admin-button {
-  width: 100%;
-  background: none;
-  font-family: inherit;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-
 /* Footer */
 .sidebar__footer {
   padding-top: 0.75rem;
@@ -748,8 +669,7 @@
 
   .sidebar__categories-item,
   .sidebar__profile-item,
-  .sidebar__ai-item,
-  .sidebar__admin-item {
+  .sidebar__ai-item {
     padding: 0.65rem 0.85rem;
     font-size: 0.88rem;
   }

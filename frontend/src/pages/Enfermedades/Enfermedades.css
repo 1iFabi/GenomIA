@@ -71,58 +71,115 @@
   min-height: 0;
 }
 
+/* Page Header */
+.enfermedades-page-header {
+  padding: 1rem 0 2.75rem;
+  margin-bottom: 0.35rem;
+  border-bottom: 1px solid #cdd2d3;
+}
+
+.enfermedades-page-header__kicker {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #5d6b72;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.enfermedades-page-header__title {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: clamp(2.25rem, 5vw, 4rem);
+  font-weight: 800;
+  letter-spacing: -0.06em;
+  line-height: 0.98;
+  text-transform: uppercase;
+}
+
+.enfermedades-page-header__title-accent {
+  color: #0b7ad0;
+}
+
+.enfermedades-page-header__title-neutral {
+  color: #0f2341;
+}
+
+.enfermedades-page-header__subtitle {
+  max-width: 68ch;
+  margin: 1rem 0 0;
+  color: #526169;
+  font-size: 0.96rem;
+  line-height: 1.65;
+}
+
 /* Page Content */
 .enfermedades-page {
   width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
   padding: 0 1rem;
 }
 
 .enfermedades-page__content {
   display: flex;
   flex-direction: column;
+  gap: 2.5rem;
+}
+
+.enfermedades-page__priorities {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.enfermedades-page__priorities-header {
+  border-bottom: 1px solid #aeb8bb;
+  padding-bottom: 1rem;
+}
+
+.enfermedades-page__priorities-header h2 {
+  margin: 0;
+  color: #182027;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: clamp(1.35rem, 2.3vw, 1.9rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.enfermedades-page__priorities-header p {
+  max-width: 58ch;
+  margin: 0.45rem 0 0;
+  color: #526169;
+  font-size: 0.88rem;
+  line-height: 1.55;
 }
 
 .enfermedades-page__priorities-container {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
-  align-items: start;
-  margin-top: -70px;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    'high medium'
+    'high low';
+  gap: 1.1rem;
+  align-items: stretch;
+  margin-top: 0;
 }
 
-.enfermedades-page__priorities-container .priority-section {
-  gap: 1rem;
-  display: flex;
-  flex-direction: column;
+.enfermedades-page__priorities-container .priority-card--high {
+  grid-area: high;
 }
 
-.enfermedades-page__priorities-container .priority-section__header {
-  flex-shrink: 0;
+.enfermedades-page__priorities-container .priority-card--medium {
+  grid-area: medium;
 }
 
-.enfermedades-page__priorities-container .priority-section__cards {
-  max-height: calc(100vh - 300px);
-  overflow-y: auto;
-  padding-right: 0.5rem;
-  flex: 1;
-  min-height: 0;
-}
-
-.enfermedades-page__priorities-container .priority-section__cards::-webkit-scrollbar {
-  width: 6px;
-}
-
-.enfermedades-page__priorities-container .priority-section__cards::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.enfermedades-page__priorities-container .priority-section__cards::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-}
-
-.enfermedades-page__priorities-container .priority-section__cards::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+.enfermedades-page__priorities-container .priority-card--low {
+  grid-area: low;
 }
 
 /* Priority Sections */
@@ -425,7 +482,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 20px;
-  align-items: stretch;
+  align-items: start;
   margin-bottom: 0px;
 }
 
@@ -434,7 +491,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  height: 80%;
   justify-content: center;
 }
 
@@ -444,7 +500,7 @@
 }
 
 .card-large-pro {
-  height: 80%;
+  height: auto;
 }
 
 /* ===== LEGEND PRO ===== */
@@ -651,11 +707,13 @@
 
   .enfermedades-page__priorities-container {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      'high'
+      'medium'
+      'low';
   }
 
-  .enfermedades-page__priorities-container .priority-section__cards {
-    max-height: none;
-  }
 }
 
 @media (max-width: 768px) {
@@ -891,3 +949,10 @@
 .priority-section:nth-child(1) { animation-delay: 0.1s; }
 .priority-section:nth-child(2) { animation-delay: 0.2s; }
 .priority-section:nth-child(3) { animation-delay: 0.3s; }
+
+/* Keep keyboard focus visible on the page's native controls. */
+.enfermedades-layout__burger:focus-visible,
+.enfermedades-page button:focus-visible {
+  outline: 3px solid #0b7ad0;
+  outline-offset: 4px;
+}

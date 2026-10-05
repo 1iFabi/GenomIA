@@ -182,13 +182,12 @@
 @media (min-width: 1200px) {
   .card-grid {
     grid-template-columns: 0.68fr 1fr 1fr;
-    grid-template-rows: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
     height: calc(100vh - 240px); /* Altura total menos header y padding */
     min-height: 500px;
     max-height: 820px;
     grid-template-areas:
       "ancestria rasgos farmacogenetica"
-      "ancestria biomarcadores biometricas"
       "ancestria enfermedades enfermedades";
   }
 
@@ -211,16 +210,6 @@
 
   .card--farmacogenetica {
     grid-area: farmacogenetica;
-    min-height: 0;
-  }
-
-  .card--biomarcadores {
-    grid-area: biomarcadores;
-    min-height: 0;
-  }
-
-  .card--biometricas {
-    grid-area: biometricas;
     min-height: 0;
   }
 
@@ -300,7 +289,7 @@
     height: calc(100vh - 220px);
     min-height: 600px;
     max-height: 900px;
-    grid-template-rows: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
   }
 }
 
@@ -309,7 +298,7 @@
     height: calc(100vh - 230px);
     min-height: 550px;
     max-height: 850px;
-    grid-template-rows: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
   }
 }
 
@@ -319,7 +308,7 @@
     height: calc(100vh - 250px);
     min-height: 500px;
     max-height: 750px;
-    grid-template-rows: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
   }
 }
 

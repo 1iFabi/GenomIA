@@ -4,6 +4,7 @@ import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar/Navbar";
 import Hero from "./pages/Hero/Hero";
 import Loader from "./components/Loader/Loader";
+import DashboardSkeleton from "./components/DashboardSkeleton/DashboardSkeleton";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login/Login";
 
@@ -26,6 +27,8 @@ export default function App() {
   // Normaliza rutas con barra final (ej: "/login/" -> "/login")
   const normalizedPath = pathname.replace(/\/+$/, "") || "/";
   const isNotFound = normalizedPath === "/404";
+  const isDashboardRoute =
+    normalizedPath === "/dashboard" || normalizedPath.startsWith("/dashboard/");
   const hideNavbar =
     normalizedPath === "/login" ||
     normalizedPath === "/register" ||
@@ -38,7 +41,11 @@ export default function App() {
   return (
     <>
       {!hideNavbar && <Navbar />}
-      <Suspense fallback={<Loader />}>
+      <Suspense
+        fallback={
+          isDashboardRoute ? <DashboardSkeleton variant="neutral" /> : <Loader />
+        }
+      >
         <Routes>
           <Route
             path="/"

@@ -4,7 +4,6 @@
   min-height: 100vh;
   background: linear-gradient(135deg, #f3f7ff 0%, #ffffff 60%);
   color: #0f2341;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   position: relative;
 }
 
@@ -17,15 +16,15 @@
   width: 52px;
   height: 52px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
+  background: rgba(15, 35, 65, 0.76);
   color: #ffffff;
   border: none;
   cursor: pointer;
   display: none;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(11, 122, 208, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0.45rem 1.2rem rgba(15, 35, 65, 0.2), 0 1px 4px rgba(0, 0, 0, 0.12);
+  transition: transform 180ms ease-out, background-color 180ms ease-out, box-shadow 180ms ease-out;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   outline: none;
@@ -33,14 +32,20 @@
 }
 
 .ancestria-dashboard__burger:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(11, 122, 208, 0.45), 0 4px 12px rgba(0, 0, 0, 0.2);
-  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 0.6rem 1.4rem rgba(15, 35, 65, 0.24);
+  background: rgba(15, 35, 65, 0.84);
 }
 
 .ancestria-dashboard__burger:active {
   transform: translateY(0);
-  box-shadow: 0 4px 16px rgba(11, 122, 208, 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0.25rem 0.75rem rgba(15, 35, 65, 0.2);
+}
+
+.ancestria-dashboard__burger:focus-visible {
+  outline: 2px solid #01579b;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.92), 0 0.45rem 1.2rem rgba(15, 35, 65, 0.2);
 }
 
 .ancestria-dashboard__sidebar {
@@ -230,8 +235,6 @@
 
 .ancestria-page__legend-item--selected {
   background: rgba(11, 122, 208, 0.1);
-  border-left: 4px solid #0b7ad0;
-  padding-left: calc(0.75rem - 4px);
 }
 
 .ancestria-page__legend-header {
@@ -492,7 +495,6 @@
 .ancestria-dashboard {
   background: #ffffff;
   color: #182027;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .ancestria-dashboard__main {
@@ -530,7 +532,6 @@
 
 .ancestria-dashboard .section-header__title {
   color: #0f2341;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: clamp(1.9rem, 3.4vw, 2.7rem);
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -632,130 +633,728 @@
   }
 }
 
-.ancestria-map-legend {
-  position: absolute;
-  z-index: 10;
-  left: 1.25rem;
-  bottom: 1.25rem;
-  width: min(20rem, calc(100% - 2.5rem));
-  padding: 0.75rem 0.9rem;
-  border: 1px solid rgba(207, 219, 221, 0.9);
-  border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 0.4rem 1.25rem rgba(24, 32, 39, 0.1);
-  backdrop-filter: blur(8px);
-  color: #182027;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+.ancestria-page__content {
+  grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem) !important;
+  align-items: stretch;
+  gap: 1rem;
 }
 
-.ancestria-map-legend__title {
-  margin-bottom: 0.5rem;
-  color: #0f2341;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+.ancestria-page__chart-card {
+  grid-column: auto !important;
+  min-width: 0;
+  margin-bottom: 0 !important;
 }
 
-.ancestria-map-legend__list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.3rem 0.75rem;
-  max-height: 8rem;
+.ancestria-insight-rail {
+  box-sizing: border-box;
+  width: 100%;
+  height: 600px;
+  max-height: 600px;
   overflow-y: auto;
-  padding-right: 0.15rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(164, 190, 207, 0.72);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 0.75rem 2rem rgba(15, 35, 65, 0.09), inset 0 1px rgba(255, 255, 255, 0.9);
+  color: #182027;
+  scrollbar-color: rgba(15, 35, 65, 0.25) transparent;
+  scrollbar-width: thin;
 }
 
-.ancestria-map-legend__item {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.35rem;
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .ancestria-insight-rail {
+    background: rgba(255, 255, 255, 0.78);
+    -webkit-backdrop-filter: blur(14px) saturate(125%);
+    backdrop-filter: blur(14px) saturate(125%);
+  }
+}
+
+.ancestria-insight-rail__title {
+  margin: 0 0 0.6rem;
+  color: #0f2341;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.ancestria-insight-rail__message {
+  margin: 0.75rem 0 0;
   color: #526169;
-  font-size: 0.68rem;
-  line-height: 1.2;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
-.ancestria-map-legend__swatch {
-  width: 0.55rem;
-  height: 0.55rem;
-  flex: 0 0 auto;
-  border: 1px solid rgba(15, 35, 65, 0.12);
-  border-radius: 0.12rem;
+.ancestria-insight-legend {
+  display: grid;
+  gap: 0.12rem;
+  margin: 0.55rem 0 0;
+  padding: 0.65rem 0 0;
+  border-top: 1px solid rgba(15, 35, 65, 0.12);
+  list-style: none;
 }
 
-.ancestria-map-legend__name {
+.ancestria-insight-legend__item {
   min-width: 0;
+}
+
+.ancestria-insight-legend__button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.48rem 0.4rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 140ms ease-out, transform 140ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ancestria-insight-legend__button:active {
+  transform: scale(0.985);
+}
+
+.ancestria-insight-legend__button:focus-visible {
+  outline: 2px solid #01579b;
+  outline-offset: 2px;
+}
+
+.ancestria-insight-legend__button[aria-pressed='true'] {
+  background: rgba(1, 87, 155, 0.09);
+}
+
+.ancestria-insight-legend__flag {
+  display: block;
+  width: 1.5rem;
+  height: 1rem;
+  border: 1px solid rgba(15, 35, 65, 0.14);
+  border-radius: 0.12rem;
+  object-fit: cover;
+}
+
+.ancestria-insight-legend__flag[hidden] {
+  display: none;
+}
+
+.ancestria-insight-legend__name {
   overflow: hidden;
+  color: #526169;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ancestria-map-legend__percentage {
-  margin-left: auto;
+.ancestria-insight-legend__percentage {
   color: #0f2341;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
+  line-height: 1.35;
   white-space: nowrap;
 }
 
-.ancestria-map-scale {
-  position: absolute;
-  right: 1.25rem;
-  bottom: 1.25rem;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.35rem;
-  transform: none;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid rgba(207, 219, 221, 0.9);
-  border-radius: 0.55rem;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 0.4rem 1.25rem rgba(24, 32, 39, 0.1);
-  backdrop-filter: blur(8px);
-  color: #526169;
-  font-size: 0.62rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: default;
+@media (hover: hover) and (pointer: fine) {
+  .ancestria-insight-legend__button:hover {
+    background: rgba(1, 87, 155, 0.06);
+  }
 }
 
-.ancestria-map-scale__gradient {
-  width: 7rem;
-  height: 0.45rem;
-  border-radius: 999px;
-  background: linear-gradient(to right, #E1F5FE, #01579B);
+@media (prefers-reduced-transparency: reduce) {
+  .ancestria-insight-rail {
+    background: rgba(255, 255, 255, 0.98);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
-.ancestria-map-scale__labels {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 0.05rem;
+@media (max-width: 1024px) {
+  .ancestria-page__content {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ancestria-insight-rail {
+    height: auto;
+    max-height: none;
+  }
 }
 
 @media (max-width: 600px) {
-  .ancestria-map-legend {
-    left: 0.75rem;
-    bottom: 0.75rem;
-    width: min(17rem, calc(100% - 1.5rem));
-    padding: 0.65rem 0.75rem;
+  .ancestria-insight-rail {
+    padding: 0.9rem 0.85rem;
+    border-radius: 0.85rem;
   }
 
-  .ancestria-map-legend__list {
-    max-height: 6rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ancestria-insight-legend__button {
+    transition: none;
   }
 
-  .ancestria-map-scale {
-    right: 0.75rem;
-    bottom: 0.75rem;
-    padding: 0.35rem 0.4rem;
+  .ancestria-insight-legend__button:active {
+    transform: none;
+  }
+}
+
+/* The map remains the primary full-width surface; the evidence panel overlays it. */
+.ancestria-page {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+.ancestria-page__content {
+  position: relative;
+  display: block !important;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.ancestria-page__chart-card {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.9rem;
+  background: #4F4F4F;
+  box-shadow: 0 0.5rem 1.5rem rgba(15, 35, 65, 0.08);
+}
+
+.ancestria-map-mark {
+  position: absolute;
+  top: 1.4rem;
+  right: 1.5rem;
+  z-index: 10;
+  display: block;
+  width: 2.25rem;
+  height: 2.25rem;
+  opacity: 0.78;
+  filter: brightness(0) invert(1);
+  pointer-events: none;
+}
+
+.ancestria-map-continent-label {
+  position: absolute;
+  z-index: 20;
+  top: 1.5rem;
+  left: 50%;
+  padding: 0.45rem 1rem;
+  transform: translateX(-50%);
+  border: 1px solid rgba(1, 87, 155, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 0.35rem 1rem rgba(15, 35, 65, 0.1);
+  color: #0d47a1;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+.ancestria-map-continent {
+  transform-box: fill-box;
+}
+
+.ancestria-map-reset-transition {
+  transition: transform 240ms ease-in-out;
+}
+
+.ancestria-map-country:focus-visible {
+  filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 3px #01579b);
+  stroke: #01579b !important;
+  stroke-width: 2.5px !important;
+}
+
+.ancestria-drawer-toggle {
+  position: absolute;
+  z-index: 31;
+  top: 50%;
+  right: 0.25rem;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  box-sizing: border-box;
+  padding: 0;
+  transform: translateY(-50%);
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #ffffff;
+  cursor: pointer;
+  transition: right 200ms ease-out;
+}
+
+.ancestria-drawer-toggle svg {
+  filter: drop-shadow(0 1px 1px rgba(15, 35, 65, 0.9));
+}
+
+.ancestria-drawer-toggle:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 8px #0f2341;
+}
+
+.ancestria-insight-rail {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: min(22rem, 86%);
+  height: auto;
+  max-height: none;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+  padding: 1rem 1rem 1.1rem;
+  transform: translateX(101%);
+  visibility: hidden;
+  border: 1px solid rgba(164, 190, 207, 0.8);
+  border-radius: 0 0.9rem 0.9rem 0;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: -0.6rem 0 1.75rem rgba(15, 35, 65, 0.12);
+  opacity: 0;
+  transition: transform 200ms ease-out, opacity 160ms ease-out, visibility 0s linear 200ms;
+  color: #182027;
+  scrollbar-color: rgba(15, 35, 65, 0.25) transparent;
+  scrollbar-width: thin;
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .ancestria-insight-rail {
+    background: rgba(255, 255, 255, 0.88);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    backdrop-filter: blur(14px) saturate(120%);
+  }
+}
+
+.ancestria-insight-rail--open {
+  transform: translateX(0);
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s;
+}
+
+.ancestria-page__chart-card--drawer-open .ancestria-drawer-toggle {
+  right: min(22rem, 86%);
+}
+
+.ancestria-insight-rail__title {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0.2rem 0 0.6rem;
+  border-bottom: 1px solid rgba(15, 35, 65, 0.12);
+  color: #0f2341;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.ancestria-insight-rail__title img {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  filter: brightness(0);
+  object-fit: contain;
+}
+
+.ancestria-insight-rail__message {
+  margin: 0.5rem 0;
+  color: #526169;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.ancestria-insight-legend {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-top: 0;
+  padding-top: 0.3rem;
+  border-top: 0;
+}
+
+.ancestria-insight-legend__button {
+  min-height: 2.35rem;
+  padding: 0.42rem 0.4rem;
+}
+
+.ancestria-insight-legend__button:focus-visible {
+  outline: 2px solid #01579b;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ancestria-insight-rail {
+    background: #ffffff;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
-  .ancestria-map-scale__gradient {
-    width: 5.5rem;
-      height: 0.45rem;
-      min-height: 0;
+  .ancestria-dashboard__burger {
+    background-color: #243d61;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
+}
+
+@media (max-width: 1024px) {
+  .ancestria-page__content {
+    grid-template-columns: minmax(0, 1fr) !important;
+    margin-top: 0.75rem;
+  }
+
+  .ancestria-page__chart-card {
+    min-height: 24rem;
+  }
+
+  .ancestria-insight-rail {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: min(30rem, 90%);
+    max-height: 90%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.9rem 1rem calc(1rem + env(safe-area-inset-bottom));
+    transform: translateY(101%);
+    border: 1px solid rgba(164, 190, 207, 0.82);
+    border-bottom: 0;
+    border-radius: 0.9rem 0.9rem 0 0;
+    box-shadow: 0 -0.65rem 1.75rem rgba(15, 35, 65, 0.14);
+    transition: transform 200ms ease-out, opacity 160ms ease-out, visibility 0s linear 200ms;
+  }
+
+  .ancestria-insight-rail--open {
+    transform: translateY(0);
+    transition-delay: 0s;
+  }
+
+  .ancestria-page__chart-card--drawer-open .ancestria-drawer-toggle {
+    top: auto;
+    right: auto;
+    bottom: min(30rem, 90%);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .ancestria-drawer-toggle {
+    top: auto;
+    right: auto;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .ancestria-insight-legend {
+    flex: 0 0 auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .ancestria-map-mark {
+    top: 1rem;
+    right: 1rem;
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .ancestria-map-continent-label {
+    top: 1rem;
+    max-width: calc(100% - 7rem);
+    overflow: hidden;
+    font-size: 0.68rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ancestria-dashboard__burger,
+  .ancestria-drawer-toggle,
+  .ancestria-insight-rail,
+  .ancestria-map-continent,
+  .ancestria-map-continent path,
+  .ancestria-map-reset-transition {
+    transition: none !important;
+  }
+
+  .ancestria-map-continent {
+    transform: none !important;
+  }
+}
+
+.ancestria-fullscreen-toggle {
+  position: absolute;
+  z-index: 40;
+  right: 1rem;
+  bottom: 1rem;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  box-sizing: border-box;
+  padding: 0;
+  place-items: center;
+  border: 1px solid #ffffff;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(15, 35, 65, 0.9);
+  color: #ffffff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.ancestria-fullscreen-toggle:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px rgba(15, 35, 65, 0.9);
+}
+
+.ancestria-fullscreen-toggle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  filter: drop-shadow(0 1px 1px rgba(15, 35, 65, 0.9));
+}
+
+.ancestria-page__chart-card:fullscreen,
+.ancestria-page__chart-card--fullscreen-native:fullscreen {
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  max-height: none;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 0;
+  background: #4F4F4F;
+}
+
+.ancestria-page__chart-card--fullscreen-fallback {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  max-height: none;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 0;
+  background: #4F4F4F;
+}
+
+.ancestria-fullscreen-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ancestria-page__chart-card {
+  transition:
+    transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.ancestria-page__chart-card--fullscreen-motion-entering {
+  transform: scale(0.99);
+  opacity: 0.96;
+  transition: none;
+}
+
+.ancestria-page__chart-card--fullscreen-motion-settled {
+  transform: none;
+  opacity: 1;
+}
+
+.ancestria-insight-rail--fullscreen {
+  gap: 0.7rem;
+  padding: 1.1rem 1.05rem;
+  border-color: #cbd8e2;
+  border-radius: 0;
+  background: #f8fbff;
+  box-shadow: -0.35rem 0 1rem rgba(15, 35, 65, 0.1);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.ancestria-insight-rail--fullscreen .ancestria-insight-rail__title {
+  gap: 0.7rem;
+  padding-bottom: 0.75rem;
+  color: #0f2341;
+  font-size: 1.08rem;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.ancestria-insight-rail__count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 0.75rem;
+  border-left: 1px solid #cbd8e2;
+  color: #526b80;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.ancestria-insight-rail__hint {
+  max-width: 30ch;
+  margin: -0.1rem 0 0;
+  color: #526b80;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.ancestria-insight-legend--fullscreen {
+  gap: 0;
+  padding-top: 0.35rem;
+}
+
+.ancestria-insight-legend--fullscreen .ancestria-insight-legend__item + .ancestria-insight-legend__item {
+  border-top: 1px solid #e2eaf1;
+}
+
+.ancestria-insight-rail--fullscreen .ancestria-insight-legend__button {
+  min-height: 3.1rem;
+  grid-template-columns: 1.7rem 1.5rem minmax(0, 1fr) auto;
+  grid-template-rows: auto 0.12rem;
+  column-gap: 0.55rem;
+  row-gap: 0.38rem;
+  padding: 0.52rem 0.35rem 0.42rem;
+  border-radius: 0;
+}
+
+.ancestria-insight-rail--fullscreen .ancestria-insight-legend__button[aria-pressed='true'] {
+  background: #e9f2fa;
+  box-shadow: inset 2px 0 0 #01579b;
+}
+
+.ancestria-insight-legend__ordinal {
+  color: #71889b;
+  font-size: 0.67rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.ancestria-insight-rail--fullscreen .ancestria-insight-legend__name {
+  color: #344e65;
+  font-weight: 550;
+}
+
+.ancestria-insight-rail--fullscreen .ancestria-insight-legend__percentage {
+  color: #0f2341;
+}
+
+.ancestria-insight-legend__bar-track {
+  display: block;
+  width: 100%;
+  height: 0.12rem;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  background: #dce6ee;
+}
+
+.ancestria-insight-legend__bar {
+  display: block;
+  max-width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 1024px) {
+  .ancestria-insight-rail--fullscreen {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    border-radius: 0.9rem 0.9rem 0 0;
+    box-shadow: 0 -0.35rem 1rem rgba(15, 35, 65, 0.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ancestria-page__chart-card,
+  .ancestria-fullscreen-toggle {
+    transition: none;
+  }
+
+  .ancestria-page__chart-card--fullscreen-motion-entering,
+  .ancestria-page__chart-card--fullscreen-motion-settled,
+  .ancestria-fullscreen-toggle:hover,
+  .ancestria-fullscreen-toggle:active {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Keep disclosure and retry outside the inert drawer, including native fullscreen. */
+.ancestria-results-status {
+  position: absolute;
+  z-index: 35;
+  top: 1rem;
+  left: 1rem;
+  max-width: min(25rem, calc(100% - 5.5rem));
+  max-height: calc(100% - 7rem);
+  overflow-y: auto;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.35rem;
+  background: rgba(15, 35, 65, 0.9);
+  color: #ffffff;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.ancestria-results-status p {
+  margin: 0.3rem 0;
+}
+
+.ancestria-results-disclosure {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+.ancestria-results-status button {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ancestria-results-status button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
 }

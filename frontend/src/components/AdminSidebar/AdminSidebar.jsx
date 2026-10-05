@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { LogOut, FileText, Database, Shield } from 'lucide-react'
+import { LogOut, Shield } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import './AdminSidebar.css'
 
@@ -88,38 +88,6 @@ const AdminSidebar = ({ onLogout, isMobileMenuOpen = false, setIsMobileMenuOpen 
         <nav className="admin-sidebar__nav">
           { showNavItems &&
             <>
-              {/* Administrar Reportes Genéticos */}
-              <a 
-                href="#"
-                className="admin-sidebar__nav-item"
-                title={!isExpanded && !isMobile ? 'Administrar reportes genéticos' : undefined}
-                tabIndex={childTabIndex}
-                onClick={closeMenuAndNavigate('/dashboard/admin/reports')}
-              >
-                <FileText size={20} className="admin-sidebar__nav-icon" />
-                {(isExpanded || isMobile) && (
-                  <span className="admin-sidebar__nav-label">Administrar reportes genéticos</span>
-                )}
-              </a>
-
-              {(isExpanded || isMobile) && <div className="admin-sidebar__divider" />}
-
-              {/* Ver Variantes en Base de Datos */}
-              <a 
-                href="#ver-variantes"
-                className="admin-sidebar__nav-item"
-                title={!isExpanded && !isMobile ? 'Ver variantes en base de datos' : undefined}
-                tabIndex={childTabIndex}
-                onClick={closeMenuAndNavigate('/dashboard/admin/variants')}
-              >
-                <Database size={20} className="admin-sidebar__nav-icon" />
-                {(isExpanded || isMobile) && (
-                  <span className="admin-sidebar__nav-label">Ver variantes en base de datos</span>
-                )}
-              </a>
-
-              {isAdmin && (isExpanded || isMobile) && <div className="admin-sidebar__divider" />}
-
               {isAdmin && (
                 <a 
                   href="#gestionar-analistas"

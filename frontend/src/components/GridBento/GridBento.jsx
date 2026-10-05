@@ -67,12 +67,6 @@ const cardData = [
     title: 'Farmacogenetica',
     description: 'Como responden tus genes a distintos tratamientos.',
     label: 'Cuidado'
-  },
-  {
-    color: '#EDF2FA',
-    title: 'Biomarcadores',
-    description: 'Indicadores clave para tu bienestar integral.',
-    label: 'Indicadores'
   }
 ];
 

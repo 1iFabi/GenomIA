@@ -1,12 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_ENDPOINTS, apiRequest } from '../config/api';
+import DashboardSkeleton from './DashboardSkeleton/DashboardSkeleton';
 
 export default function ProtectedRoute({ children, requireService = true, requireAdmin = false }) {
   const [ok, setOk] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const isDashboardRoute =
+    location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/');
 
   useEffect(() => {
     let mounted = true;
@@ -17,8 +21,10 @@ export default function ProtectedRoute({ children, requireService = true, requir
       if (!res.ok) {
         navigate('/login', { replace: true });
       } else {
+        const authenticatedUser = res.data?.user ?? res.data;
+
         // Verificar si el usuario es staff (administrador)
-        const isStaff = res.data?.user?.is_staff === true;
+        const isStaff = authenticatedUser?.is_staff === true;
         
         // Si la ruta requiere admin y el usuario no es staff, redirigir a dashboard
         if (requireAdmin && !isStaff) {
@@ -27,7 +33,7 @@ export default function ProtectedRoute({ children, requireService = true, requir
         }
         
         // Verificar el estado del servicio
-        const serviceStatus = res.data?.user?.service_status;
+        const serviceStatus = authenticatedUser?.service_status;
         
         // Si require servicio y el usuario es NO_PURCHASED, redirigir a /no-purchased
         if (requireService && serviceStatus === 'NO_PURCHASED') {
@@ -59,6 +65,7 @@ export default function ProtectedRoute({ children, requireService = true, requir
           return;
         }
         
+        setUser(authenticatedUser);
         setOk(true);
       }
       setLoading(false);
@@ -66,6 +73,18 @@ export default function ProtectedRoute({ children, requireService = true, requir
     return () => { mounted = false; };
   }, [navigate, location.pathname, requireService, requireAdmin]);
 
-  if (loading) return null;
-  return ok ? children : null;
+  if (loading) {
+    return isDashboardRoute ? <DashboardSkeleton variant="neutral" /> : null;
+  }
+  if (!ok) return null;
+
+  const protectedChildren = isDashboardRoute && React.isValidElement(children)
+    ? React.cloneElement(children, { user })
+    : children;
+
+  return isDashboardRoute ? (
+    <Suspense fallback={<DashboardSkeleton variant={DashboardSkeleton.getRoleVariant(user)} />}>
+      {protectedChildren}
+    </Suspense>
+  ) : protectedChildren;
 }

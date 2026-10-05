@@ -491,6 +491,13 @@ button.rasgos-breadcrumb__crumb:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* Raw demo definitions reuse the responsive field grid without default indentation. */
+.rasgos-page .rasgos-field dt,
+.rasgos-page .rasgos-field dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .rasgos-trait-detail__disclaimer {
   margin: 0;
   padding: 0 1.75rem 1.5rem;

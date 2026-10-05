@@ -1,6 +1,34 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { apiRequest, getCsrfToken } from './api';
 
+const retiredSnpEndpoints = [
+  'DISEASES', 'ANCESTRY', 'INDIGENOUS', 'TRAITS', 'PHARMACOGENETICS',
+  'UPLOAD_GENETIC_FILE', 'DELETE_GENETIC_FILE',
+];
+
+describe('legacy SNP API retirement', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it.each(['', 'https://api.example.test/api'])(
+    'does not expose legacy result or genetic-file URLs with base "%s"',
+    async (base) => {
+      vi.stubEnv('VITE_API_BASE_URL', base);
+      vi.resetModules();
+      const { API_ENDPOINTS } = await import('./api');
+
+      for (const endpoint of retiredSnpEndpoints) {
+        expect(API_ENDPOINTS).not.toHaveProperty(endpoint);
+      }
+      expect(Object.values(API_ENDPOINTS).some((value) => (
+        typeof value === 'string' && /\/(genetics\/(diseases|ancestry|indigenous|traits|pharmacogenetics)|ingest\/(upload|delete)-genetic-file)\//.test(value)
+      ))).toBe(false);
+    },
+  );
+});
+
 describe('apiRequest (auth via cookie HttpOnly)', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());

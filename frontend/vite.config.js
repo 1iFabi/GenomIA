@@ -8,6 +8,12 @@ export default defineConfig({
     react(),
     tailwindcss()
   ],
+  css: {
+    // Keep the frontend on Tailwind v4 instead of inheriting the root app's v3 PostCSS config.
+    postcss: {
+      plugins: [],
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

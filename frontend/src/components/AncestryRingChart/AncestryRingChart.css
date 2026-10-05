@@ -1,0 +1,92 @@
+.ancestry-ring-chart {
+  position: relative;
+  width: min(100%, 19rem);
+  margin: 0 auto;
+}
+
+.ancestry-ring-chart__rings,
+.bklit-ring-chart {
+  width: 100%;
+  max-width: 100%;
+}
+
+.bklit-ring-chart {
+  display: grid;
+  place-items: center;
+}
+
+.bklit-ring-chart__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.bklit-ring-chart__ring {
+  outline: none;
+}
+
+.bklit-ring-chart__ring[role='button'] {
+  cursor: pointer;
+}
+
+.bklit-ring-chart__ring[role='button']:focus-visible {
+  filter: drop-shadow(0 0 3px #01579b);
+}
+
+.bklit-ring-chart__ring[role='button']:hover,
+.bklit-ring-chart__ring[role='button']:focus-visible,
+.bklit-ring-chart__ring[aria-pressed='true'] {
+  opacity: 1;
+}
+
+.ancestry-ring-chart__center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  width: 5rem;
+  max-width: 28%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.ancestry-ring-chart__center-value {
+  color: #182027;
+  font-size: clamp(0.75rem, 4vw, 1.05rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.ancestry-ring-chart__center-name {
+  max-width: 100%;
+  overflow: hidden;
+  color: #526169;
+  font-size: 0.54rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ancestry-ring-chart__caption {
+  margin: 0.1rem 0 0;
+  color: #526169;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bklit-ring-chart__ring {
+    transition: none !important;
+  }
+}

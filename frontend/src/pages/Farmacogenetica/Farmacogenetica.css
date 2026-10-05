@@ -463,3 +463,49 @@
 .system-toggle-icon .chevron-icon.open{
   transform: rotate(180deg);
 }
+
+/* Page-scoped demo disclosure, raw values and keyboard focus. */
+.farmacogenetica-layout-new .farmaco-demo-disclosure {
+  color: #145f9f;
+  font-weight: 700;
+}
+
+.farmacogenetica-layout-new .farmaco-demo-content {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.farmacogenetica-layout-new .farmaco-demo-panel {
+  padding: 1.5rem;
+}
+
+.farmacogenetica-layout-new .farmaco-demo-panel h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.farmacogenetica-layout-new .farmaco-demo-values > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+}
+
+.farmacogenetica-layout-new .farmaco-demo-values dt {
+  overflow-wrap: anywhere;
+}
+
+.farmacogenetica-layout-new .farmaco-demo-values dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.farmacogenetica-layout-new .farmaco-demo-disclaimer {
+  overflow-wrap: anywhere;
+}
+
+.farmacogenetica-layout-new button:focus-visible {
+  outline: 3px solid #145f9f;
+  outline-offset: 3px;
+}

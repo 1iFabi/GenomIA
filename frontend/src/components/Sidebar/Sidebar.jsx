@@ -1,28 +1,42 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
-import { LogOut, Dna, Activity, Heart, Globe, Pill, TestTube, User, ChevronDown, ChevronUp, KeyRound, UserX, MessageCircle, Grid3x3, Menu, X, Settings, Upload } from 'lucide-react'
+import { LogOut, Dna, Activity, Heart, Globe, Pill, TestTube, User, ChevronDown, ChevronUp, KeyRound, UserX, MessageCircle, Grid3x3 } from 'lucide-react'
 import { Home } from 'lucide-react'
 import ChangePasswordModal from '../ChangePasswordModal/ChangePasswordModal.jsx'
 import DeleteAccountModal from '../DeleteAccountModal/DeleteAccountModal.jsx'
-import UploadFileModal from '../UploadFileModal/UploadFileModal.jsx'
 import './Sidebar.css'
 
-const defaultIcons = [Dna, Activity, Heart, Globe, Pill, TestTube]
+const defaultCategoryIcons = [Dna, Activity, Heart, Globe, Pill, TestTube]
+const defaultIcons = {
+  profile: User,
+  profileExpand: ChevronDown,
+  profileCollapse: ChevronUp,
+  key: KeyRound,
+  removeAccount: UserX,
+  categories: Grid3x3,
+  categoriesExpand: ChevronDown,
+  categoriesCollapse: ChevronUp,
+  categoryItems: defaultCategoryIcons,
+  aiExpand: ChevronDown,
+  aiCollapse: ChevronUp,
+  chat: MessageCircle,
+  home: Home,
+  logout: LogOut,
+}
 const noop = () => {}
 
-const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMobileMenuOpen = noop }) => {
+const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMobileMenuOpen = noop, iconOverrides }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const [isHovered, setIsHovered] = useState(false)
   const [isProfileExpanded, setIsProfileExpanded] = useState(false)
   const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(false)
   const [isAIExpanded, setIsAIExpanded] = useState(false)
-  const [isAdminExpanded, setIsAdminExpanded] = useState(false)
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false)
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false)
-  const [isUploadFileModalOpen, setIsUploadFileModalOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const Icons = { ...defaultIcons, ...iconOverrides }
   const base = import.meta.env.BASE_URL || '/'
   const nalaImg = `${base}nala.png`
 
@@ -58,14 +72,15 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
 
   const navItems = useMemo(() => {
     return items.map((it, idx) => {
-      const Icon = defaultIcons[idx % defaultIcons.length]
+      const Icon = iconOverrides?.categoryItems?.[idx]
+        || defaultCategoryIcons[idx % defaultCategoryIcons.length]
       return {
         label: it.label ?? String(it),
         href: it.href ?? '#',
         Icon,
       }
     })
-  }, [items])
+  }, [iconOverrides, items])
 
   const displayName = useMemo(() => {
     return user?.first_name || user?.firstName || user?.name || 'Usuario'
@@ -84,11 +99,6 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
   const toggleAI = (e) => {
     e.preventDefault()
     setIsAIExpanded(!isAIExpanded)
-  }
-
-  const toggleAdmin = (e) => {
-    e.preventDefault()
-    setIsAdminExpanded(!isAdminExpanded)
   }
 
   const closeMenuAndNavigate = (href) => (e) => {
@@ -141,11 +151,13 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
             onClick={toggleProfile}
             title={!isExpanded && !isMobile ? 'Perfil' : undefined}
           >
-            <User size={20} className="sidebar__nav-icon" />
+            <Icons.profile size={20} className="sidebar__nav-icon" aria-hidden="true" />
             {(isExpanded || isMobile) && (
               <>
                 <span className="sidebar__nav-label">Perfil</span>
-                {isProfileExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                {isProfileExpanded
+                  ? <Icons.profileCollapse size={16} aria-hidden="true" />
+                  : <Icons.profileExpand size={16} aria-hidden="true" />}
               </>
             )}
           </button>
@@ -166,7 +178,7 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
                     }}
                     className="sidebar__profile-item sidebar__profile-button"
                   >
-                    <KeyRound size={18} className="sidebar__profile-icon" />
+                    <Icons.key size={18} className="sidebar__profile-icon" aria-hidden="true" />
                     <span>Cambiar contraseña</span>
                   </button>
                 </li>
@@ -180,7 +192,7 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
                     }}
                     className="sidebar__profile-item sidebar__profile-item--danger sidebar__profile-button"
                   >
-                    <UserX size={18} className="sidebar__profile-icon" />
+                    <Icons.removeAccount size={18} className="sidebar__profile-icon" aria-hidden="true" />
                     <span>Eliminar cuenta</span>
                   </button>
                 </li>
@@ -198,11 +210,13 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
             onClick={toggleCategories}
             title={!isExpanded && !isMobile ? 'Categorías' : undefined}
           >
-            <Grid3x3 size={20} className="sidebar__nav-icon" />
+            <Icons.categories size={20} className="sidebar__nav-icon" aria-hidden="true" />
             {(isExpanded || isMobile) && (
               <>
                 <span className="sidebar__nav-label">Categorías</span>
-                {isCategoriesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                {isCategoriesExpanded
+                  ? <Icons.categoriesCollapse size={16} aria-hidden="true" />
+                  : <Icons.categoriesExpand size={16} aria-hidden="true" />}
               </>
             )}
           </button>
@@ -217,7 +231,7 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
                       className="sidebar__categories-item"
                       onClick={closeMenuAndNavigate(nav.href)}
                     >
-                      <nav.Icon size={18} className="sidebar__categories-icon" />
+                      <nav.Icon size={18} className="sidebar__categories-icon" aria-hidden="true" />
                       <span>{nav.label}</span>
                     </button>
                   </li>
@@ -244,7 +258,9 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
             {(isExpanded || isMobile) && (
               <>
                 <span className="sidebar__nav-label">Pregúntale a Nala</span>
-                {isAIExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                {isAIExpanded
+                  ? <Icons.aiCollapse size={16} aria-hidden="true" />
+                  : <Icons.aiExpand size={16} aria-hidden="true" />}
               </>
             )}
           </button>
@@ -258,7 +274,7 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
                     className="sidebar__ai-item"
                     onClick={closeMenuAndNavigate('#chatear-ia')}
                   >
-                    <MessageCircle size={18} className="sidebar__ai-icon" />
+                    <Icons.chat size={18} className="sidebar__ai-icon" aria-hidden="true" />
                     <span>Chatea con la IA</span>
                   </a>
                 </li>
@@ -267,49 +283,6 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
           )}
         </div>
 
-        {user?.is_staff && (
-          <>
-            {(isExpanded || isMobile) && <div className="sidebar__divider" />}
-            
-            <div className="sidebar__admin-section">
-              <button 
-                type="button" 
-                className="sidebar__nav-item sidebar__admin-toggle"
-                onClick={toggleAdmin}
-                title={!isExpanded && !isMobile ? 'Administrador' : undefined}
-              >
-                <Settings size={20} className="sidebar__nav-icon" />
-                {(isExpanded || isMobile) && (
-                  <>
-                    <span className="sidebar__nav-label">Administrador</span>
-                    {isAdminExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </>
-                )}
-              </button>
-
-              {isAdminExpanded && (isExpanded || isMobile) && (
-                <div className="sidebar__admin-content">
-                  <ul className="sidebar__admin-menu">
-                    <li>
-                      <button
-                        type="button"
-                        className="sidebar__admin-item sidebar__admin-button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setIsUploadFileModalOpen(true);
-                          if (isMobile) setIsMobileMenuOpen(false);
-                        }}
-                      >
-                        <Upload size={18} className="sidebar__admin-icon" />
-                        <span>Subir Archivo</span>
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-              )}
-            </div>
-          </>
-        )}
       </nav>
 
       <div className="sidebar__footer">
@@ -319,7 +292,7 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
           onClick={() => { if (isMobile) setIsMobileMenuOpen(false); navigate('/'); }}
           title={!isExpanded && !isMobile ? 'Volver al inicio' : undefined}
         >
-          <Home size={20} />
+          <Icons.home size={20} aria-hidden="true" />
           {(isExpanded || isMobile) && <span>Volver al inicio</span>}
         </button>
         {onLogout && (
@@ -332,7 +305,7 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
             }}
             title={!isExpanded && !isMobile ? 'Cerrar sesión' : undefined}
           >
-            <LogOut size={20} />
+            <Icons.logout size={20} aria-hidden="true" />
             {(isExpanded || isMobile) && <span>Cerrar sesión</span>}
           </button>
         )}
@@ -353,10 +326,6 @@ const Sidebar = ({ items = [], onLogout, user, isMobileMenuOpen = false, setIsMo
               setIsProfileExpanded(false)
             }}
             userName={displayName}
-          />
-          <UploadFileModal
-            isOpen={isUploadFileModalOpen}
-            onClose={() => setIsUploadFileModalOpen(false)}
           />
         </>,
         document.body

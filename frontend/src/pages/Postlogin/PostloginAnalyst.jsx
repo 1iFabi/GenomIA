@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Menu, X, Users, FileText, Database, Activity } from 'lucide-react';
+import { Menu, X, Users, FileText, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import AdminSidebar from '../../components/AdminSidebar/AdminSidebar';
@@ -103,14 +103,6 @@ const PostloginAnalyst = ({ user }) => {
 
             <div className="postlogin-analyst__stat-card">
               <div className="postlogin-analyst__stat-header">
-                <span className="postlogin-analyst__stat-label">Variantes en BD</span>
-                <Database size={24} className="postlogin-analyst__stat-icon" style={{ color: '#8b5cf6' }} />
-              </div>
-              <div className="postlogin-analyst__stat-value">{stats.variantsInDB.toLocaleString()}</div>
-            </div>
-
-            <div className="postlogin-analyst__stat-card">
-              <div className="postlogin-analyst__stat-header">
                 <span className="postlogin-analyst__stat-label">Análisis Completados</span>
                 <Activity size={24} className="postlogin-analyst__stat-icon" style={{ color: '#10b981' }} />
               </div>
@@ -119,49 +111,6 @@ const PostloginAnalyst = ({ user }) => {
           </div>
         </section>
 
-        <section className="postlogin-analyst__grid" aria-label="Administración">
-          <div className="postlogin-analyst__grid-wrapper">
-            {/* Card Naranja */}
-            <div className="postlogin-analyst__card postlogin-analyst__card--orange" role="button" tabIndex="0">
-              <div className="postlogin-analyst__card-content">
-                <h2 className="postlogin-analyst__card-title">Administrar reportes genéticos</h2>
-                <p className="postlogin-analyst__card-description">
-                  Gestiona los archivos genéticos de los usuarios: carga, edita o elimina sus variantes (RSIDs).
-                </p>
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    navigate('/dashboard/admin/reports');
-                  }}
-                  href="#"
-                  className="postlogin-analyst__card-link"
-                >
-                  Administrar archivo
-                </a>
-              </div>
-            </div>
-
-            {/* Card Morada */}
-            <div className="postlogin-analyst__card postlogin-analyst__card--purple" role="button" tabIndex="0">
-              <div className="postlogin-analyst__card-content">
-                <h2 className="postlogin-analyst__card-title">Base de datos de variantes genéticas</h2>
-                <p className="postlogin-analyst__card-description">
-                  Explora y gestiona las variantes genéticas almacenadas en la base de datos del sistema.
-                </p>
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    navigate('/dashboard/admin/variants');
-                  }}
-                  href="#"
-                  className="postlogin-analyst__card-link"
-                >
-                  Ver variantes
-                </a>
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
   );
