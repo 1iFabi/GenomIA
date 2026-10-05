@@ -30,6 +30,235 @@ from services.models import (
 )
 
 
+class EpigeneticFeatureTests(TestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+
+    def feature(self, **changes):
+        return domain.EpigeneticFeature(**(dict(
+            feature_type='synthetic-feature', reference_assembly='GRCh38', contig='1', start_pos=1, end_pos=1,
+        ) | changes))
+
+    def test_minimal_feature_has_orm_defaults_and_nullable_fields(self):
+        self.assertTrue(hasattr(domain, 'EpigeneticFeature'), 'EpigeneticFeature is missing.')
+        before = timezone.now()
+        feature = self.feature()
+        created = feature.created_at
+        self.assertLessEqual(before, created)
+        self.assertLessEqual(created, timezone.now())
+        feature.full_clean()
+        feature.save()
+        feature.refresh_from_db()
+        self.assertIsInstance(feature.pk, uuid.UUID)
+        self.assertEqual(feature.pk.version, 4)
+        self.assertEqual(feature.coordinate_system, '1-based-inclusive')
+        self.assertEqual(feature.created_at, created)
+        self.assertTrue(timezone.is_aware(created))
+        for field in ('strand', 'modification_code', 'name', 'metadata'):
+            self.assertIsNone(getattr(feature, field))
+
+    def test_exact_twelve_columns_defaults_keys_checks_and_only_region_index(self):
+        columns = {
+            'epigenetic_feature_id': ('uuid', None, 'NO', None),
+            'feature_type': ('character varying', 64, 'NO', None),
+            'reference_assembly': ('character varying', 32, 'NO', None),
+            'contig': ('character varying', 64, 'NO', None),
+            'start_pos': ('bigint', None, 'NO', None),
+            'end_pos': ('bigint', None, 'NO', None),
+            'coordinate_system': ('character varying', 32, 'NO', "'1-based-inclusive'::character varying"),
+            'strand': ('character', 1, 'YES', None),
+            'modification_code': ('character varying', 32, 'YES', None),
+            'name': ('character varying', 255, 'YES', None),
+            'metadata': ('jsonb', None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        model = domain.EpigeneticFeature
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('epigenetic_feature', 'epigenetic_feature_id'))
+        self.assertEqual({field.column for field in model._meta.local_fields}, set(columns))
+        self.assertIs(model._meta.pk.default, uuid.uuid4)
+        self.assertFalse(model._meta.pk.editable)
+        for field in model._meta.local_fields:
+            _, length, nullable, _ = columns[field.column]
+            self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+            if length is not None:
+                self.assertEqual(field.max_length, length)
+            self.assertFalse(field.is_relation or field.db_index or field.choices)
+            self.assertEqual(field.has_default(), field.name in ('epigenetic_feature_id', 'coordinate_system', 'created_at'))
+            self.assertEqual(field.has_db_default(), field.name in ('coordinate_system', 'created_at'))
+        coordinate = model._meta.get_field('coordinate_system')
+        # Correct SQL v01.5's triple-quoted literal to the semantic, unquoted value.
+        self.assertEqual((coordinate.default, coordinate.db_default), ('1-based-inclusive', '1-based-inclusive'))
+        created = model._meta.get_field('created_at')
+        self.assertIs(created.default, timezone.now)
+        self.assertIsInstance(created.db_default, TransactionNow)
+        self.assertFalse(created.auto_now or created.auto_now_add)
+        self.assertIsInstance(model._meta.get_field('strand'), domain.FixedCharField)
+        region = {'idx_epigenetic_feature_region': ['reference_assembly', 'contig', 'start_pos', 'end_pos']}
+        self.assertEqual({index.name: index.fields for index in model._meta.indexes}, region)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable, column_default '
+                           'FROM information_schema.columns WHERE table_schema = current_schema() '
+                           "AND table_name = 'epigenetic_feature'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'epigenetic_feature')
+            cursor.execute('SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() '
+                           "AND tablename = 'epigenetic_feature'")
+            self.assertEqual({row[0] for row in cursor.fetchall()}, {'epigenetic_feature_pkey', *region})
+        self.assertEqual([info['columns'] for info in constraints.values() if info['primary_key']], [['epigenetic_feature_id']])
+        self.assertFalse(any(info['foreign_key'] or info['unique'] and not info['primary_key'] for info in constraints.values()))
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['index']}, region)
+        checks = {'epigenetic_feature_start_gte_1': {'start_pos'},
+                  'epigenetic_feature_end_gte_start': {'end_pos', 'start_pos'}}
+        self.assertEqual({constraint.name for constraint in model._meta.constraints}, set(checks))
+        self.assertEqual({name: set(info['columns']) for name, info in constraints.items() if info['check']}, checks)
+
+    def test_raw_sql_defaults_are_unquoted_nullable_and_transaction_time(self):
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO epigenetic_feature '
+                           '(epigenetic_feature_id, feature_type, reference_assembly, contig, start_pos, end_pos) '
+                           'VALUES (%s, %s, %s, %s, %s, %s) RETURNING coordinate_system, strand, modification_code, '
+                           'name, metadata, created_at, transaction_timestamp()',
+                           [uuid.uuid4(), 'synthetic-feature', 'GRCh38', '1', 1, 1])
+            coordinate, *optional, created, database_now = cursor.fetchone()
+        self.assertEqual(coordinate, '1-based-inclusive')
+        self.assertEqual(optional, [None] * 4)
+        self.assertTrue(timezone.is_aware(created))
+        self.assertEqual(created, database_now)
+
+    def test_explicit_values_and_duplicate_regions_preserve_unrelated_legacy_rows(self):
+        legacy = SNP.objects.create(rsid='synthetic-epi', genotipo='AA', fenotipo='Unrelated legacy row')
+        UserSNP.objects.create(user=User.objects.create_user(username='epigenetic-legacy'), snp=legacy)
+        self.assertEqual((SNP.objects.count(), UserSNP.objects.count()), (1, 1))
+        other_models = (SNP, UserSNP, domain.Analysis, domain.DataRelease, domain.Variant,
+                        domain.VariantPlacement, domain.ExternalIdentifier, domain.Population)
+        before = {model: model.objects.count() for model in other_models}
+        self.assertEqual(domain.EpigeneticFeature.objects.count(), 0)  # No seeds.
+        values = dict(feature_type='unlisted-feature-type', reference_assembly='synthetic-assembly',
+                      contig='synthetic-contig', start_pos=2**40, end_pos=2**40 + 2,
+                      coordinate_system='synthetic-coordinates', strand='?', modification_code='unlisted-modification',
+                      name='Synthetic definition', metadata={'tags': ['synthetic'], 'details': {'count': 2}},
+                      created_at=timezone.now() - timedelta(days=1))
+        for _ in range(2):
+            feature = self.feature(**values)
+            feature.full_clean()
+            feature.save()
+            feature.refresh_from_db()
+            self.assertEqual({field: getattr(feature, field) for field in values}, values)
+        self.assertEqual(domain.EpigeneticFeature.objects.count(), 2)  # No interval uniqueness or ontology inference.
+        self.assertEqual({model: model.objects.count() for model in other_models}, before)
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.fenotipo, 'Unrelated legacy row')
+
+    def test_coordinate_checks_apply_to_orm_inserts_and_sql_updates(self):
+        valid = self.feature()
+        valid.full_clean()
+        valid.save()  # Inclusive single-base features at position one are valid.
+        upper = self.feature(start_pos=2**63 - 1, end_pos=2**63 - 1)
+        upper.full_clean()
+        upper.save()
+        for changes, constraint in (
+            ({'start_pos': 0}, 'epigenetic_feature_start_gte_1'),
+            ({'start_pos': -1}, 'epigenetic_feature_start_gte_1'),
+            ({'start_pos': 2, 'end_pos': 1}, 'epigenetic_feature_end_gte_start'),
+        ):
+            with self.subTest(changes=changes):
+                feature = self.feature(**changes)
+                with self.assertRaises(ValidationError) as error:
+                    feature.full_clean()
+                self.assertIn(constraint, str(error.exception))
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    feature.save()
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint)
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute('UPDATE epigenetic_feature SET start_pos = %s, end_pos = %s '
+                                       'WHERE epigenetic_feature_id = %s', [feature.start_pos, feature.end_pos, valid.pk])
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint)
+        valid.refresh_from_db()
+        self.assertEqual((valid.start_pos, valid.end_pos), (1, 1))
+        self.assertEqual(domain.EpigeneticFeature.objects.count(), 2)
+
+    def test_required_columns_and_primary_key_are_enforced_in_orm_and_sql(self):
+        values = dict(epigenetic_feature_id=uuid.uuid4(), feature_type='synthetic-feature', reference_assembly='GRCh38',
+                      contig='1', start_pos=1, end_pos=1, coordinate_system='1-based-inclusive', created_at=timezone.now())
+        columns = ', '.join(connection.ops.quote_name(field) for field in values)
+        placeholders = ', '.join(['%s'] * len(values))
+        sql = f'INSERT INTO epigenetic_feature ({columns}) VALUES ({placeholders})'
+        for field in values:
+            with self.subTest(null_column=field):
+                if field != 'epigenetic_feature_id':
+                    with self.assertRaises(ValidationError) as error:
+                        self.feature(**{field: None}).full_clean()
+                    self.assertIn(field, error.exception.message_dict)
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(sql, [None if name == field else value for name, value in values.items()])
+                self.assertEqual(error.exception.__cause__.diag.column_name, field)
+        for field in ('feature_type', 'reference_assembly', 'contig', 'coordinate_system'):
+            with self.subTest(blank_field=field):
+                with self.assertRaises(ValidationError) as error:
+                    self.feature(**{field: ''}).full_clean()
+                self.assertIn(field, error.exception.message_dict)
+        first = self.feature()
+        first.save()
+        duplicate = self.feature(epigenetic_feature_id=first.pk)
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            domain.EpigeneticFeature.objects.bulk_create([duplicate])
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'epigenetic_feature_pkey')
+        with self.assertRaises(IntegrityError) as error, transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute(sql, list((values | {'epigenetic_feature_id': first.pk}).values()))
+        self.assertEqual(error.exception.__cause__.diag.constraint_name, 'epigenetic_feature_pkey')
+        self.assertEqual(domain.EpigeneticFeature.objects.count(), 1)
+
+    def test_varchar_and_fixed_char_boundaries_and_overflows_in_orm_and_sql(self):
+        for field, length in (('feature_type', 64), ('reference_assembly', 32), ('contig', 64),
+                              ('coordinate_system', 32), ('strand', 1), ('modification_code', 32), ('name', 255)):
+            with self.subTest(field=field):
+                boundary = self.feature(**{field: 'x' * length})
+                boundary.full_clean()
+                boundary.save()
+                boundary.refresh_from_db()
+                self.assertEqual(getattr(boundary, field), 'x' * length)
+                too_long = self.feature(**{field: 'x' * (length + 1)})
+                with self.assertRaises(ValidationError) as error:
+                    too_long.full_clean()
+                self.assertIn(field, error.exception.message_dict)
+                with self.assertRaises(DataError), transaction.atomic():
+                    too_long.save()
+                with self.assertRaises(DataError), transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'UPDATE epigenetic_feature SET {connection.ops.quote_name(field)} = %s '
+                                       'WHERE epigenetic_feature_id = %s', ['x' * (length + 1), boundary.pk])
+                boundary.refresh_from_db()
+                self.assertEqual(getattr(boundary, field), 'x' * length)
+
+    def test_schema_only_migration_dependency_state_and_fixed_char_deconstruction(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0008_epigenetic_feature')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0007_population')])
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel'])
+        self.assertEqual(migration.operations[0].name, 'EpigeneticFeature')
+        historical = MigrationLoader(connection).project_state([('genetics', '0008_epigenetic_feature')]).apps.get_model(
+            'genetics', 'EpigeneticFeature',
+        )
+        self.assertEqual(historical._meta.db_table, domain.EpigeneticFeature._meta.db_table)
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in domain.EpigeneticFeature._meta.local_fields})
+        self.assertEqual(historical._meta.indexes, domain.EpigeneticFeature._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.EpigeneticFeature._meta.constraints)
+        field = domain.EpigeneticFeature._meta.get_field('strand')
+        _, path, args, kwargs = field.deconstruct()
+        self.assertEqual(path, 'genetics.models.FixedCharField')
+        rebuilt = domain.FixedCharField(*args, **kwargs)
+        self.assertEqual(rebuilt.deconstruct()[1:], field.deconstruct()[1:])
+        self.assertEqual(rebuilt.db_type(connection), 'char(1)')
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
+
+
 class PopulationTests(TestCase):
     def setUp(self):
         self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
