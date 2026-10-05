@@ -8,7 +8,6 @@ from accounts.authentication import JWTAuthentication
 from accounts.csrf import CSRFDoubleSubmitMixin
 from .models import SNP, UserSNP
 from profiles.models import Profile, ServiceStatus
-from accounts.email_utils import send_results_ready_email
 from accounts.roles import is_admin_or_analyst
 import logging
 import json
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class UploadGeneticFileAPIView(CSRFDoubleSubmitMixin, APIView):
-    """Vista para procesar archivos genéticos y crear asociaciones user-snp"""
+    """Disabled legacy user-scoped SNP upload route."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -29,125 +28,10 @@ class UploadGeneticFileAPIView(CSRFDoubleSubmitMixin, APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        try:
-            # Obtener datos del body (JSON)
-            try:
-                data = json.loads(request.body or '{}')
-            except json.JSONDecodeError:
-                data = {}
-
-            user_id = data.get('userId')
-            file_content = data.get('fileContent', '').strip()
-            filename = data.get('filename', 'report.txt').strip()
-
-            # Validaciones
-            if not user_id:
-                return Response(
-                    {"error": "userId es obligatorio"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            if not file_content:
-                return Response(
-                    {"error": "fileContent es obligatorio"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Verificar que el usuario exista
-            try:
-                target_user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                return Response(
-                    {"error": "Usuario no encontrado"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-            # Validar que el filename coincida con el sample_code del usuario
-            try:
-                user_profile = target_user.profile
-                sample_code = user_profile.sample_code
-                
-                # Comparar: el filename (sin extensión) debe coincidir con el sample_code
-                filename_without_ext = filename.split('.')[0]
-                if filename_without_ext != sample_code:
-                    return Response(
-                        {
-                            "error": "El nombre del archivo no coincide con el SampleCode del usuario."
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except Profile.DoesNotExist:
-                return Response(
-                    {"error": "El usuario no tiene perfil configurado"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Procesar archivo genético
-            processing_result = self._process_genetic_file(target_user, file_content)
-
-            if not isinstance(processing_result, dict):
-                return Response(
-                    {"error": "Error al procesar el archivo genético"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-
-            # Actualizar el service_status del usuario a COMPLETED y guardar nombre del archivo
-            try:
-                from django.utils import timezone
-                profile, created = Profile.objects.get_or_create(user=target_user)
-                profile.service_status = ServiceStatus.COMPLETED
-                profile.report_filename = filename
-                profile.report_uploaded_at = timezone.now()
-                profile.save()
-                logger.info(
-                    f"Service status actualizado a COMPLETED para usuario {target_user.email}. "
-                    f"Archivo: {filename}"
-                )
-            except Exception as e:
-                logger.error(f"Error actualizando service_status: {str(e)}")
-
-            # Enviar email de notificación al usuario
-            user_name = (
-                target_user.first_name
-                or target_user.username
-                or target_user.email.split('@')[0]
-            )
-            email_sent = False
-            try:
-                email_sent = send_results_ready_email(target_user.email, user_name)
-                if email_sent:
-                    logger.info(f"Email de resultados listos enviado a {target_user.email}")
-                else:
-                    logger.warning(
-                        f"No se pudo enviar email de notificación a {target_user.email}"
-                    )
-            except Exception as e:
-                logger.error(f"Error enviando email de notificación: {str(e)}")
-
-            return Response({
-                "success": True,
-                "message": (
-                    f"Archivo procesado. {processing_result['snps_added']} nuevas variantes "
-                    f"genéticas agregadas."
-                ),
-                "user_id": user_id,
-                "snps_count": processing_result['snps_added'],
-                "status_updated": True,
-                "email_sent": email_sent,
-                "details": {
-                    "total_lines": processing_result['total_lines'],
-                    "processed_rsids": processing_result['processed_rsids'],
-                    "unprocessed_lines": processing_result['unprocessed_lines'],
-                    "skipped_lines": processing_result['snps_skipped'],
-                }
-            }, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
-            logger.error(f"Error en UploadGeneticFileAPIView: {str(e)}", exc_info=True)
-            return Response(
-                {"error": "Error interno del servidor"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response(
+            {"error": "Legacy user-scoped SNP upload is disabled until validated per-service import and review are available."},
+            status=status.HTTP_409_CONFLICT,
+        )
 
     def _process_genetic_file(self, user, file_content):
         """
