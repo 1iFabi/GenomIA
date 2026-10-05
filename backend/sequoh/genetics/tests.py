@@ -30,6 +30,271 @@ from services.models import (
 )
 
 
+class PopulationTests(TestCase):
+    def setUp(self):
+        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
+
+    def population(self, **changes):
+        return domain.Population(**(dict(code=uuid.uuid4().hex, name='Synthetic cohort') | changes))
+
+    def fk_actions(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT conname, confdeltype, confupdtype, condeferrable, condeferred FROM pg_constraint '
+                           "WHERE conrelid = 'population'::regclass AND contype = 'f'")
+            return {row[0]: row[1:] for row in cursor.fetchall()}
+
+    def test_minimal_population_has_orm_defaults_and_nullable_fields(self):
+        self.assertTrue(hasattr(domain, 'Population'), 'Population is missing.')
+        population = domain.Population(code='unlisted-population', name='Synthetic cohort')
+        population.full_clean()
+        population.save()
+        population.refresh_from_db()
+        self.assertIsInstance(population.pk, uuid.UUID)
+        self.assertEqual(population.pk.version, 4)
+        self.assertEqual((population.code, population.name), ('unlisted-population', 'Synthetic cohort'))
+        self.assertIs(population.is_internal, False)
+        self.assertIs(population.is_masked, False)
+        self.assertTrue(timezone.is_aware(population.created_at))
+        for field in ('parent_population_id', 'description', 'geographic_region', 'metadata'):
+            self.assertIsNone(getattr(population, field))
+
+    def test_exact_ten_columns_defaults_keys_self_fk_and_no_extra_indexes_or_checks(self):
+        columns = {
+            'population_id': ('uuid', None, 'NO', None),
+            'parent_population_id': ('uuid', None, 'YES', None),
+            'code': ('character varying', 64, 'NO', None),
+            'name': ('character varying', 128, 'NO', None),
+            'description': ('text', None, 'YES', None),
+            'geographic_region': ('character varying', 128, 'YES', None),
+            'is_internal': ('boolean', None, 'NO', 'false'),
+            'is_masked': ('boolean', None, 'NO', 'false'),
+            'metadata': ('jsonb', None, 'YES', None),
+            'created_at': ('timestamp with time zone', None, 'NO', 'CURRENT_TIMESTAMP'),
+        }
+        model = domain.Population
+        self.assertEqual((model._meta.db_table, model._meta.pk.name), ('population', 'population_id'))
+        self.assertEqual({field.column for field in model._meta.local_fields}, set(columns))
+        self.assertIs(model._meta.pk.default, uuid.uuid4)
+        self.assertFalse(model._meta.pk.editable)
+        for field in model._meta.local_fields:
+            _, length, nullable, _ = columns[field.column]
+            self.assertEqual((field.null, field.blank), (nullable == 'YES', nullable == 'YES'))
+            if length is not None:
+                self.assertEqual(field.max_length, length)
+            self.assertFalse(field.choices)
+            self.assertEqual(field.has_default(), field.name in ('population_id', 'is_internal', 'is_masked', 'created_at'))
+            self.assertEqual(field.has_db_default(), field.name in ('is_internal', 'is_masked', 'created_at'))
+        for name in ('is_internal', 'is_masked'):
+            field = model._meta.get_field(name)
+            self.assertIs(field.default, False)
+            self.assertIs(field.db_default, False)
+        created = model._meta.get_field('created_at')
+        self.assertIs(created.default, timezone.now)
+        self.assertIsInstance(created.db_default, TransactionNow)
+        parent = model._meta.get_field('parent_population')
+        self.assertIs(parent.remote_field.model, model)
+        self.assertIs(parent.remote_field.on_delete, SET_NULL)
+        self.assertEqual(parent.target_field.name, 'population_id')
+        self.assertFalse(parent.db_index)
+        self.assertEqual(model._meta.indexes, [])
+        unique, = model._meta.constraints
+        self.assertEqual((unique.name, unique.fields), ('uq_population_code', ('code',)))
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT column_name, data_type, character_maximum_length, is_nullable, column_default '
+                           "FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'population'")
+            self.assertEqual({row[0]: row[1:] for row in cursor.fetchall()}, columns)
+            constraints = connection.introspection.get_constraints(cursor, 'population')
+            cursor.execute("SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'population'")
+            self.assertEqual({row[0] for row in cursor.fetchall()}, {'population_pkey', 'uq_population_code'})
+        self.assertEqual([info['columns'] for info in constraints.values() if info['primary_key']], [['population_id']])
+        self.assertEqual({name: info['columns'] for name, info in constraints.items() if info['unique'] and not info['primary_key']},
+                         {'uq_population_code': ['code']})
+        self.assertEqual([info['foreign_key'] for info in constraints.values() if info['foreign_key']], [('population', 'population_id')])
+        self.assertEqual(constraints['fk_population_parent']['columns'], ['parent_population_id'])
+        self.assertFalse(any(info['check'] or info['index'] for info in constraints.values()))
+        self.assertEqual(self.fk_actions(), {'fk_population_parent': ('n', 'c', False, False)})
+
+    def test_raw_sql_defaults_are_false_nullable_and_transaction_time(self):
+        with connection.cursor() as cursor:
+            cursor.execute('INSERT INTO population (population_id, code, name) VALUES (%s, %s, %s) '
+                           'RETURNING parent_population_id, description, geographic_region, metadata, '
+                           'is_internal, is_masked, created_at, transaction_timestamp()',
+                           [uuid.uuid4(), 'synthetic-sql', 'Synthetic cohort'])
+            *optional, internal, masked, created, database_now = cursor.fetchone()
+        self.assertEqual(optional, [None] * 4)
+        self.assertIs(internal, False)
+        self.assertIs(masked, False)
+        self.assertTrue(timezone.is_aware(created))
+        self.assertEqual(created, database_now)
+
+    def test_explicit_values_round_trip_without_inference_or_other_table_writes(self):
+        other_models = (SNP, UserSNP, domain.Analysis, domain.DataRelease, domain.Variant,
+                        domain.VariantPlacement, domain.ExternalIdentifier)
+        before = {model: model.objects.count() for model in other_models}
+        self.assertEqual(domain.Population.objects.count(), 0)  # No catalog seeds.
+        parent = self.population()
+        parent.save()
+        values = dict(parent_population=parent, code='unlisted.code-42', name='Synthetic cohort',
+                      description='Synthetic description', geographic_region='Unlisted synthetic region',
+                      is_internal=True, is_masked=True, metadata={'tags': ['synthetic'], 'details': {'count': 2}},
+                      created_at=timezone.now() - timedelta(days=1))
+        population = self.population(**values)
+        population.full_clean()
+        population.save()
+        population.refresh_from_db()
+        self.assertEqual({field: getattr(population, field) for field in values}, values)
+        self.assertEqual({model: model.objects.count() for model in other_models}, before)
+
+    def test_required_columns_primary_key_and_unique_code_are_enforced(self):
+        values = dict(population_id=uuid.uuid4(), code='synthetic', name='Synthetic cohort',
+                      is_internal=False, is_masked=False, created_at=timezone.now())
+        columns = ', '.join(connection.ops.quote_name(field) for field in values)
+        placeholders = ', '.join(['%s'] * len(values))
+        for field in values:
+            with self.subTest(null_column=field):
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'INSERT INTO population ({columns}) VALUES ({placeholders})',
+                                       [None if name == field else value for name, value in values.items()])
+                self.assertEqual(error.exception.__cause__.diag.column_name, field)
+        for field in ('code', 'name'):
+            with self.subTest(blank_field=field):
+                with self.assertRaises(ValidationError) as error:
+                    self.population(**{field: ''}).full_clean()
+                self.assertIn(field, error.exception.message_dict)
+        first = self.population()
+        first.save()
+        with self.assertRaises(ValidationError):
+            self.population(code=first.code).full_clean()
+        for changes, constraint in (({'population_id': first.pk}, 'population_pkey'),
+                                    ({'code': first.code}, 'uq_population_code')):
+            with self.subTest(constraint=constraint):
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    domain.Population.objects.bulk_create([self.population(**changes)])
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, constraint)
+
+    def test_varchar_boundaries_and_overflows_in_orm_and_database(self):
+        for field, length in (('code', 64), ('name', 128), ('geographic_region', 128)):
+            with self.subTest(field=field):
+                boundary = self.population(**{field: 'x' * length})
+                boundary.full_clean()
+                boundary.save()
+                boundary.refresh_from_db()
+                self.assertEqual(getattr(boundary, field), 'x' * length)
+                too_long = self.population(**{field: 'x' * (length + 1)})
+                with self.assertRaises(ValidationError) as error:
+                    too_long.full_clean()
+                self.assertIn(field, error.exception.message_dict)
+                with self.assertRaises(DataError), transaction.atomic():
+                    too_long.save()
+
+    def test_raw_parent_pk_update_cascades_and_delete_sets_only_direct_children_null(self):
+        parent = self.population()
+        parent.parent_population_id = parent.pk  # SQL allows self-reference; no acyclicity check.
+        parent.save()
+        children = [self.population(parent_population=parent) for _ in range(2)]
+        domain.Population.objects.bulk_create(children)
+        grandchild = self.population(parent_population=children[0])
+        grandchild.save()
+        unrelated = self.population()
+        unrelated.save()
+        new_id = uuid.uuid4()
+        with connection.cursor() as cursor:
+            cursor.execute('UPDATE population SET population_id = %s WHERE population_id = %s', [new_id, parent.pk])
+            self.assertEqual(list(domain.Population.objects.filter(code__in=[parent.code] + [child.code for child in children])
+                                  .values_list('parent_population_id', flat=True)), [new_id] * 3)
+            cursor.execute('DELETE FROM population WHERE population_id = %s', [new_id])
+        self.assertEqual(list(domain.Population.objects.filter(pk__in=[child.pk for child in children])
+                              .values_list('parent_population_id', flat=True)), [None] * 2)
+        grandchild.refresh_from_db()
+        self.assertEqual(grandchild.parent_population_id, children[0].pk)
+        self.assertTrue(domain.Population.objects.filter(pk=unrelated.pk).exists())
+        self.assertEqual(domain.Population.objects.count(), 4)
+
+    def test_orm_parent_delete_preserves_children_with_null_parent(self):
+        parent = self.population()
+        parent.save()
+        child = self.population(parent_population=parent)
+        child.save()
+        parent.delete()
+        child.refresh_from_db()
+        self.assertIsNone(child.parent_population_id)
+        self.assertEqual(domain.Population.objects.count(), 1)
+
+    def test_orphan_fk_rejects_insert_and_update_immediately_even_when_all_are_deferred(self):
+        orphan = self.population(parent_population_id=uuid.uuid4())
+        with self.assertRaises(ValidationError) as error:
+            orphan.full_clean()
+        self.assertIn('parent_population', error.exception.message_dict)
+        population = self.population()
+        population.save()
+        for sql, args in (
+            ('INSERT INTO population (population_id, parent_population_id, code, name) VALUES (%s, %s, %s, %s)',
+             [orphan.pk, orphan.parent_population_id, orphan.code, orphan.name]),
+            ('UPDATE population SET parent_population_id = %s WHERE population_id = %s', [orphan.parent_population_id, population.pk]),
+        ):
+            with self.subTest(sql=sql):
+                with self.assertRaises(IntegrityError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute('SET CONSTRAINTS ALL DEFERRED')
+                        cursor.execute(sql, args)
+                        self.fail('Population FK must reject an orphan at the statement, not transaction end.')
+                self.assertEqual(error.exception.__cause__.diag.constraint_name, 'fk_population_parent')
+
+    def test_fk_reverse_restores_django_defaults_and_lookup_fails_closed(self):
+        operation = import_module('genetics.migrations.0007_population').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0007_population')])
+        with connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected = self.fk_actions()
+            operation.database_backwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), {'fk_population_parent': ('a', 'a', True, True)})
+            for case, sql in (
+                ('missing', 'ALTER TABLE population DROP CONSTRAINT fk_population_parent'),
+                ('ambiguous', 'ALTER TABLE population ADD CONSTRAINT duplicate_fk FOREIGN KEY (parent_population_id) '
+                 'REFERENCES population (population_id) DEFERRABLE INITIALLY DEFERRED'),
+            ):
+                with self.subTest(case=case), transaction.atomic():
+                    cursor.execute(sql)
+                    before = self.fk_actions()
+                    with self.assertRaisesMessage(RuntimeError, 'Expected exactly one FK'):
+                        operation.database_forwards('genetics', editor, state, state)
+                    self.assertEqual(self.fk_actions(), before)
+                    transaction.set_rollback(True)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected)
+
+    def test_fk_lookup_matches_exact_source_and_target_attnums(self):
+        operation = import_module('genetics.migrations.0007_population').Migration.operations[1]
+        state = MigrationLoader(connection).project_state([('genetics', '0007_population')])
+        with transaction.atomic(), connection.schema_editor() as editor, connection.cursor() as cursor:
+            expected = self.fk_actions()
+            cursor.execute('ALTER TABLE population ADD CONSTRAINT decoy_unique UNIQUE (parent_population_id)')
+            for name, source, target in (('decoy_source', 'population_id', 'population_id'),
+                                         ('decoy_target', 'parent_population_id', 'parent_population_id')):
+                cursor.execute(f'ALTER TABLE population ADD CONSTRAINT {name} FOREIGN KEY ({source}) '
+                               f'REFERENCES population ({target}) DEFERRABLE INITIALLY DEFERRED')
+            operation.database_backwards('genetics', editor, state, state)
+            operation.database_forwards('genetics', editor, state, state)
+            self.assertEqual(self.fk_actions(), expected | {name: ('a', 'a', True, True) for name in ('decoy_source', 'decoy_target')})
+            transaction.set_rollback(True)
+
+    def test_schema_only_migration_dependency_and_state_match_model(self):
+        with self.assertNumQueries(0):
+            migration = reload(import_module('genetics.migrations.0007_population')).Migration
+        self.assertEqual(migration.dependencies, [('genetics', '0006_external_identifier')])
+        self.assertEqual([type(operation).__name__ for operation in migration.operations], ['CreateModel', 'RunPython'])
+        self.assertEqual(migration.operations[0].name, 'Population')
+        self.assertTrue(migration.operations[1].reversible)
+        historical = MigrationLoader(connection).project_state([('genetics', '0007_population')]).apps.get_model('genetics', 'Population')
+        self.assertEqual(historical._meta.db_table, domain.Population._meta.db_table)
+        self.assertEqual({field.name: field.deconstruct()[1:] for field in historical._meta.local_fields},
+                         {field.name: field.deconstruct()[1:] for field in domain.Population._meta.local_fields})
+        self.assertEqual(historical._meta.indexes, domain.Population._meta.indexes)
+        self.assertEqual(historical._meta.constraints, domain.Population._meta.constraints)
+        call_command('check')
+        call_command('makemigrations', check=True, dry_run=True)
+
+
 class ExternalIdentifierTests(TestCase):
     def setUp(self):
         self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))

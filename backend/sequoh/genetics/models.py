@@ -109,6 +109,29 @@ class ExternalIdentifier(models.Model):
         constraints = [models.UniqueConstraint(fields=['namespace', 'accession', 'version'], name='uq_external_identifier')]
 
 
+class Population(models.Model):
+    """Hierarchical population reference without inferred biological semantics."""
+
+    population_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    parent_population = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, db_column='parent_population_id',
+        null=True, blank=True, db_index=False, related_name='child_populations',
+    )
+    code = models.CharField(max_length=64)
+    name = models.CharField(max_length=128)
+    description = models.TextField(null=True, blank=True)
+    geographic_region = models.CharField(max_length=128, null=True, blank=True)
+    is_internal = models.BooleanField(default=False, db_default=False)
+    is_masked = models.BooleanField(default=False, db_default=False)
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=TransactionNow())
+
+    class Meta:
+        db_table = 'population'
+        # A constraint avoids Django's extra VARCHAR pattern index from unique=True.
+        constraints = [models.UniqueConstraint(fields=['code'], name='uq_population_code')]
+
+
 class Analysis(models.Model):
     """Pipeline provenance with optional participant, sample, request and release links."""
 
