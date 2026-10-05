@@ -30,12 +30,9 @@ from .email_validation import is_valid_registration_name, validate_registration_
 from .username_validation import normalize_registration_username
 from .csrf import CSRFDoubleSubmitMixin
 from .roles import (
-    ensure_default_groups,
     is_admin,
     is_analyst,
-    is_reception,
     is_admin_or_analyst,
-    is_admin_or_reception,
     grant_analyst_role,
     revoke_analyst_role,
     grant_reception_role,
@@ -223,8 +220,6 @@ class MeAPIView(APIView):
 
     def get(self, request):
         u = request.user
-        # Asegurar que los grupos base existan
-        ensure_default_groups()
 
         # Cargar estado de servicio desde Profile
         from profiles.models import Profile, ServiceStatus
@@ -234,15 +229,11 @@ class MeAPIView(APIView):
         except Profile.DoesNotExist:
             service_status = ServiceStatus.NO_PURCHASED
 
-        roles = list(u.groups.values_list("name", flat=True))
-        admin_flag = is_admin(u)
-        analyst_flag = is_analyst(u)
-        reception_flag = is_reception(u)
-        if admin_flag and "ADMIN" not in roles:
-            roles.append("ADMIN")
-        if reception_flag and "RECEPCION" not in roles:
-            roles.append("RECEPCION")
-        data_roles = sorted(set(roles))
+        functional_role = AppUser.objects.filter(django_user=u).values_list('role__code', flat=True).first()
+        admin_flag = functional_role == Role.Code.ADMIN
+        analyst_flag = functional_role == Role.Code.ANALISTA
+        reception_flag = functional_role == Role.Code.RECEPCION
+        data_roles = [functional_role] if functional_role else []
         if admin_flag:
             user_type = "admin"
         elif analyst_flag:
@@ -967,8 +958,7 @@ class GetUsersAPIView(APIView):
             # Analistas: ver muestras de usuarios finales (sin admin/analista/recepción)
             profiles = (
                 Profile.objects.select_related("user")
-                .filter(user__is_active=True, user__is_superuser=False, user__is_staff=False)
-                .exclude(user__groups__name__in=["ADMIN", "ANALISTA", "RECEPCION"])
+                .filter(user__is_active=True, user__app_user__role__code=Role.Code.CLIENTE)
             )
             from profiles.utils import ensure_sample_code
             users_list = []
@@ -985,9 +975,12 @@ class GetUsersAPIView(APIView):
             return Response(users_list)
 
         # Admin: información completa
-        users = User.objects.filter(is_active=True).values(
+        users = list(User.objects.filter(is_active=True).values(
             "id", "username", "email", "first_name", "last_name", "is_staff", "is_superuser"
-        )
+        ))
+        roles_by_user = dict(AppUser.objects.filter(
+            django_user_id__in=[user['id'] for user in users]
+        ).values_list('django_user_id', 'role__code'))
         users_list = []
         for user in users:
             user_dict = dict(user)
@@ -1001,17 +994,11 @@ class GetUsersAPIView(APIView):
                 user_dict["sample_code"] = None
                 user_dict["service_status"] = None
 
-            try:
-                target = User.objects.get(id=user["id"])
-                user_dict["roles"] = list(target.groups.values_list("name", flat=True))
-                user_dict["is_admin"] = is_admin(target)
-                user_dict["is_analyst"] = is_analyst(target)
-                user_dict["is_reception"] = is_reception(target)
-            except User.DoesNotExist:
-                user_dict["roles"] = []
-                user_dict["is_admin"] = False
-                user_dict["is_analyst"] = False
-                user_dict["is_reception"] = False
+            role_code = roles_by_user.get(user['id'])
+            user_dict['roles'] = [role_code] if role_code else []
+            user_dict['is_admin'] = role_code == Role.Code.ADMIN
+            user_dict['is_analyst'] = role_code == Role.Code.ANALISTA
+            user_dict['is_reception'] = role_code == Role.Code.RECEPCION
 
             users_list.append(user_dict)
 
@@ -1027,26 +1014,17 @@ class AdminStatsAPIView(APIView):
         if not is_admin_or_analyst(request.user):
             return Response({"error": "No tienes permisos"}, status=status.HTTP_403_FORBIDDEN)
         
-        from django.db import connection
         from profiles.models import Profile, ServiceStatus
-        
+
+        clients = User.objects.filter(is_active=True, app_user__role__code=Role.Code.CLIENTE)
         try:
-            # Contar usuarios activos (excluyendo staff y superusers)
-            total_users = User.objects.filter(
-                is_active=True,
-                is_superuser=False,
-            ).exclude(groups__name__in=["ADMIN", "ANALISTA"]).filter(is_staff=False).count()
-            
-            # Análisis completados (solo usuarios regulares)
-            analysis_count = User.objects.filter(
-                is_active=True,
-                is_staff=False,
-                is_superuser=False,
-                profile__service_status=ServiceStatus.COMPLETED
-            ).exclude(groups__name__in=["ADMIN", "ANALISTA"]).count()
-            
-            # Contar reportes pendientes
-            pending_reports = Profile.objects.filter(service_status=ServiceStatus.PENDING).exclude(user__groups__name__in=["ADMIN", "ANALISTA"]).count()
+            total_users = clients.count()
+            analysis_count = clients.filter(profile__service_status=ServiceStatus.COMPLETED).count()
+            pending_reports = Profile.objects.filter(
+                user__is_active=True,
+                user__app_user__role__code=Role.Code.CLIENTE,
+                service_status=ServiceStatus.PENDING,
+            ).count()
             
             # Contar variantes en la BD
             variants_count = SNP.objects.count()
@@ -1068,7 +1046,7 @@ class AdminStatsAPIView(APIView):
             print(f"Error en AdminStatsAPIView: {e}")
             # Devolver al menos los usuarios que podemos contar
             return Response({
-                "total_users": User.objects.filter(is_active=True, is_superuser=False).exclude(groups__name__in=["ADMIN", "ANALISTA"]).filter(is_staff=False).count(),
+                "total_users": clients.count(),
                 "processed_reports": 0,
                 "variants_count": 0,
                 "analysis_count": 0,

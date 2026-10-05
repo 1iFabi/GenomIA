@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from profiles.models import Profile, ServiceStatus
-from .models import EmailVerification, WelcomeStatus, PasswordResetToken
+from .models import AppUser, EmailVerification, WelcomeStatus, PasswordResetToken
 
 
 class ProfileInline(admin.StackedInline):
@@ -14,9 +14,25 @@ class ProfileInline(admin.StackedInline):
     fields = ('phone', 'service_status')
 
 
+class AppUserInline(admin.StackedInline):
+    """Assign one GenomIA role without making Django staff flags into app privileges."""
+    model = AppUser
+    fields = ('role',)
+    can_delete = False
+    extra = 1
+    max_num = 1
+    verbose_name = 'GenomIA functional role'
+    verbose_name_plural = 'GenomIA functional role'
+
+
 class CustomUserAdmin(BaseUserAdmin):
-    """Admin personalizado para User que incluye el teléfono del Profile"""
-    inlines = (ProfileInline,)
+    """Admin personalizado para User que incluye perfil y rol funcional."""
+    inlines = (ProfileInline, AppUserInline)
+
+    def get_inlines(self, request, obj):
+        # The post_save hook creates CLIENTE on User creation; exposing a second
+        # AppUser form on the add page would try to create a duplicate mapping.
+        return (ProfileInline,) if obj is None else super().get_inlines(request, obj)
 
     # Columnas mostradas en la lista
     list_display = (

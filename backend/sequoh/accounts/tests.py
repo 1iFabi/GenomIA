@@ -11,6 +11,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.loader import MigrationLoader
 from django.test import TestCase, TransactionTestCase, override_settings
+from django.urls import reverse
 import uuid
 from rest_framework.test import APIClient
 
@@ -459,6 +460,170 @@ class FunctionalRoleAuthorizationTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data['roles'], ['CLIENTE'])
         self.assertEqual(list(self.target.groups.values_list('name', flat=True)), ['ADMIN'])
+
+
+class FunctionalRoleReadSurfaceTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username='api-admin')
+        self.admin.app_user.role = Role.objects.get(code='ADMIN')
+        self.admin.app_user.save(update_fields=['role'])
+        self.analyst = User.objects.create_user(username='api-analyst')
+        self.analyst.app_user.role = Role.objects.get(code='ANALISTA')
+        self.analyst.app_user.save(update_fields=['role'])
+        self.reception = User.objects.create_user(username='api-reception')
+        self.reception.app_user.role = Role.objects.get(code='RECEPCION')
+        self.reception.app_user.save(update_fields=['role'])
+        self.client_user = User.objects.create_user(username='client-staff', is_staff=True)
+        self.client_user.groups.add(Group.objects.get_or_create(name='ADMIN')[0])
+        self.super_client = User.objects.create_user(username='client-super', is_superuser=True)
+        self.super_client.groups.add(Group.objects.get_or_create(name='ANALISTA')[0])
+        self.unmapped = User.objects.bulk_create([User(username='unmapped-client')])[0]
+        self.unmapped.groups.add(Group.objects.get_or_create(name='ADMIN')[0])
+        for index, (user, status) in enumerate((
+            (self.client_user, 'PENDING'), (self.super_client, 'COMPLETED'),
+            (self.admin, 'PENDING'), (self.analyst, 'COMPLETED'),
+            (self.reception, 'PENDING'), (self.unmapped, 'COMPLETED'),
+        )):
+            Profile.objects.create(user=user, service_status=status, sample_code=f'SAMPLE-{index}')
+
+    def get_as(self, user, path):
+        client = APIClient()
+        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
+        return client.get(path)
+
+    def test_me_reports_only_functional_role_and_does_not_create_groups(self):
+        cases = (
+            (self.client_user, ['CLIENTE'], 'user', (False, False, False)),
+            (self.super_client, ['CLIENTE'], 'user', (False, False, False)),
+            (self.admin, ['ADMIN'], 'admin', (True, False, False)),
+            (self.analyst, ['ANALISTA'], 'analyst', (False, True, False)),
+            (self.reception, ['RECEPCION'], 'reception', (False, False, True)),
+            (self.unmapped, [], 'user', (False, False, False)),
+        )
+        initial_groups = list(Group.objects.order_by('pk').values_list('pk', 'name'))
+        for user, expected_roles, user_type, flags in cases:
+            with self.subTest(user=user.username):
+                response = self.get_as(user, '/api/auth/me/')
+                self.assertEqual(response.status_code, 200, response.data)
+                data = response.data['user']
+                self.assertEqual(data['roles'], expected_roles)
+                self.assertEqual(data['user_type'], user_type)
+                self.assertEqual((data['is_admin'], data['is_analyst'], data['is_reception']), flags)
+                self.assertEqual(data['is_staff'], user.is_staff)
+                self.assertEqual(data['is_superuser'], user.is_superuser)
+        self.assertEqual(list(Group.objects.order_by('pk').values_list('pk', 'name')), initial_groups)
+
+    def test_admin_listing_reports_real_role_and_analyst_only_sees_clients(self):
+        listing = self.get_as(self.admin, '/api/admin/users/')
+        self.assertEqual(listing.status_code, 200, listing.data)
+        users = {user['id']: user for user in listing.data}
+        self.assertEqual(set(users), {user.pk for user in (
+            self.admin, self.analyst, self.reception, self.client_user,
+            self.super_client, self.unmapped,
+        )})
+        for user, role, flags in (
+            (self.client_user, 'CLIENTE', (False, False, False)),
+            (self.super_client, 'CLIENTE', (False, False, False)),
+            (self.admin, 'ADMIN', (True, False, False)),
+            (self.analyst, 'ANALISTA', (False, True, False)),
+            (self.reception, 'RECEPCION', (False, False, True)),
+            (self.unmapped, None, (False, False, False)),
+        ):
+            with self.subTest(user=user.username):
+                self.assertEqual(users[user.pk]['roles'], [role] if role else [])
+                self.assertEqual(tuple(users[user.pk][field] for field in
+                                       ('is_admin', 'is_analyst', 'is_reception')), flags)
+        listing = self.get_as(self.analyst, '/api/admin/users/')
+        self.assertEqual(listing.status_code, 200, listing.data)
+        self.assertEqual({user['id'] for user in listing.data},
+                         {self.client_user.pk, self.super_client.pk})
+        self.assertTrue(all(set(user) == {'id', 'sample_code', 'service_status'}
+                            for user in listing.data))
+
+    def test_stats_count_active_functional_clients_only_in_normal_and_fallback_paths(self):
+        response = self.get_as(self.analyst, '/api/admin/stats/')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['total_users'], 2)
+        self.assertEqual(response.data['analysis_count'], 1)
+        self.assertEqual(response.data['pending_reports'], 1)
+        self.assertIn('variants_count', response.data)
+        with patch('accounts.views.SNP.objects.count', side_effect=RuntimeError('test failure')):
+            fallback = self.get_as(self.admin, '/api/admin/stats/')
+        self.assertEqual(fallback.status_code, 200, fallback.data)
+        self.assertEqual(fallback.data['total_users'], 2)
+
+
+class FunctionalRoleDjangoAdminTests(TestCase):
+    def test_add_user_form_defers_role_edit_until_mapping_exists(self):
+        superuser = User.objects.create_superuser(username='django-super', password='test-only')
+        self.client.force_login(superuser)
+        page = self.client.get(reverse('admin:auth_user_add'))
+        self.assertEqual(page.status_code, 200)
+        self.assertFalse(any(inline.formset.model is AppUser
+                             for inline in page.context['inline_admin_formsets']))
+
+    def test_superuser_changes_functional_role_without_staff_flags_or_mapping_rebind(self):
+        superuser = User.objects.create_superuser(username='django-super', password='test-only')
+        target = User.objects.create_user(username='functional-target')
+        other = User.objects.create_user(username='other-target')
+        Profile.objects.create(user=target)
+        original_id = target.app_user.pk
+        self.client.force_login(superuser)
+        url = reverse('admin:auth_user_change', args=[target.pk])
+        page = self.client.get(url)
+        self.assertEqual(page.status_code, 200)
+        role_id = Role.objects.get(code='ADMIN').pk
+        payload = {
+            'username': target.username, 'first_name': '', 'last_name': '',
+            'email': '', 'is_active': 'on', '_save': 'Save',
+            'date_joined_0': target.date_joined.strftime('%Y-%m-%d'),
+            'date_joined_1': target.date_joined.strftime('%H:%M:%S'),
+        }
+        role_form_found = False
+        role_prefix = None
+        for inline in page.context['inline_admin_formsets']:
+            forms = inline.formset
+            prefix = forms.prefix
+            for name, value in forms.management_form.initial.items():
+                payload[f'{prefix}-{name}'] = value
+            for index, form in enumerate(forms.initial_forms):
+                payload[f'{prefix}-{index}-id'] = str(form.instance.pk)
+                if isinstance(form.instance, Profile):
+                    payload[f'{prefix}-{index}-phone'] = form.instance.phone
+                    payload[f'{prefix}-{index}-service_status'] = form.instance.service_status
+                if isinstance(form.instance, AppUser):
+                    role_form_found = True
+                    role_prefix = f'{prefix}-{index}'
+                    payload[f'{role_prefix}-user_id'] = str(form.instance.pk)
+                    payload[f'{role_prefix}-role'] = str(role_id)
+        self.assertTrue(role_form_found, 'User admin must expose the AppUser role inline')
+        result = self.client.post(url, payload)
+        self.assertEqual(result.status_code, 302, (
+            result.context['adminform'].form.errors,
+            [(inline.formset.prefix, inline.formset.errors, inline.formset.non_form_errors())
+             for inline in result.context['inline_admin_formsets']],
+        ) if result.status_code == 200 else None)
+        target.refresh_from_db()
+        mapping = AppUser.objects.get(django_user=target)
+        self.assertEqual(mapping.pk, original_id)
+        self.assertEqual(mapping.role.code, 'ADMIN')
+        self.assertFalse(target.is_staff)
+        self.assertFalse(target.is_superuser)
+        self.assertEqual(AppUser.objects.get(django_user=other).role.code, 'CLIENTE')
+        self.assertEqual(AppUser.objects.filter(django_user=target).count(), 1)
+
+        # The inline cannot delete a mapping or move it to another User.
+        delete_attempt = self.client.post(url, {**payload, f'{role_prefix}-DELETE': 'on'})
+        self.assertEqual(delete_attempt.status_code, 302)
+        self.assertTrue(AppUser.objects.filter(pk=original_id, django_user=target).exists())
+        forged = self.client.post(url, {**payload, f'{role_prefix}-django_user': str(other.pk)})
+        self.assertEqual(forged.status_code, 200)
+        self.assertTrue(AppUser.objects.filter(pk=original_id, django_user=target, role__code='ADMIN').exists())
+        self.assertEqual(AppUser.objects.get(django_user=other).role.code, 'CLIENTE')
+        wrong_id = self.client.post(url, {**payload, f'{role_prefix}-user_id': str(other.app_user.pk)})
+        self.assertEqual(wrong_id.status_code, 200)
+        self.assertTrue(AppUser.objects.filter(pk=original_id, django_user=target).exists())
+        self.assertEqual(AppUser.objects.get(django_user=other).role.code, 'CLIENTE')
 
 
 class ManageAnalystRoleAtomicResponseTests(TransactionTestCase):
