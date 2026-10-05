@@ -1,7 +1,9 @@
 import uuid
 
 from django.conf import settings
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, router
+from django.db.models.functions import Now
 from django.utils import timezone
 
 
@@ -65,3 +67,75 @@ class Participant(models.Model):
                 name='participant_granted_consent_complete',
             ),
         ]
+
+
+class Observation(models.Model):
+    observation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    participant = models.ForeignKey(
+        Participant, on_delete=models.PROTECT, db_column='participant_id',
+        db_index=False, related_name='observations',
+    )
+    sample = models.ForeignKey(
+        'services.Sample', on_delete=models.PROTECT, db_column='sample_id',
+        null=True, blank=True, db_index=False, related_name='observations',
+    )
+    observation_type = models.CharField(max_length=48)
+    code_system = models.CharField(max_length=64, null=True, blank=True)
+    code = models.CharField(max_length=128, null=True, blank=True)
+    label = models.CharField(max_length=255)
+    value_numeric = models.DecimalField(max_digits=18, decimal_places=6, null=True, blank=True)
+    value_text = models.TextField(null=True, blank=True)
+    value_code = models.CharField(max_length=128, null=True, blank=True)
+    value_boolean = models.BooleanField(null=True, blank=True)
+    unit = models.CharField(max_length=64, null=True, blank=True)
+    reference_low = models.DecimalField(max_digits=18, decimal_places=6, null=True, blank=True)
+    reference_high = models.DecimalField(max_digits=18, decimal_places=6, null=True, blank=True)
+    source_name = models.CharField(max_length=128, null=True, blank=True)
+    source_version = models.CharField(max_length=64, null=True, blank=True)
+    observed_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=Now())
+
+    class Meta:
+        db_table = 'observation'
+        indexes = [
+            models.Index(fields=['participant', 'observed_at'], name='observation_part_time_idx'),
+            models.Index(fields=['code_system', 'code'], name='observation_code_idx'),
+        ]
+
+    def _validate_relationships(self, using, update_fields=None):
+        user_id = Participant.objects.using(using).filter(pk=self.participant_id).values_list('user_id', flat=True).first()
+        if user_id is None:
+            raise ValidationError({'participant': 'An existing participant is required.'})
+        persisted = type(self).objects.using(using).filter(pk=self.pk).values('participant_id', 'sample_id').first()
+        if persisted and persisted['participant_id'] != self.participant_id:
+            raise ValidationError({'participant': 'Observation ownership cannot be reassigned.'})
+        sample_id = self.sample_id
+        # Partial saves must validate the sample that will remain in the row.
+        if persisted and update_fields is not None and {'sample', 'sample_id'}.isdisjoint(update_fields):
+            sample_id = persisted['sample_id']
+        if sample_id is not None:
+            from services.models import Sample
+            sample = Sample.objects.using(using).filter(pk=sample_id).values(
+                'participant_id', 'service_request__participant_id',
+                'service_request__purchase__owner__django_user_id',
+            ).first()
+            if sample is None or (
+                sample['participant_id'], sample['service_request__participant_id'],
+                sample['service_request__purchase__owner__django_user_id'],
+            ) != (self.participant_id, self.participant_id, user_id):
+                raise ValidationError({'sample': 'Sample, service participant and purchase owner must match the participant.'})
+
+    def clean(self):
+        super().clean()
+        self._validate_relationships(router.db_for_write(type(self), instance=self))
+
+    def save(self, *args, **kwargs):
+        # bulk_create/QuerySet.update bypass validation; cross-table ownership is
+        # checked from persisted relations, not cached objects, on ordinary saves.
+        using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            update_fields = kwargs['update_fields'] = frozenset(update_fields)
+        self._validate_relationships(using, update_fields)
+        return super().save(*args, **kwargs)
