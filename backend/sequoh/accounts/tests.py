@@ -306,7 +306,7 @@ class FunctionalRoleAuthorizationTests(TestCase):
             ('GET', '/api/admin/stats/', None, {'ADMIN', 'ANALISTA'}, 200),
             ('POST', '/api/admin/analysts/',
              {'userId': self.target.pk, 'grant': False}, {'ADMIN'}, 200),
-            ('GET', '/api/reception/search/?email=target@example.com',
+            ('GET', '/api/reception/search/?sample_code=GX-TARGET',
              None, {'ADMIN', 'RECEPCION'}, 200),
             # Unknown targets: permitted roles pass the role gate and then get 404.
             ('POST', '/api/services/payments/', {'userId': 2**31 - 1}, {'ADMIN', 'RECEPCION'}, 404),
@@ -397,7 +397,7 @@ class FunctionalRoleAuthorizationTests(TestCase):
         grant_admin_role(admin)
         self.assertTrue(is_admin(admin))
         self.assertFalse(is_reception(admin))
-        response = self.request_as(admin, 'GET', '/api/reception/search/?email=target@example.com', None)
+        response = self.request_as(admin, 'GET', '/api/reception/search/?sample_code=GX-TARGET', None)
         self.assertEqual(response.status_code, 200)
 
     def test_manage_role_rejects_non_boolean_grant_without_mutation(self):

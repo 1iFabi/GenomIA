@@ -1,8 +1,10 @@
+from django.apps import apps
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from profiles.models import Profile
 from services.status import ClientStatus, get_service_projection
+from services.models import ServiceRequest, ServiceStatus, Sample, Purchase
 from .models import AppUser, EmailVerification, WelcomeStatus, PasswordResetToken
 
 
@@ -110,3 +112,43 @@ class PasswordResetTokenAdmin(admin.ModelAdmin):
         return obj.is_expired
     is_expired.boolean = True
     is_expired.short_description = 'Expirado'
+
+
+@admin.register(ServiceRequest)
+class ServiceRequestAdmin(admin.ModelAdmin):
+    list_display = ('purchase', 'participant', 'status', 'created_at', 'completed_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('participant__user__email', 'purchase__owner__django_user__email')
+    readonly_fields = ('purchase', 'participant', 'created_at', 'started_at')
+
+
+admin.site.register(ServiceStatus)
+admin.site.register(Sample)
+admin.site.register(Purchase)
+
+
+class ReadOnlyAdmin(admin.ModelAdmin):
+    """Browse-only: service state must change through the API so every step is logged."""
+    list_select_related = True
+
+    def get_list_display(self, request):
+        return [field.name for field in self.model._meta.concrete_fields][:8]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+# Participant questionnaires/answers stay out of the admin by design (privacy).
+HIDDEN_FROM_ADMIN = {'participants.ParticipantMetadata'}
+for app_label in ('accounts', 'services', 'participants', 'genoma', 'reception'):
+    for model in apps.get_app_config(app_label).get_models():
+        # Django admin cannot register composite-primary-key models.
+        if (not admin.site.is_registered(model) and not model._meta.is_composite_pk
+                and model._meta.label not in HIDDEN_FROM_ADMIN):
+            admin.site.register(model, ReadOnlyAdmin)

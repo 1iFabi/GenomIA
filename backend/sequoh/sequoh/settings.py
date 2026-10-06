@@ -122,6 +122,7 @@ REST_FRAMEWORK = {
         'resend': '5/min',
         'contact': '5/min',
         'register_email_validation': '20/min',
+        'reception_rut': '30/min',
     },
 }
 
