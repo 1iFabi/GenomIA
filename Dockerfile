@@ -10,7 +10,8 @@ RUN apt-get update \
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" \
-    UV_PYTHON_DOWNLOADS=never
+    UV_PYTHON_DOWNLOADS=never \
+    UV_COMPILE_BYTECODE=1
 
 ENV PUPPETEER_SKIP_DOWNLOAD=1
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
