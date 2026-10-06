@@ -17,16 +17,14 @@ export const API_ENDPOINTS = {
   CONTACT: `${API_BASE}/contact/`,
   GET_USERS: `${API_BASE}/admin/users/`,
   ADMIN_ANALYSTS: `${API_BASE}/admin/analysts/`,
-  UPDATE_SERVICE_STATUS: `${API_BASE}/auth/service/status/`,
   GENOMICS_SERVICES: `${API_BASE}/genoma/v1/services/`,
   GENOMICS_SERVICE_RESULTS: (serviceRequestId) =>
     `${API_BASE}/genoma/v1/services/${encodeURIComponent(serviceRequestId)}/results/`,
   GENOMICS_SERVICE_METRICS: (serviceRequestId) =>
     `${API_BASE}/genoma/v1/services/${encodeURIComponent(serviceRequestId)}/metrics/`,
   RECEPTION_SEARCH: `${API_BASE}/reception/search/`,
-  RECEPTION_MARK_ARRIVAL: `${API_BASE}/reception/arrival/`,
-  RECEPTION_SAMPLE_CODE: `${API_BASE}/reception/sample-code/`,
-  RECEPTION_SAMPLE_STATUS: `${API_BASE}/reception/sample-status/`,
+  RECEPTION_VERIFY_RUT: `${API_BASE}/reception/verify-rut/`,
+  CONFIRM_PAYMENT: `${API_BASE}/services/payments/`,
 };
 
 // Session lifecycle notifications contain no user data; consumers stay lazy.

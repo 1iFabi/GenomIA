@@ -17,7 +17,7 @@ const SearchSample = ({ onSearch, loading }) => {
           <Search size={20} className="search-sample-icon" />
           <input
             type="text"
-            placeholder="Buscar por SampleID..."
+            placeholder="Buscar por Sample ID..."
             value={sampleId}
             onChange={(e) => setSampleId(e.target.value)}
             className="search-sample-input"

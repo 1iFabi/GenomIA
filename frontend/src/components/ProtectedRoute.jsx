@@ -11,15 +11,17 @@ export default function ProtectedRoute({ children, requireService = true, requir
     location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/');
 
   const serviceStatus = user?.service_status;
+  // Staff never buy a service; only clients are gated by purchase state.
+  const gateService = requireService && DashboardSkeleton.getRoleVariant(user) === 'user';
   let redirectTo = null;
   if (!loading) {
     if (!user) {
       redirectTo = '/login';
     } else if (requireAdmin && user.is_staff !== true) {
       redirectTo = '/dashboard';
-    } else if (requireService && serviceStatus === 'NO_PURCHASED' && location.pathname !== '/no-purchased') {
+    } else if (gateService && serviceStatus === 'NO_PURCHASED' && location.pathname !== '/no-purchased') {
       redirectTo = '/no-purchased';
-    } else if (requireService && serviceStatus === 'PENDING' && location.pathname !== '/pending') {
+    } else if (gateService && serviceStatus === 'PENDING' && location.pathname !== '/pending') {
       redirectTo = '/pending';
     } else if (location.pathname === '/no-purchased' && serviceStatus !== 'NO_PURCHASED') {
       redirectTo = '/dashboard';

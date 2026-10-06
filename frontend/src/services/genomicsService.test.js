@@ -79,11 +79,9 @@ describe('owner-scoped genoma v1 URLs', () => {
       CONTACT: '/api/contact/',
       GET_USERS: '/api/admin/users/',
       ADMIN_ANALYSTS: '/api/admin/analysts/',
-      UPDATE_SERVICE_STATUS: '/api/auth/service/status/',
       RECEPTION_SEARCH: '/api/reception/search/',
-      RECEPTION_MARK_ARRIVAL: '/api/reception/arrival/',
-      RECEPTION_SAMPLE_CODE: '/api/reception/sample-code/',
-      RECEPTION_SAMPLE_STATUS: '/api/reception/sample-status/',
+      RECEPTION_VERIFY_RUT: '/api/reception/verify-rut/',
+      CONFIRM_PAYMENT: '/api/services/payments/',
     });
   });
 
