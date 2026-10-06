@@ -23,11 +23,9 @@ from .email_utils import (
 )
 from .jwt_utils import encode_jwt, decode_jwt
 from .authentication import JWTAuthentication
-from profiles.models import Profile, ServiceStatus
-from services.legacy_profile import (
-    get_legacy_service_projection, get_paid_legacy_service_projections,
-)
-from services.models import Purchase
+from profiles.models import Profile
+from services.status import ClientStatus, get_service_projection, get_service_projections
+from services.models import ServiceRequest
 from .models import AppUser, RevokedToken, Role, WelcomeStatus
 from .email_validation import is_valid_registration_name, validate_registration_email
 from .username_validation import normalize_registration_username
@@ -47,67 +45,6 @@ import logging
 from html import escape
 
 logger = logging.getLogger(__name__)
-
-
-class UserServiceStatusAPIView(CSRFDoubleSubmitMixin, APIView):
-    """Read own status; admin/analyst may write only unpaid legacy Profile states."""
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        """Devuelve el estado del usuario autenticado."""
-        u = request.user
-        projection = get_legacy_service_projection(u)
-        return Response({
-            "user_id": u.id,
-            "service_status": projection.service_status,
-            "can_view_results": projection.can_view_results,
-            "updated_at": projection.updated_at,
-        })
-
-    def post(self, request):
-        """Update an unpaid legacy Profile only. Body: {userId, status}."""
-        if not is_admin_or_analyst(request.user):
-            return Response({"error": "No tienes permisos"}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            data = json.loads(request.body or '{}')
-        except json.JSONDecodeError:
-            data = request.data or {}
-        user_id = data.get('userId')
-        status_str = data.get('status')
-        if not user_id or not status_str:
-            return Response({"error": "userId y status son obligatorios"}, status=status.HTTP_400_BAD_REQUEST)
-        if status_str not in {s.value for s in ServiceStatus}:
-            return Response({"error": f"status inválido. Usa uno de: {[s.value for s in ServiceStatus]}"}, status=status.HTTP_400_BAD_REQUEST)
-        # Accept the legacy decimal-string client ID, but never coerce booleans,
-        # floats or containers through the ORM's integer field conversion.
-        if type(user_id) is str:
-            if len(user_id) > 19 or not re.fullmatch(r'[1-9][0-9]*', user_id):
-                return Response({"error": "userId inválido"}, status=status.HTTP_400_BAD_REQUEST)
-            user_id = int(user_id)
-        if type(user_id) is not int or not 0 < user_id <= 2**63 - 1:
-            return Response({"error": "userId inválido"}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            target = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
-        with transaction.atomic():
-            # Serialize with payment, which locks the owner before marking a purchase PAID.
-            AppUser.objects.select_for_update(of=('self',)).filter(django_user_id=target.pk).first()
-            if Purchase.objects.filter(owner__django_user_id=target.pk, status__code='PAID').exists():
-                return Response({"error": "Selecciona un servicio pagado específico"},
-                                status=status.HTTP_409_CONFLICT)
-            if status_str == ServiceStatus.COMPLETED:
-                return Response({"error": "La publicación requiere revisión del analista"},
-                                status=status.HTTP_409_CONFLICT)
-            profile, _ = Profile.objects.get_or_create(user=target)
-            profile.service_status = status_str
-            profile.save(update_fields=["service_status", "service_updated_at"])
-            return Response({
-                "user_id": target.id,
-                "service_status": profile.service_status,
-                "updated_at": profile.service_updated_at,
-            })
 
 
 def normalize_cl_phone(raw: str):
@@ -233,7 +170,7 @@ class MeAPIView(APIView):
     def get(self, request):
         u = request.user
 
-        projection = get_legacy_service_projection(u)
+        projection = get_service_projection(u)
 
         functional_role = AppUser.objects.filter(django_user=u).values_list('role__code', flat=True).first()
         admin_flag = functional_role == Role.Code.ADMIN
@@ -413,46 +350,6 @@ class LogoutAPIView(CSRFDoubleSubmitMixin, APIView):
         return resp
 
 
-class DashboardAPIView(APIView):
-    """Ejemplo de endpoint de dashboard por usuario (JWT)."""
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        u = request.user
-        profile = getattr(u, 'profile', None)
-        projection = get_legacy_service_projection(u)
-        payload = {
-            "user": {
-                "id": u.id,
-                "email": u.email,
-                "first_name": u.first_name,
-                "last_name": u.last_name,
-            },
-            "profile": {
-                "phone": getattr(profile, 'phone', None),
-                "service_status": projection.service_status,
-                "can_view_results": projection.can_view_results,
-            },
-        }
-        # Métricas globales solo para staff/analista (evita fuga de datos de negocio)
-        if is_admin_or_analyst(u):
-            payload.update({
-                "total_users": User.objects.filter(is_active=True).count(),
-                # Keep the legacy dashboard cohort: all users with a Profile, regardless
-                # of role/activity. A paid service overrides only its own Profile row.
-                "analysis_count": _dashboard_analysis_count(),
-                "user_growth": "+12%",
-                "report_growth": "+8%",
-                "analysis_growth": "+18%",
-                "last_update": timezone.now().strftime("%d/%m/%Y"),
-            })
-        resp = Response(payload)
-        resp["Cache-Control"] = "no-store"
-        return resp
-
-
-@method_decorator(csrf_exempt, name='dispatch')
 class ContactAPIView(APIView):
     """Recibe mensajes del formulario de contacto y los envía por correo."""
     authentication_classes = []
@@ -767,50 +664,6 @@ class RegisterAPIView(APIView):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class ResendVerificationAPIView(APIView):
-    """Reenvía el correo de verificación usando allauth. Responde éxito sin filtrar información."""
-    throttle_scope = 'resend'
-
-    def post(self, request):
-        try:
-            try:
-                data = json.loads(request.body or '{}')
-            except Exception:
-                data = getattr(request, 'data', {}) or {}
-            email = (data.get('email') or '').strip().lower()
-            if not email:
-                return Response({"error": "Email es obligatorio"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Buscar usuario
-            user = User.objects.filter(email=email).first()
-            if not user:
-                # No revelar si existe o no
-                return Response({"success": True})
-
-            # Si ya está verificado, responder éxito
-            if EmailAddress.objects.filter(user=user, email=email, verified=True).exists():
-                return Response({"success": True})
-
-            # Reenviar confirmación
-            EmailAddress.objects.add_email(
-                request,
-                user,
-                email,
-                confirm=True,
-                signup=False,
-            )
-            return Response({"success": True})
-        except EmailDeliveryError:
-            logger.exception("ResendVerificationAPIView email delivery failed")
-            # Preserve anti-enumeration behavior for known users as well.
-            return Response({"success": True})
-        except Exception:
-            logger.exception("ResendVerificationAPIView failed")
-            # Por seguridad, responder éxito igualmente
-            return Response({"success": True})
-
-
-@method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetRequestAPIView(APIView):
     throttle_scope = 'reset'
 
@@ -948,13 +801,6 @@ class ManageAnalystRoleAPIView(CSRFDoubleSubmitMixin, APIView):
         return Response(response_data)
 
 
-def _dashboard_analysis_count():
-    profiles = dict(Profile.objects.values_list('user_id', 'service_status'))
-    paid = get_paid_legacy_service_projections(profiles)
-    return sum((paid[user_id].service_status if user_id in paid else legacy)
-               == ServiceStatus.COMPLETED for user_id, legacy in profiles.items())
-
-
 class GetUsersAPIView(APIView):
     """Endpoint para obtener lista de usuarios (solo staff)."""
     authentication_classes = [JWTAuthentication]
@@ -967,27 +813,17 @@ class GetUsersAPIView(APIView):
         user_is_analyst = is_analyst(request.user)
 
         if user_is_analyst:
-            # Analistas: ver muestras de usuarios finales (sin admin/analista/recepción)
-            profiles = (
-                Profile.objects.select_related("user")
-                .filter(user__is_active=True, user__app_user__role__code=Role.Code.CLIENTE)
-            )
-            from profiles.utils import ensure_sample_code
-            profiles = list(profiles)
-            paid = get_paid_legacy_service_projections(profile.user_id for profile in profiles)
-            users_list = []
-            for profile in profiles:
-                if not profile.sample_code:
-                    ensure_sample_code(profile)
-                if not profile.sample_code:
-                    continue
-                users_list.append({
-                    "id": profile.user.id,
-                    "sample_code": profile.sample_code,
-                    "service_status": (paid[profile.user_id].service_status
-                                       if profile.user_id in paid else profile.service_status),
-                })
-            return Response(users_list)
+            # Analysts see paid client services, which they advance via services/requests/<id>/advance/.
+            services = ServiceRequest.objects.filter(
+                purchase__status__code='PAID',
+                purchase__owner__django_user__is_active=True,
+                purchase__owner__role__code=Role.Code.CLIENTE,
+            ).values('service_request_id', 'purchase__owner__django_user_id', 'status__code')
+            return Response([{
+                "id": service['purchase__owner__django_user_id'],
+                "service_request_id": service['service_request_id'],
+                "service_status": service['status__code'],
+            } for service in services])
 
         # Admin: información completa
         users = list(User.objects.filter(is_active=True).values(
@@ -998,15 +834,14 @@ class GetUsersAPIView(APIView):
             django_user_id__in=user_ids
         ).values_list('django_user_id', 'role__code'))
         profiles = {profile.user_id: profile for profile in Profile.objects.filter(user_id__in=user_ids)}
-        paid = get_paid_legacy_service_projections(user_ids)
+        paid = get_service_projections(user_ids)
         users_list = []
         for user in users:
             user_dict = dict(user)
             profile = profiles.get(user['id'])
             user_dict["rut"] = getattr(profile, "rut", None)
-            user_dict["sample_code"] = getattr(profile, "sample_code", None)
             user_dict["service_status"] = (paid[user['id']].service_status
-                                           if user['id'] in paid else getattr(profile, "service_status", None))
+                                           if user['id'] in paid else ClientStatus.NO_PURCHASED)
 
             role_code = roles_by_user.get(user['id'])
             user_dict['roles'] = [role_code] if role_code else []
@@ -1031,14 +866,10 @@ class AdminStatsAPIView(APIView):
         clients = User.objects.filter(is_active=True, app_user__role__code=Role.Code.CLIENTE)
         try:
             client_ids = list(clients.values_list('id', flat=True))
-            profiles = dict(Profile.objects.filter(user_id__in=client_ids)
-                            .values_list('user_id', 'service_status'))
-            paid = get_paid_legacy_service_projections(client_ids)
-            projected = [paid[user_id].service_status if user_id in paid
-                         else profiles.get(user_id) for user_id in client_ids]
+            projected = [projection.service_status for projection in get_service_projections(client_ids).values()]
             total_users = len(client_ids)
-            analysis_count = projected.count(ServiceStatus.COMPLETED)
-            pending_reports = projected.count(ServiceStatus.PENDING)
+            analysis_count = projected.count(ClientStatus.COMPLETED)
+            pending_reports = projected.count(ClientStatus.PENDING)
             
             payload = {
                 "total_users": total_users,

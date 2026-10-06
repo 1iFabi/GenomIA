@@ -1,8 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from profiles.models import Profile, ServiceStatus
-from services.legacy_profile import get_legacy_service_projection
+from profiles.models import Profile
+from services.status import ClientStatus, get_service_projection
 from .models import AppUser, EmailVerification, WelcomeStatus, PasswordResetToken
 
 
@@ -18,8 +18,8 @@ class ProfileInline(admin.StackedInline):
     @admin.display(description='Estado servicio')
     def projected_service_status(self, obj):
         if obj.user_id is None:
-            return ServiceStatus.NO_PURCHASED
-        return get_legacy_service_projection(obj.user).service_status
+            return ClientStatus.NO_PURCHASED
+        return get_service_projection(obj.user).service_status
 
 
 class AppUserInline(admin.StackedInline):
@@ -68,7 +68,7 @@ class CustomUserAdmin(BaseUserAdmin):
     get_phone.short_description = 'Teléfono'
 
     def get_service_status(self, obj):
-        return get_legacy_service_projection(obj).service_status
+        return get_service_projection(obj).service_status
     get_service_status.short_description = 'Estado servicio'
 
 

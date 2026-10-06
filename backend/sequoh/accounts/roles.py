@@ -1,18 +1,6 @@
-from django.contrib.auth.models import Group
 from django.db import transaction
 
 from .models import AppUser, Role
-
-# Legacy group names are retained for compatibility with older readers.
-ADMIN_GROUP = "ADMIN"
-ANALYST_GROUP = "ANALISTA"
-RECEPTION_GROUP = "RECEPCION"
-
-
-def ensure_default_groups():
-    """Keep legacy group records for endpoints that still display them."""
-    for name in (ADMIN_GROUP, ANALYST_GROUP, RECEPTION_GROUP):
-        Group.objects.get_or_create(name=name)
 
 
 def _has_role(user, code):

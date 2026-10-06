@@ -40,7 +40,8 @@ from accounts.models import AppUser, Role
 from accounts.roles import grant_admin_role, grant_analyst_role, grant_reception_role
 from genoma import models as domain, synthetic_import as bundle
 from participants.models import Participant
-from profiles.models import Profile, ServiceStatus
+from profiles.models import Profile
+from services.status import ClientStatus
 from services.models import (
     Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus as RequestStatus,
     ServiceStatusLog,
@@ -272,7 +273,7 @@ class NormalizedInitialMigrationTests(TestCase):
         self.assertIn(self.initial, MigrationLoader(connection).disk_migrations,
                       'Normalized initial migration is required')
         self.user = User.objects.create_user(username='squash-preserved-owner')
-        Profile.objects.create(user=self.user, sample_code='SQUASH', report_filename='preserved.txt')
+        Profile.objects.create(user=self.user, phone='SQUASH')
         self.preserved_models = (User, AppUser, Role, Group, Profile, Participant,
                                  Purchase, ServiceRequest, Sample)
 
@@ -603,7 +604,6 @@ class RetiredLegacyGeneticsRouteTests(SimpleTestCase):
             ('/api/genoma/v1/services/', 'api_genoma_v1_services'),
             (f'/api/genoma/v1/services/{service_id}/results/', 'api_genoma_v1_service_results'),
             (f'/api/genoma/v1/services/{service_id}/metrics/', 'api_genoma_v1_service_metrics'),
-            ('/api/report/pdf/', 'api_report_pdf'),
         ):
             with self.subTest(path=path):
                 self.assertEqual(resolve(path).view_name, name)
@@ -669,10 +669,7 @@ class RetiredLegacyGeneticsAuthenticatedTests(APITestCase):
         self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         owner = User.objects.create_user(username='retired-genetics-owner')
         domain.Variant.objects.create(variant_type='synthetic', canonical_name='Preserved normalized row')
-        Profile.objects.create(
-            user=owner, service_status=ServiceStatus.COMPLETED,
-            report_filename='legacy.txt', report_uploaded_at=timezone.now(),
-        )
+        Profile.objects.create(user=owner)
         paths = [path for path, _ in RetiredLegacyGeneticsRouteTests.routes[:-1]] + [
             f'/api/ingest/user-report-status/{owner.pk}/',
         ]
@@ -697,20 +694,6 @@ class RetiredLegacyGeneticsAuthenticatedTests(APITestCase):
             self.assertEqual([list(model.objects.order_by('pk').values()) for model in (
                 User, AppUser, domain.Variant, Profile, Purchase, ServiceRequest, ServiceStatusLog,
             )], before)
-
-    def test_authenticated_pdf_remains_unavailable_without_queries_or_legacy_assembly(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
-        self.client.force_authenticate(user=User.objects.create_user(username='retired-genetics-pdf'))
-        with patch('reports.views._build_report_payload', create=True) as builder, \
-                patch('subprocess.run') as generator, self.assertNumQueries(0):
-            response = self.client.get('/api/report/pdf/')
-            self.assertEqual(response.status_code, 503)
-            self.assertEqual(response.json(), {
-                'code': 'pdf_report_unavailable',
-                'detail': 'El reporte PDF estará disponible cuando los resultados hayan sido revisados y publicados.',
-            })
-            builder.assert_not_called()
-            generator.assert_not_called()
 
 
 class SyntheticServiceResultReadTests(APITestCase):
@@ -1305,10 +1288,8 @@ class SyntheticServiceResultReadTests(APITestCase):
             'genoma/v1/services/', 'genoma/v1/services/<str:service_request_id>/results/',
             'genoma/v1/services/<str:service_request_id>/metrics/',
         ])
-        self.assertEqual(resolve('/api/report/pdf/').view_name, 'api_report_pdf')
-        self.assertEqual(resolve('/api/auth/service/status/').view_name, 'api_service_status')
-        Profile.objects.create(user=self.user, service_status=ServiceStatus.COMPLETED, report_filename='legacy.txt')
-        status_path = '/api/auth/service/status/'
+        Profile.objects.create(user=self.user)
+        status_path = '/api/auth/me/'
         status_before = (self.client.get(status_path).status_code, self.client.get(status_path).json())
         before = self.state()
         for path in (self.list_url, self.detail_url(), self.metrics_url()):
@@ -1443,10 +1424,10 @@ class SyntheticGenomicsImportTests(TestCase):
             self.assertEqual((result.created_at, analysis.created_at), (purchase.created_at,) * 2)
         self.assertEqual((request.started_at, sample.created_at, purchase.purchased_at),
                          (purchase.created_at,) * 3)
-        from services.legacy_profile import get_legacy_service_projection
-        projection = get_legacy_service_projection(self.user)
+        from services.status import get_service_projection
+        projection = get_service_projection(self.user)
         # No history is fabricated to satisfy the unchanged fail-closed legacy projection.
-        self.assertEqual(projection.service_status, ServiceStatus.NO_PURCHASED)
+        self.assertEqual(projection.service_status, ClientStatus.NO_PURCHASED)
         self.assertFalse(projection.can_view_results)
 
     def test_demo_never_attributes_a_user_action_or_owns_independent_status_history(self):
@@ -1667,10 +1648,7 @@ class SyntheticGenomicsImportTests(TestCase):
     def test_normalized_rows_and_profile_metadata_are_preserved_without_publishing_placeholders(self):
         grant_admin_role(self.other)
         domain.Variant.objects.create(variant_type='synthetic', canonical_name='Preserved normalized row')
-        Profile.objects.create(
-            user=self.user, service_status=ServiceStatus.COMPLETED, sample_code='LEGACY-SYNTHETIC',
-            report_filename='legacy.txt', report_uploaded_at=timezone.now(),
-        )
+        Profile.objects.create(user=self.user, phone='LEGACY-SYNTHETIC')
         before = self.legacy_state()
         self.import_demo()
         self.assertEqual(self.legacy_state(), before)
@@ -2317,10 +2295,10 @@ class SyntheticGenomicsV2Tests(APITestCase):
 
     def test_v2_profile_and_shared_service_status_do_not_change(self):
         domain.Variant.objects.create(variant_type='synthetic', canonical_name='Preserved normalized row')
-        Profile.objects.create(user=self.user, service_status=ServiceStatus.COMPLETED, report_filename='legacy.txt')
+        Profile.objects.create(user=self.user)
         self.import_demo('1')
         self.authenticate()
-        paths = ('/api/auth/service/status/',)
+        paths = ('/api/auth/me/',)
         responses = [(self.client.get(path).status_code, self.client.get(path).json()) for path in paths]
         legacy = self.legacy_state()
         receipt = self.import_demo()
@@ -6563,7 +6541,7 @@ class SyntheticVariantCatalogLoadTests(TestCase):
 
     def test_both_loads_preserve_nonempty_patient_workflow_results_auth_and_other_catalog_rows(self):
         self.user = User.objects.create_user(username='catalog-preserved-owner')
-        Profile.objects.create(user=self.user, sample_code='CATALOG-PRESERVED')
+        Profile.objects.create(user=self.user, phone='CATALOG-PRESERVED')
         group = Group.objects.create(name='catalog-preserved-group')
         self.user.groups.add(group)
         # Reuse the existing isolated-test graph builder, not the custom importer.
@@ -7101,7 +7079,7 @@ class PublicVariantPreparationLoadTests(PublicVariantPreparationInputs, TestCase
 
     def test_actual_serialization_loaddata_composites_reload_and_preservation(self):
         self.user = User.objects.create_user(username='public-preparation-preserved-owner')
-        Profile.objects.create(user=self.user, sample_code='PUBLIC-PREP-PRESERVED')
+        Profile.objects.create(user=self.user, phone='PUBLIC-PREP-KEPT')
         group = Group.objects.create(name='public-preparation-preserved-group')
         self.user.groups.add(group)
         NormalizedInitialMigrationTests.seed_complete_normalized_graph(self)

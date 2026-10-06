@@ -1,10 +1,9 @@
 from django.urls import path
 
-from services.views import PurchaseCreateAPIView, PurchasePayAPIView, SampleReceiveAPIView
+from services.views import AdvanceServiceStatusAPIView, ConfirmPaymentAPIView
 
 urlpatterns = [
-    path('services/purchases/', PurchaseCreateAPIView.as_view(), name='service_purchase_create'),
-    path('services/purchases/<uuid:purchase_id>/pay/', PurchasePayAPIView.as_view(), name='service_purchase_pay'),
-    path('services/requests/<uuid:request_id>/receive-sample/', SampleReceiveAPIView.as_view(),
-         name='service_sample_receive'),
+    path('services/payments/', ConfirmPaymentAPIView.as_view(), name='service_payment_confirm'),
+    path('services/requests/<uuid:request_id>/advance/', AdvanceServiceStatusAPIView.as_view(),
+         name='service_status_advance'),
 ]

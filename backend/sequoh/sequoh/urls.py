@@ -34,7 +34,6 @@ urlpatterns = [
     path('api/', include('reception.urls')),
     path('api/', include('services.urls')),
     path('api/', include('genoma.urls')),
-    path('api/', include('reports.urls')),
     # Sobreescribir la URL de confirmación de allauth para usar nuestro view personalizado
     path('accounts/confirm-email/<str:key>/', CustomConfirmEmailView.as_view(), name='account_confirm_email'),
     path('accounts/', include('allauth.urls')),

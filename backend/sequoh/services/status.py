@@ -1,28 +1,34 @@
-"""Read-only projection of a client's newest paid service into legacy Profile status."""
+"""Read-only projection of a client's newest paid service into the client-facing status."""
 
 from dataclasses import dataclass, replace
 from datetime import datetime
 
+from django.db import models
 from django.db.models import F
 
-from profiles.models import Profile, ServiceStatus as LegacyStatus
 from services.models import Purchase, Sample, ServiceRequest, ServiceStatusLog
 
 
+class ClientStatus(models.TextChoices):
+    NO_PURCHASED = "NO_PURCHASED", "Sin servicio"
+    PENDING = "PENDING", "Pendiente"
+    COMPLETED = "COMPLETED", "Completado"
+
+
 @dataclass(frozen=True)
-class LegacyServiceProjection:
+class ServiceProjection:
     service_status: str
     updated_at: datetime | None
     service_samples: tuple[Sample, ...] = ()
 
     @property
     def can_view_results(self):
-        return self.service_status == LegacyStatus.COMPLETED
+        return self.service_status == ClientStatus.COMPLETED
 
 
 def _project_paid(purchase, service, *, has_initial, latest_log, participant_owned):
-    """A malformed newest paid purchase must never expose older Profile/results state."""
-    unavailable = LegacyServiceProjection(LegacyStatus.NO_PURCHASED, None)
+    """A malformed newest paid purchase must never expose older results state."""
+    unavailable = ServiceProjection(ClientStatus.NO_PURCHASED, None)
     if (purchase.purchased_at is None or service is None or not participant_owned
             or not has_initial or latest_log is None or latest_log.status_id != service.status_id):
         return unavailable
@@ -30,14 +36,14 @@ def _project_paid(purchase, service, *, has_initial, latest_log, participant_own
     if code == 'COMPLETED':
         if service.completed_at is None or service.completed_at < service.started_at:
             return unavailable
-        return LegacyServiceProjection(LegacyStatus.COMPLETED, latest_log.changed_at)
+        return ServiceProjection(ClientStatus.COMPLETED, latest_log.changed_at)
     if code in ('WAITING_SAMPLE', 'SAMPLE_RECEIVED', 'PROCESSING'):
-        return LegacyServiceProjection(LegacyStatus.PENDING, latest_log.changed_at)
+        return ServiceProjection(ClientStatus.PENDING, latest_log.changed_at)
     return unavailable
 
 
-def get_paid_legacy_service_projections(user_ids, *, include_samples=False):
-    """Bulk paid overrides keyed by Django User ID; callers supply their own legacy fallback.
+def get_service_projections(user_ids, *, include_samples=False):
+    """Projections keyed by Django User ID; users without a paid purchase are absent.
 
     PostgreSQL DISTINCT ON chooses one newest PAID purchase per owner. The two
     history queries cover initial and latest state without a query per account.
@@ -73,7 +79,7 @@ def get_paid_legacy_service_projections(user_ids, *, include_samples=False):
             participant_owned=service is None or service.participant_id is None
             or purchase.participant_owner_id == owner_id,
         )
-        if (include_samples and projections[owner_id].service_status != LegacyStatus.NO_PURCHASED
+        if (include_samples and projections[owner_id].service_status != ClientStatus.NO_PURCHASED
                 and service.participant_id is not None):
             request_owners[service.pk] = owner_id
     if request_owners:
@@ -91,16 +97,13 @@ def get_paid_legacy_service_projections(user_ids, *, include_samples=False):
     return projections
 
 
-def get_legacy_service_projection(user):
-    """Never use an older service or Profile to mask a broken paid purchase."""
+def get_service_projection(user):
+    """Never use an older service to mask a broken newest paid purchase."""
     purchase = (Purchase.objects.filter(owner__django_user=user, status__code='PAID')
                 .order_by(F('purchased_at').desc(nulls_first=True), '-created_at', '-pk')
                 .first())
     if purchase is None:
-        profile = Profile.objects.filter(user=user).first()
-        if profile is not None:
-            return LegacyServiceProjection(profile.service_status, profile.service_updated_at)
-        return LegacyServiceProjection(LegacyStatus.NO_PURCHASED, None)
+        return ServiceProjection(ClientStatus.NO_PURCHASED, None)
     if purchase.purchased_at is None:
         return _project_paid(purchase, None, has_initial=False, latest_log=None, participant_owned=True)
 

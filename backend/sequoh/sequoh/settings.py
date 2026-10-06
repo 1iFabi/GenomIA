@@ -85,7 +85,6 @@ INSTALLED_APPS = [
     'services',
     'reception',
     'genoma',
-    'reports',
     'rest_framework',
     'corsheaders',
     'django.contrib.admin',

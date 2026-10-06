@@ -501,14 +501,8 @@ def send_verification_email(user_email: str, user_name: str, verification_url: s
 
 def send_welcome_email(user) -> bool:
     """Envía email de bienvenida tras verificación."""
-    from profiles.utils import ensure_sample_code
-    from profiles.models import Profile
-
     try:
-        profile, _ = Profile.objects.get_or_create(user=user)
-        sample_code = ensure_sample_code(profile)
-
-        subject = f'¡Bienvenido a GenomIA! Tu SampleCode es {sample_code}'
+        subject = '¡Bienvenido a GenomIA!'
         login_url = getattr(
             settings,
             'FRONTEND_LOGIN_REDIRECT',
@@ -529,13 +523,7 @@ def send_welcome_email(user) -> bool:
         inner = f"""
           <p>Hola {safe_first_name},</p>
           <p>¡Bienvenido a GenomIA! Tu registro ha sido exitoso y tu cuenta ha sido verificada.</p>
-          
-          <div style="background:#F0F9FF; border-left:4px solid #0EA5E9; padding:20px; border-radius:12px; margin:24px 0;">
-            <h3 style="color:#0369A1; margin:0 0 12px 0; font-size:18px;">Tu SampleCode</h3>
-            <p style="margin:8px 0; color:#1E40AF;">Guarda este código, lo necesitarás para tu examen genético:</p>
-            <p style="font-size: 20px; font-weight: 700; letter-spacing: 0.8px;">{sample_code}</p>
-          </div>
-          
+
           <div style="text-align:center; margin: 28px 0;">
             {btn_html}
           </div>
@@ -544,16 +532,13 @@ def send_welcome_email(user) -> bool:
             inner_html=inner,
             title_text='¡Bienvenido a GenomIA!',
             logo_src=logo_src,
-            preheader=f"Tu SampleCode es {sample_code}"
+            preheader="Tu cuenta ya está verificada."
         )
 
         text_content = text_block(
             f"¡Bienvenido a GenomIA, {user.first_name}!",
             "",
             "Tu registro ha sido exitoso y tu cuenta ha sido verificada.",
-            "",
-            "Tu SampleCode es:",
-            sample_code,
             "",
             f"Accede a tu cuenta: {login_url}",
             "",
@@ -642,88 +627,6 @@ def send_password_reset_email(user_email: str, user_name: str, reset_url: str) -
     except Exception as e:
         logger.error(
             "Error enviando email de reset (dominio=%s; error=%s)",
-            _recipient_domain(user_email),
-            type(e).__name__,
-        )
-        return False
-
-def send_results_ready_email(user_email: str, user_name: str) -> bool:
-    """
-    Envía email notificando que los resultados genéticos están listos para ver.
-    """
-    try:
-        subject = '¡Tus resultados están listos!'
-        safe_user_name = escape(user_name or '')
-        dashboard_url = getattr(
-            settings,
-            'FRONTEND_DASHBOARD_URL',
-            f"{getattr(settings, 'FRONTEND_DOMAIN', 'http://localhost:5173').rstrip('/')}/postlogin"
-        )
-
-        inline_images = {}
-        logo_bytes = load_logo_bytes()
-        logo_src = None
-        if logo_bytes:
-            inline_images['logo_cid'] = logo_bytes
-            logo_src = 'cid:logo_cid'
-        else:
-            logo_src = _asset_url('cNormal.png')
-
-        btn_html = email_button(dashboard_url, "Ver mis resultados", kind="primary")
-        inner = f"""
-          <p>Hola {safe_user_name},</p>
-          <p>¡Tenemos excelentes noticias! Tu análisis genético ha sido completado y tus resultados ya están disponibles.</p>
-          <p>Ahora puedes explorar:</p>
-          <ul style="color:#374151; line-height:1.8; margin:16px 0;">
-            <li>Tu perfil de ancestría</li>
-            <li>Rasgos genéticos</li>
-            <li>Información sobre farmacogenética</li>
-            <li>Biomarcadores y biométricas</li>
-            <li>Predisposición a enfermedades</li>
-          </ul>
-          <div style="text-align:center; margin: 24px 0;">
-            {btn_html}
-          </div>
-          <p style="background:#DBEAFE; border:1px solid #93C5FD; border-radius:10px; padding:12px; color:#1E40AF;">
-            <strong>¡Importante!</strong> Recuerda que esta información es confidencial. Puedes descargar un PDF completo desde tu dashboard.
-          </p>
-        """
-        html_content = build_branded_html(
-            inner_html=inner,
-            title_text='¡Tus resultados están listos!',
-            logo_src=logo_src,
-            preheader="Tu análisis genético ha sido completado."
-        )
-
-        text_content = text_block(
-            f"Hola {user_name},",
-            "",
-            "¡Tu análisis genético ha sido completado!",
-            "Tus resultados ya están disponibles en tu dashboard.",
-            "",
-            f"Accede aquí: {dashboard_url}",
-            "",
-            f"Equipo {BRAND['name']}"
-        )
-
-        ok = send_email(
-            to_email=user_email,
-            subject=subject,
-            html_body=html_content,
-            text_body=text_content,
-            inline_images=inline_images or None,
-            from_name="Genomia",
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'seqgenomia@gmail.com'),
-        )
-        if ok:
-            logger.info(
-                "Email de resultados listos enviado (dominio=%s)",
-                _recipient_domain(user_email),
-            )
-        return ok
-    except Exception as e:
-        logger.error(
-            "Error enviando email de resultados listos (dominio=%s; error=%s)",
             _recipient_domain(user_email),
             type(e).__name__,
         )
