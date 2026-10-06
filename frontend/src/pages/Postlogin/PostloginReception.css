@@ -397,3 +397,14 @@
   border-color: #a0c8e8;
   cursor: not-allowed;
 }
+
+.reception-rut-check {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.reception-rut-check .search-sample-input {
+  flex: 1;
+  min-width: 0;
+}

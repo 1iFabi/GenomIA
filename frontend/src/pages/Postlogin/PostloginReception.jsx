@@ -8,24 +8,36 @@ import { AlertCircle, CheckCircle2, Printer, CheckSquare, X } from 'lucide-react
 
 import SkeletonCard from '../../components/SkeletonCard/SkeletonCard';
 
+const STATUS_LABELS = {
+  NO_PURCHASED: 'Sin servicio',
+  WAITING_SAMPLE: 'Esperando muestra',
+  SAMPLE_RECEIVED: 'Muestra recibida',
+  PROCESSING: 'En análisis',
+  COMPLETED: 'Completado',
+};
+const EMPTY_CHECKLIST = {
+  rut: false,
+  nombre: false,
+  consentimiento: false,
+  entiende: false,
+  muestra: false,
+  etiqueta: false,
+};
+
 const PostloginReception = ({ user }) => {
   const navigate = useNavigate();
   const [selectedUser, setSelectedUser] = useState(null);
-  const [checklist, setChecklist] = useState({
-    rut: false,
-    nombre: false,
-    consentimiento: false,
-    entiende: false,
-    muestra: false,
-    etiqueta: false,
-  });
+  const [checklist, setChecklist] = useState(EMPTY_CHECKLIST);
+  const [loadingSearch, setLoadingSearch] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [rutInput, setRutInput] = useState('');
+  const [rutMatches, setRutMatches] = useState(null);
+  const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
 
   const handleChecklistChange = (item) => {
     setChecklist((prev) => ({ ...prev, [item]: !prev[item] }));
   };
-  const [loadingSearch, setLoadingSearch] = useState(false);
-  const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
 
   const handleLogout = async () => {
     try {
@@ -39,48 +51,86 @@ const PostloginReception = ({ user }) => {
   const resetMessages = () => {
     setError('');
     setInfo('');
-    setChecklist({
-      rut: false,
-      nombre: false,
-      consentimiento: false,
-      entiende: false,
-      muestra: false,
-      etiqueta: false,
-    });
+    setChecklist(EMPTY_CHECKLIST);
+    setRutInput('');
+    setRutMatches(null);
   };
 
-  const handleSearch = async (sampleId) => {
+  const search = async (query) => {
+    const params = new URLSearchParams({ sample_code: query.trim() });
+    const response = await apiRequest(`${API_ENDPOINTS.RECEPTION_SEARCH}?${params.toString()}`, { method: 'GET' });
+    if (!response.ok) {
+      setError(response.data?.error || 'No se pudo buscar. Intenta de nuevo.');
+      return null;
+    }
+    return response.data?.results || [];
+  };
+
+  const handleSearch = async (query) => {
     resetMessages();
-    if (!sampleId) {
-      setError('Ingresa un SampleID para buscar.');
+    if (!query?.trim()) {
+      setError('Ingresa un Sample ID para buscar.');
       return;
     }
     setLoadingSearch(true);
-    const params = new URLSearchParams();
-    params.append('sample_code', sampleId.trim());
-
-    const response = await apiRequest(`${API_ENDPOINTS.RECEPTION_SEARCH}?${params.toString()}`, { method: 'GET' });
+    const found = await search(query);
     setLoadingSearch(false);
-    if (!response.ok) {
-      setError(response.data?.error || 'No se pudo buscar. Intenta de nuevo.');
-      return;
-    }
-    const found = response.data?.results || [];
+    if (found === null) return;
     if (found.length === 1) {
       setSelectedUser(found[0]);
     } else {
       setSelectedUser(null);
-      setInfo('No se encontraron usuarios con ese SampleID.');
+      setInfo('No se encontró ningún cliente con ese Sample ID.');
     }
   };
 
-  const handlePrint = (userPayload = selectedUser) => {
-    if (!userPayload?.sample_code) return;
+  const handleConfirmPayment = async () => {
+    resetMessages();
+    setConfirming(true);
+    const response = await apiRequest(API_ENDPOINTS.CONFIRM_PAYMENT, {
+      method: 'POST',
+      body: JSON.stringify({ userId: selectedUser.user_id }),
+    });
+    if (!response.ok) {
+      setConfirming(false);
+      setError(response.data?.error || 'No se pudo confirmar el pago.');
+      return;
+    }
+    const { sampleCode, sampleEmailSent } = response.data;
+    const refreshed = await search(sampleCode);
+    setConfirming(false);
+    if (refreshed?.length === 1) setSelectedUser(refreshed[0]);
+    setInfo(sampleEmailSent
+      ? `Pago confirmado. Sample ID ${sampleCode} enviado al correo del cliente.`
+      : `Pago confirmado. Sample ID ${sampleCode}. No se pudo enviar el correo: entrégaselo al cliente.`);
+  };
+
+  // The RUT is never sent to the browser (Ley 21.719): reception types it and the backend answers match/no match.
+  const handleVerifyRut = async () => {
+    setError('');
+    const response = await apiRequest(API_ENDPOINTS.RECEPTION_VERIFY_RUT, {
+      method: 'POST',
+      body: JSON.stringify({ userId: selectedUser.user_id, rut: rutInput.trim() }),
+    });
+    if (!response.ok) {
+      setError(response.data?.error || response.data?.detail || 'No se pudo verificar el RUT.');
+      return;
+    }
+    setRutMatches(response.data.matches);
+    setChecklist((prev) => ({ ...prev, rut: response.data.matches }));
+  };
+
+  const sampleCode = selectedUser?.service_samples?.[0]?.sample_code || selectedUser?.client_code || '';
+  const statusCode = selectedUser?.service_request_status || selectedUser?.service_status;
+  const hasService = Boolean(selectedUser?.service_request_status);
+
+  const handlePrint = () => {
+    if (!sampleCode) return;
     const win = window.open('', 'PRINT', 'height=480,width=320');
     if (!win) return;
 
     const printDocument = win.document;
-    const name = [userPayload.first_name || '', userPayload.last_name || '']
+    const name = [selectedUser.first_name || '', selectedUser.last_name || '']
       .filter(Boolean)
       .join(' ')
       .trim();
@@ -105,9 +155,8 @@ const PostloginReception = ({ user }) => {
     card.className = 'card';
     card.append(
       createTextElement('div', '', 'SampleCode'),
-      createTextElement('div', 'code', userPayload.sample_code),
+      createTextElement('div', 'code', sampleCode),
       createTextElement('div', 'meta', name || 'Usuario'),
-      createTextElement('div', 'meta', userPayload.rut || ''),
     );
     printDocument.body.appendChild(card);
 
@@ -123,34 +172,6 @@ const PostloginReception = ({ user }) => {
     printDocument.close();
   };
 
-  const checklistComplete = Object.values(checklist).every(Boolean);
-
-  const handleCompletePending = async () => {
-    if (!selectedUser?.user_id) {
-      setError('Selecciona un Sample ID primero.');
-      return;
-    }
-    if (!checklistComplete) {
-      setError('Marca todas las verificaciones antes de continuar.');
-      return;
-    }
-    resetMessages();
-    // Llamar a sample-code para asegurar SampleCode y dejar service_status en PENDING
-    const body = { userId: selectedUser.user_id, resend: false };
-    const resp = await apiRequest(API_ENDPOINTS.RECEPTION_SAMPLE_CODE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-      setError(resp.data?.error || 'No se pudo actualizar a pendiente.');
-      return;
-    }
-    const updated = resp.data?.user || selectedUser;
-    setSelectedUser(updated);
-    setInfo('Estado actualizado a pendiente.');
-  };
-  
   const displayName = useMemo(() => {
     const candidates = [
       user?.first_name,
@@ -172,7 +193,7 @@ const PostloginReception = ({ user }) => {
           <div className="postlogin-reception__headline">
             <h1 className="postlogin-reception__title">Bienvenido/a {displayName}</h1>
             <p className="postlogin-reception__subtitle">
-              Busca una muestra por su SampleID para verificar la identidad del usuario y etiquetar la muestra.
+              Busca al cliente por su Sample ID para confirmar su pago o recibir su muestra.
             </p>
           </div>
         </header>
@@ -206,54 +227,68 @@ const PostloginReception = ({ user }) => {
               <SkeletonCard />
             </div>
           ) : selectedUser ? (
-            selectedUser.service_status === 'PENDING' ? (
-              <div className="reception-pending-message">
-                <CheckCircle2 size={32} className="reception-pending-message__icon" />
-                <h2 className="reception-pending-message__title">Muestra en estado Pendiente</h2>
-                <p className="reception-pending-message__text">
-                  El Sample ID <strong>{selectedUser.sample_code}</strong> ya ha sido procesado y está pendiente de resultados.
-                </p>
-                <button className="reception-btn reception-btn--primary" onClick={() => setSelectedUser(null)}>
-                  Buscar otra muestra
-                </button>
-              </div>
-            ) : (
-              <div className="reception-details">
-                <div className="reception-user-card">
-                  <div className="reception-user-card__header">
-                    <div>
-                      <p className="reception-user-card__label">Sample ID</p>
-                      <h2 className="reception-user-card__code">{selectedUser.sample_code || '—'}</h2>
-                    </div>
-                    <span className={`reception-badge ${selectedUser.sample_status?.includes('PENDING') ? 'reception-badge--pending' : 'reception-badge--default'}`}>
-                      {selectedUser.sample_status_display || selectedUser.service_status || 'Pendiente'}
-                    </span>
+            <div className="reception-details">
+              <div className="reception-user-card">
+                <div className="reception-user-card__header">
+                  <div>
+                    <p className="reception-user-card__label">Sample ID</p>
+                    <h2 className="reception-user-card__code">{sampleCode || '—'}</h2>
                   </div>
-                  <div className="reception-user-card__body">
-                    <div className="reception-user-card__row">
-                      <div>
-                        <p className="reception-user-card__label">Paciente</p>
-                        <p className="reception-user-card__value">
-                          {(selectedUser.first_name || '')} {(selectedUser.last_name || '')}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="reception-user-card__label">RUT</p>
-                        <p className="reception-user-card__value">{selectedUser.rut || '—'}</p>
-                      </div>
+                  <span className={`reception-badge ${hasService ? 'reception-badge--pending' : 'reception-badge--default'}`}>
+                    {STATUS_LABELS[statusCode] || statusCode}
+                  </span>
+                </div>
+                <div className="reception-user-card__body">
+                  <div className="reception-user-card__row">
+                    <div>
+                      <p className="reception-user-card__label">Paciente</p>
+                      <p className="reception-user-card__value">
+                        {(selectedUser.first_name || '')} {(selectedUser.last_name || '')}
+                      </p>
                     </div>
                   </div>
                 </div>
+                {!hasService && (
+                  <div className="reception-checklist-card__actions">
+                    <button
+                      className="reception-btn reception-btn--primary"
+                      onClick={handleConfirmPayment}
+                      disabled={confirming}
+                    >
+                      {confirming ? 'Confirmando…' : 'Confirmar pago'}
+                    </button>
+                  </div>
+                )}
+              </div>
 
+              {hasService && (
                 <div className="reception-checklist-card">
                   <h3 className="reception-checklist-card__title">Checklist de recepción</h3>
                   <div className="reception-checklist">
                     <div className="reception-checklist-group">
                       <h4 className="reception-checklist-group__title">Verificación de Identidad (Cédula vs. Sistema)</h4>
+                      <form
+                        className="reception-rut-check"
+                        onSubmit={(event) => { event.preventDefault(); handleVerifyRut(); }}
+                      >
+                        <input
+                          type="text"
+                          className="search-sample-input"
+                          placeholder="RUT de la cédula (12345678-K)"
+                          aria-label="RUT de la cédula"
+                          value={rutInput}
+                          onChange={(event) => { setRutInput(event.target.value); setRutMatches(null); }}
+                        />
+                        <button type="submit" className="reception-btn reception-btn--ghost" disabled={!rutInput.trim()}>
+                          Verificar RUT
+                        </button>
+                      </form>
                       <label className={`reception-checkbox ${checklist.rut ? 'reception-checkbox--checked' : ''}`}>
-                        <input type="checkbox" checked={checklist.rut} onChange={() => handleChecklistChange('rut')} />
+                        <input type="checkbox" checked={checklist.rut} readOnly disabled />
                         <div className="reception-checkbox__icon"><CheckSquare size={14} /></div>
-                        <span className="reception-checkbox__label">RUT Coincide</span>
+                        <span className="reception-checkbox__label">
+                          {rutMatches === false ? 'El RUT no coincide' : 'RUT Coincide'}
+                        </span>
                       </label>
                       <label className={`reception-checkbox ${checklist.nombre ? 'reception-checkbox--checked' : ''}`}>
                         <input type="checkbox" checked={checklist.nombre} onChange={() => handleChecklistChange('nombre')} />
@@ -291,22 +326,15 @@ const PostloginReception = ({ user }) => {
                   <div className="reception-checklist-card__actions">
                     <button
                       className="reception-btn reception-btn--ghost"
-                      onClick={() => handlePrint()}
-                      disabled={!selectedUser?.sample_code}
+                      onClick={handlePrint}
+                      disabled={!sampleCode}
                     >
                       <Printer size={16} /> Imprimir etiqueta
                     </button>
-                    <button
-                      className="reception-btn reception-btn--primary"
-                      onClick={handleCompletePending}
-                      disabled={!checklistComplete}
-                    >
-                      Completar y marcar pendiente
-                    </button>
                   </div>
                 </div>
-              </div>
-            )
+              )}
+            </div>
           ) : null}
         </div>
       </main>
