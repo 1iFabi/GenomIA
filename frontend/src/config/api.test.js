@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiRequest, getCsrfToken } from './api';
+import { API_ENDPOINTS, apiRequest, clearToken, getCsrfToken, subscribeAuthChanges } from './api';
 
 const retiredSnpEndpoints = [
   'DISEASES', 'ANCESTRY', 'INDIGENOUS', 'TRAITS', 'PHARMACOGENETICS',
@@ -93,6 +93,55 @@ describe('apiRequest (auth via cookie HttpOnly)', () => {
       expect.objectContaining({ credentials: 'include' }),
     );
   });
+
+  it('clearToken invalidates auth immediately and awaits exactly one authenticated logout POST', async () => {
+    let finishLogout;
+    globalThis.fetch.mockImplementationOnce(() => new Promise((resolve) => { finishLogout = resolve; }));
+    const listener = vi.fn();
+    const unsubscribe = subscribeAuthChanges(listener);
+    try {
+      let settled = false;
+      const logout = clearToken().then(() => { settled = true; });
+      expect(listener).toHaveBeenCalledExactlyOnceWith({ type: 'logout' });
+      expect(globalThis.fetch).toHaveBeenCalledExactlyOnceWith(API_ENDPOINTS.LOGOUT, {
+        method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': 'abc123' },
+      });
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      finishLogout(mockJson());
+      await logout;
+      expect(settled).toBe(true);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it.each(['HTTP failure', 'network rejection'])(
+    'clearToken still completes and invalidates auth once after %s without retrying', async (failure) => {
+      if (failure === 'network rejection') {
+        globalThis.fetch.mockRejectedValueOnce(new Error('Logout unavailable'));
+      } else {
+        globalThis.fetch.mockResolvedValueOnce(new Response('{}', {
+          status: 503, headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      const listener = vi.fn();
+      const unsubscribe = subscribeAuthChanges(listener);
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(clearToken()).resolves.toBeUndefined();
+        expect(listener).toHaveBeenCalledExactlyOnceWith({ type: 'logout' });
+        expect(globalThis.fetch).toHaveBeenCalledExactlyOnceWith(API_ENDPOINTS.LOGOUT, {
+          method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': 'abc123' },
+        });
+      } finally {
+        unsubscribe();
+        errorSpy.mockRestore();
+      }
+    }
+  );
 
   it('ignora cookies CSRF malformadas sin lanzar una excepción', () => {
     document.cookie = 'csrftoken=%E0%A4%A; Path=/';

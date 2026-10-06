@@ -18,9 +18,9 @@ import {
   X as CloseIcon,
 } from '@animateicons/react/lucide';
 import { Expand as ExpandIcon, Shrink as ShrinkIcon } from 'lucide-react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { API_ENDPOINTS, apiRequest } from '../../config/api';
+import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import { AuthProvider } from '../../contexts/AuthContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import Ancestria from './Ancestria';
@@ -37,10 +37,11 @@ vi.mock('../../config/api', async (importOriginal) => {
 });
 
 vi.mock('../../components/Sidebar/Sidebar', () => ({
-  default: ({ items, iconOverrides, user }) => (
+  default: ({ items, iconOverrides, user, onLogout }) => (
     <nav aria-label="Dashboard navigation" data-has-icon-overrides={Boolean(iconOverrides)}>
       <span data-testid="shared-user">{user?.name}</span>
       {items.map((item) => <a key={item.href} href={item.href}>{item.label}</a>)}
+      <button type="button" onClick={onLogout}>Cerrar sesión</button>
       {iconOverrides?.categoryItems?.map((Icon, index) => (
         <Icon key={index} data-testid={`ancestria-sidebar-icon-${index}`} aria-hidden="true" />
       ))}
@@ -382,6 +383,8 @@ const openDrawer = async () => {
   return toggle;
 };
 
+const LocationMarker = () => <output aria-label="Current route">{useLocation().pathname}</output>;
+
 const renderPage = async ({ protectedRoute = false } = {}) => {
   if (!root) {
     container = document.createElement('div');
@@ -397,6 +400,7 @@ const renderPage = async ({ protectedRoute = false } = {}) => {
             <React.StrictMode><ProtectedRoute><Ancestria /></ProtectedRoute></React.StrictMode>
           ) : <Ancestria />}
         </AuthProvider>
+        <LocationMarker />
       </MemoryRouter>
     );
   });
@@ -413,6 +417,7 @@ beforeEach(() => {
     1000 / 60
   );
   window.cancelAnimationFrame = (frame) => window.clearTimeout(frame);
+  vi.mocked(clearToken).mockReset();
   vi.mocked(apiRequest).mockReset();
   vi.mocked(apiRequest).mockImplementation(apiImplementation.request);
   vi.stubGlobal('fetch', vi.fn());
@@ -436,6 +441,29 @@ afterEach(async () => {
 });
 
 describe('Ancestria insight rail', () => {
+  it('clears the shared session once and navigates home without a direct logout POST', async () => {
+    await renderPage();
+    await act(async () => [...container.querySelectorAll('nav button')]
+      .find((button) => button.textContent === 'Cerrar sesión').click());
+    expect(clearToken).toHaveBeenCalledExactlyOnceWith();
+    expect(apiRequest.mock.calls.filter(([url]) => url === API_ENDPOINTS.LOGOUT)).toHaveLength(0);
+    expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/');
+  });
+
+  it('waits for shared best-effort logout to complete before navigating home', async () => {
+    const logout = deferred();
+    clearToken.mockReturnValueOnce(logout.promise);
+    await renderPage();
+    await act(async () => [...container.querySelectorAll('nav button')]
+      .find((button) => button.textContent === 'Cerrar sesión').click());
+    expect(clearToken).toHaveBeenCalledExactlyOnceWith();
+    expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/dashboard/ancestria');
+    await act(async () => logout.resolve());
+    expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/');
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(apiRequest.mock.calls.filter(([url]) => url === API_ENDPOINTS.LOGOUT)).toHaveLength(0);
+  });
+
   it('reuses the StrictMode guard profile and retains it after the result page remounts', async () => {
     mockApi({ profile: reply({ user: { name: 'Ada', service_status: 'COMPLETED' } }) });
     await renderPage({ protectedRoute: true });

@@ -22,7 +22,7 @@ import {
   X as CloseIcon,
 } from '@animateicons/react/lucide';
 import { Expand as FullscreenIcon, Shrink as ExitFullscreenIcon } from 'lucide-react';
-import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
+import { clearToken } from '../../config/api';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import SectionHeader from '../../components/SectionHeader/SectionHeader';
 import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
@@ -556,9 +556,8 @@ const Ancestria = () => {
 
   const handleLogout = async () => {
     try {
-      await apiRequest(API_ENDPOINTS.LOGOUT, { method: 'POST' });
+      await clearToken();
     } catch (error) { console.error(error); }
-    clearToken();
     navigate('/');
   };
 

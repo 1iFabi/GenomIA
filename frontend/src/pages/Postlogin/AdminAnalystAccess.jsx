@@ -51,11 +51,10 @@ const AdminAnalystAccess = ({ user }) => {
 
   const handleLogout = async () => {
     try {
-      await apiRequest(API_ENDPOINTS.LOGOUT, { method: 'POST' });
+      await clearToken();
     } catch (err) {
       console.error('Error al cerrar sesion', err);
     }
-    clearToken();
     navigate('/');
   };
 

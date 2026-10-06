@@ -5,10 +5,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import PostloginRouter from './PostloginRouter';
 import AdminSidebar from '../../components/AdminSidebar/AdminSidebar';
 import { useAdminStats } from '../../hooks/useAdminStats';
-import { apiRequest } from '../../config/api';
+import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 
 vi.mock('../../config/api', () => ({
-  API_ENDPOINTS: { ME: '/me', DASHBOARD: '/api/auth/dashboard/', LOGOUT: '/logout' },
+  API_ENDPOINTS: { ME: '/me', DASHBOARD: '/api/auth/dashboard/', LOGOUT: '/logout', GET_USERS: '/users' },
   apiRequest: vi.fn(),
   clearToken: vi.fn(),
 }));
@@ -69,6 +69,7 @@ afterEach(async () => {
   container?.remove();
   container = null;
   vi.clearAllMocks();
+  clearToken.mockReset();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -160,6 +161,28 @@ describe('retired SNP catalog dashboard consumers', () => {
     root = null;
     await vi.advanceTimersByTimeAsync(60000);
     expect(apiRequest).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe.each([
+  ['PostloginAdmin', '/dashboard'],
+  ['PostloginAnalyst', '/dashboard'],
+  ['PostloginReception', '/dashboard'],
+  ['AdminAnalystAccess', '/dashboard/admin/analysts'],
+])('%s logout', (component, path) => {
+  it('awaits one shared best-effort logout before navigating home without a direct POST', async () => {
+    const { default: Page } = await vi.importActual(`./${component}.jsx`);
+    apiRequest.mockResolvedValue({ ok: true, data: component === 'AdminAnalystAccess' ? [] : {} });
+    let finishLogout;
+    clearToken.mockImplementationOnce(() => new Promise((resolve) => { finishLogout = resolve; }));
+    const view = await renderView(<Page user={{ id: 1, username: 'Reviewer' }} />, path);
+    await act(async () => view.querySelector('.admin-sidebar__logout').click());
+    expect(clearToken).toHaveBeenCalledExactlyOnceWith();
+    expect(view.querySelector('[data-testid="location"]').textContent).toBe(path);
+    await act(async () => finishLogout());
+    expect(view.querySelector('[data-testid="location"]').textContent).toBe('/');
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(apiRequest.mock.calls.filter(([url]) => url === API_ENDPOINTS.LOGOUT)).toHaveLength(0);
   });
 });
 

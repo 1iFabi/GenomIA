@@ -29,11 +29,10 @@ const PostloginReception = ({ user }) => {
 
   const handleLogout = async () => {
     try {
-      await apiRequest(API_ENDPOINTS.LOGOUT, { method: 'POST' });
+      await clearToken();
     } catch (err) {
       console.error('Error al cerrar sesión', err);
     }
-    clearToken();
     navigate('/');
   };
 

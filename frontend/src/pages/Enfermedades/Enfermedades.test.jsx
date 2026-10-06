@@ -414,16 +414,31 @@ describe('result states and independent page shell', () => {
     Object.assign(state, { status, loading: status === 'loading' });
     await renderPage();
     await act(async () => [...container.querySelectorAll('nav button')].find((button) => button.textContent === 'Cerrar sesión').click());
-    expect(apiRequest).toHaveBeenLastCalledWith(API_ENDPOINTS.LOGOUT, { method: 'POST' });
-    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(apiRequest.mock.calls.filter(([url]) => url === API_ENDPOINTS.LOGOUT)).toHaveLength(0);
+    expect(clearToken).toHaveBeenCalledExactlyOnceWith();
     expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/');
   });
 
-  it('still clears the local session when remote logout rejects', async () => {
-    await renderPage();
-    apiRequest.mockRejectedValueOnce(new Error('Logout unavailable'));
-    await act(async () => [...container.querySelectorAll('nav button')].find((button) => button.textContent === 'Cerrar sesión').click());
-    expect(clearToken).toHaveBeenCalledTimes(1);
-    expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/');
+  it('awaits shared logout and navigates home even when the server returns an error', async () => {
+    const { clearToken: clearSession } = await vi.importActual('../../config/api');
+    let finishLogout;
+    const logoutFetch = vi.fn(async (url) => url === API_ENDPOINTS.LOGOUT
+      ? new Promise((resolve) => { finishLogout = resolve; }) : new Response('{}'));
+    vi.stubGlobal('fetch', logoutFetch);
+    clearToken.mockImplementationOnce(clearSession);
+    try {
+      await renderPage();
+      await act(async () => [...container.querySelectorAll('nav button')].find((button) => button.textContent === 'Cerrar sesión').click());
+      expect(clearToken).toHaveBeenCalledExactlyOnceWith();
+      expect(container.querySelector('nav').textContent).not.toContain('Demo account');
+      expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/dashboard/enfermedades');
+      await act(async () => finishLogout(new Response('{}', { status: 503 })));
+      expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/');
+      expect(clearToken).toHaveBeenCalledTimes(1);
+      expect(logoutFetch.mock.calls.filter(([url]) => url === API_ENDPOINTS.LOGOUT)).toHaveLength(1);
+      expect(apiRequest.mock.calls.filter(([url]) => url === API_ENDPOINTS.LOGOUT)).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

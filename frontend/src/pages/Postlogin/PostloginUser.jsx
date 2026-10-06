@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, Routes, Route } from 'react-router-dom';
 import Dashboard from './Dashboard';
-import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
+import { clearToken } from '../../config/api';
 import Ancestria from '../Ancestria/Ancestria';
 import Rasgos from '../Rasgos/Rasgos';
 import Enfermedades from '../Enfermedades/Enfermedades';
@@ -12,11 +12,10 @@ const PostloginUser = ({ user }) => {
 
   const handleLogout = async () => {
     try {
-      await apiRequest(API_ENDPOINTS.LOGOUT, { method: 'POST' });
+      await clearToken();
     } catch (error) {
       console.error('Error al cerrar sesion', error);
     }
-    clearToken();
     navigate('/');
   };
 

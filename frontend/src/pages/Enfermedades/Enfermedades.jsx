@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
-import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
+import { clearToken } from '../../config/api';
 import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
 import { useSession } from '../../hooks/useSession';
 import Sidebar from '../../components/Sidebar/Sidebar';
@@ -138,12 +138,7 @@ const Enfermedades = () => {
   }, []);
 
   const handleLogout = async () => {
-    try {
-      await apiRequest(API_ENDPOINTS.LOGOUT, { method: 'POST' });
-    } catch {
-          // Logout is best effort; clear the local session below.
-        }
-    clearToken();
+    await clearToken();
     navigate('/');
   };
 

@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Menu, X, Users, FileText, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
+import { clearToken } from '../../config/api';
 import AdminSidebar from '../../components/AdminSidebar/AdminSidebar';
 import { useAdminStats } from '../../hooks/useAdminStats';
 import './PostloginAdmin.css';
@@ -29,11 +29,10 @@ const PostloginAdmin = ({ user, mode = 'admin' }) => {
 
   const handleLogout = async () => {
     try {
-      await apiRequest(API_ENDPOINTS.LOGOUT, { method: 'POST' });
+      await clearToken();
     } catch (error) {
       console.error('Error al cerrar sesion', error);
     }
-    clearToken();
     navigate('/');
   };
 
