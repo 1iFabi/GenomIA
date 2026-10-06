@@ -7,9 +7,11 @@ from rest_framework.views import APIView
 
 from accounts.authentication import JWTAuthentication
 from accounts.csrf import CSRFDoubleSubmitMixin
+from accounts.email_utils import send_sample_code_email
 from accounts.models import AppUser, Role
+from participants.codes import new_client_code
 from participants.models import Participant
-from services.models import Purchase, PurchaseStatus, ServiceRequest, ServiceStatus, ServiceStatusLog
+from services.models import Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus, ServiceStatusLog
 
 STATUS_SEQUENCE = ('WAITING_SAMPLE', 'SAMPLE_RECEIVED', 'PROCESSING', 'COMPLETED')
 
@@ -20,8 +22,17 @@ def _lock_actor(user, roles):
     ).first()
 
 
+def _sample_code_for(participant):
+    """First sample reuses the client's Sample ID; repeat purchases get -2, -3, ..."""
+    code, n = participant.participant_code, 1
+    while Sample.objects.filter(sample_code__iexact=code).exists():
+        n += 1
+        code = f'{participant.participant_code}-{n}'
+    return code
+
+
 class ConfirmPaymentAPIView(CSRFDoubleSubmitMixin, APIView):
-    """Reception confirms an in-person payment: creates a PAID purchase and its service."""
+    """Reception confirms an in-person payment: PAID purchase, service and sample code, emailed to the client."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -36,7 +47,7 @@ class ConfirmPaymentAPIView(CSRFDoubleSubmitMixin, APIView):
             if actor is None:
                 return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
             # Locking the owner serializes concurrent confirmations for the same client.
-            owner = AppUser.objects.select_for_update(of=('self',)).filter(
+            owner = AppUser.objects.select_for_update(of=('self',)).select_related('django_user').filter(
                 django_user_id=user_id, django_user__is_active=True, role__code=Role.Code.CLIENTE,
             ).first()
             if owner is None:
@@ -49,16 +60,23 @@ class ConfirmPaymentAPIView(CSRFDoubleSubmitMixin, APIView):
             waiting = ServiceStatus.objects.filter(code=STATUS_SEQUENCE[0]).first()
             if paid is None or waiting is None:
                 return Response({'error': 'Status catalog unavailable'}, status=status.HTTP_409_CONFLICT)
-            purchase = Purchase.objects.create(owner=owner, status=paid, purchased_at=timezone.now())
-            service = ServiceRequest.objects.create(
-                purchase=purchase, status=waiting,
-                participant=Participant.objects.filter(user_id=user_id).first(),
+            participant, _ = Participant.objects.get_or_create(
+                user_id=user_id, defaults={'participant_code': new_client_code()},
             )
+            purchase = Purchase.objects.create(owner=owner, status=paid, purchased_at=timezone.now())
+            service = ServiceRequest.objects.create(purchase=purchase, status=waiting, participant=participant)
             log = ServiceStatusLog.objects.create(request=service, status=waiting, actor=actor)
+            sample = Sample.objects.create(
+                service_request=service, participant=participant, sample_code=_sample_code_for(participant),
+                sample_type='saliva', status='pending_collection',
+            )
+        # After commit: a failed email must not undo a confirmed payment; reception sees the outcome.
+        email_sent = send_sample_code_email(owner.django_user, sample.sample_code)
         return Response({
             'purchaseId': purchase.pk, 'status': 'PAID',
             'purchasedAt': purchase.purchased_at.isoformat().replace('+00:00', 'Z'),
             'serviceRequestId': service.pk, 'serviceStatus': waiting.code, 'statusLogId': log.pk,
+            'sampleCode': sample.sample_code, 'sampleEmailSent': email_sent,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -95,6 +113,10 @@ class AdvanceServiceStatusAPIView(CSRFDoubleSubmitMixin, APIView):
             if following.code == 'COMPLETED':
                 service.completed_at = timezone.now()
                 update_fields.append('completed_at')
+            if following.code == 'SAMPLE_RECEIVED':
+                Sample.objects.filter(service_request=service, status='pending_collection').update(
+                    status='received', collected_at=timezone.now(),
+                )
             service.save(update_fields=update_fields)
             log = ServiceStatusLog.objects.create(request=service, status=following, actor=actor)
         return Response({

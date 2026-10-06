@@ -20,6 +20,8 @@ class ServiceProjection:
     service_status: str
     updated_at: datetime | None
     service_samples: tuple[Sample, ...] = ()
+    service_request_id: object = None
+    request_status: str | None = None
 
     @property
     def can_view_results(self):
@@ -36,9 +38,11 @@ def _project_paid(purchase, service, *, has_initial, latest_log, participant_own
     if code == 'COMPLETED':
         if service.completed_at is None or service.completed_at < service.started_at:
             return unavailable
-        return ServiceProjection(ClientStatus.COMPLETED, latest_log.changed_at)
+        return ServiceProjection(ClientStatus.COMPLETED, latest_log.changed_at,
+                                 service_request_id=service.pk, request_status=code)
     if code in ('WAITING_SAMPLE', 'SAMPLE_RECEIVED', 'PROCESSING'):
-        return ServiceProjection(ClientStatus.PENDING, latest_log.changed_at)
+        return ServiceProjection(ClientStatus.PENDING, latest_log.changed_at,
+                                 service_request_id=service.pk, request_status=code)
     return unavailable
 
 

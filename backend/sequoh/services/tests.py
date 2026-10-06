@@ -774,7 +774,10 @@ class ServiceFlowTestCase(APITestCase):
         grant_reception_role(self.reception)
         self.analyst = users.create_user(username='flow-analyst')
         grant_analyst_role(self.analyst)
-        self.owner = users.create_user(username='flow-client')
+        self.owner = users.create_user(username='flow-client', email='flow-client@example.com')
+        email = patch('services.views.send_sample_code_email', return_value=True)
+        self.send_sample_email = email.start()
+        self.addCleanup(email.stop)
 
     def as_actor(self, user):
         self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
@@ -813,10 +816,42 @@ class ConfirmPaymentTests(ServiceFlowTestCase):
                          (response.data['statusLogId'], service.status, self.reception.app_user))
         self.assertEqual(get_service_projection(self.owner).service_status, 'PENDING')
 
-    def test_participant_is_optional(self):
+    def test_confirmation_creates_sample_code_emails_it_and_reception_can_find_it(self):
+        Profile.objects.create(user=self.owner)  # Registration always creates one; reception searches profiles.
         response = self.confirm()
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertIsNone(domain.ServiceRequest.objects.get().participant)
+        service = domain.ServiceRequest.objects.get(pk=response.data['serviceRequestId'])
+        participant = Participant.objects.get(user=self.owner)  # Created when missing.
+        sample = domain.Sample.objects.get(service_request=service)
+        self.assertEqual((service.participant, sample.participant), (participant, participant))
+        self.assertRegex(sample.sample_code, r'^GX-[0-9A-F]{8}$')
+        self.assertEqual((sample.sample_type, sample.status), ('saliva', 'pending_collection'))
+        self.assertEqual((response.data['sampleCode'], response.data['sampleEmailSent']), (sample.sample_code, True))
+        self.send_sample_email.assert_called_once_with(self.owner, sample.sample_code)
+        search = self.client.get('/api/reception/search/', {'sample_code': sample.sample_code.lower()})
+        self.assertEqual([row['user_id'] for row in search.data['results']], [self.owner.pk])
+
+    def test_sample_reuses_the_welcome_client_code_and_repeat_purchases_get_a_suffix(self):
+        from participants.codes import ensure_client_code
+
+        code = ensure_client_code(self.owner)  # Issued with the welcome email after verification.
+        self.assertRegex(code, r'^GX-[0-9A-F]{8}$')
+        self.assertIsNone(ensure_client_code(self.analyst))  # Staff never get a client code.
+        first = self.confirm()
+        self.assertEqual(first.data['sampleCode'], code)
+        for _ in range(3):
+            self.assertEqual(self.advance(first.data['serviceRequestId']).status_code, 200)
+        second = self.confirm()
+        self.assertEqual(second.status_code, 201, second.data)
+        self.assertEqual(second.data['sampleCode'], f'{code}-2')
+
+    def test_failed_email_keeps_the_confirmed_payment(self):
+        self.send_sample_email.return_value = False
+        response = self.confirm()
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertFalse(response.data['sampleEmailSent'])
+        self.assertEqual(self.counts(), (1, 1, 1))
+        self.assertEqual(domain.Sample.objects.count(), 1)
 
     def test_active_service_blocks_second_confirmation_until_completed(self):
         service_id = self.confirm().data['serviceRequestId']
@@ -837,6 +872,7 @@ class ConfirmPaymentTests(ServiceFlowTestCase):
                 response = self.post_json('/api/services/payments/', {'userId': self.owner.pk})
                 self.assertEqual(response.status_code, 403)
         self.assertEqual(self.counts(), (0, 0, 0))
+        self.send_sample_email.assert_not_called()
         self.as_actor(self.admin)
         self.assertEqual(self.post_json('/api/services/payments/', {'userId': self.owner.pk}).status_code, 201)
 
@@ -870,6 +906,9 @@ class AdvanceServiceStatusTests(ServiceFlowTestCase):
             log = domain.ServiceStatusLog.objects.get(pk=response.data['statusLogId'])
             self.assertEqual((log.status.code, log.actor), (expected, self.analyst.app_user))
         self.assertIsNotNone(domain.ServiceRequest.objects.get(pk=service_id).completed_at)
+        sample = domain.Sample.objects.get(service_request_id=service_id)
+        self.assertEqual(sample.status, 'received')
+        self.assertIsNotNone(sample.collected_at)
         projection = get_service_projection(self.owner)
         self.assertEqual((projection.service_status, projection.can_view_results), ('COMPLETED', True))
         before = self.counts()
