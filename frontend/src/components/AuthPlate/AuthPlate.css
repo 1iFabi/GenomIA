@@ -1,0 +1,68 @@
+.auth-plate {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #d8ddef; /* mismo tono que el fondo del video: sin flash al cargar */
+  outline: 1px solid rgba(28, 59, 194, 0.10);
+  outline-offset: -1px;
+}
+
+/* La niebla porcelana sube desde abajo: el texto lee sobre el video sin oscurecerlo. */
+/* El video compartido vive en el slot y llena la placa; el texto va por encima. */
+.auth-plate__slot {
+  position: absolute;
+  inset: 0;
+}
+
+.auth-plate__media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 45%;
+}
+
+.auth-plate__caption {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 120px clamp(28px, 3.2vw, 48px) clamp(28px, 3.2vw, 44px);
+  background: linear-gradient(
+    to top,
+    rgba(216, 221, 239, 0.96) 0%,
+    rgba(216, 221, 239, 0.86) 42%,
+    rgba(216, 221, 239, 0) 100%
+  );
+  pointer-events: none;
+}
+
+.auth-plate__title {
+  max-width: 13ch;
+  margin: 0;
+  font-family: 'Geist', 'DM Sans', 'Inter', system-ui, sans-serif;
+  font-size: clamp(30px, 2.9vw, 46px);
+  font-weight: 600;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: #16245c;
+  text-wrap: balance;
+}
+
+.auth-plate__accent {
+  color: #6a35c9; /* púrpura del logo, oscurecido para contraste AA sobre la niebla */
+}
+
+.auth-plate__lede {
+  max-width: 42ch;
+  margin: 14px 0 0;
+  text-wrap: pretty;
+  font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: rgba(22, 36, 92, 0.7);
+}
+
+@media (max-height: 700px) {
+  .auth-plate__caption { padding-top: 88px; }
+  .auth-plate__title { font-size: clamp(26px, 2.4vw, 36px); }
+}

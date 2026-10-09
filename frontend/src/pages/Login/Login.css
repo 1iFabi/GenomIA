@@ -22,6 +22,12 @@
   box-sizing: border-box;
 }
 
+/* La raíz pinta la superficie de la página: lo que la placa del arte deja libre al cruzar nunca
+   queda con el negro del body. */
+.auth.login-page {
+  background: #ffffff;
+}
+
 /* ===== LADO IZQUIERDO (corregido según mock) ===== */
 .auth-left {
   position: relative;
@@ -56,7 +62,7 @@
 }
 
 .welcome-logo {
-  width: 80px;
+  width: 56px;
   height: auto;
 }
 
@@ -380,17 +386,25 @@
 }
 
 /* ===== Lado derecho ===== */
+/* El arte es una placa enmarcada dentro de su mitad, no una pared a sangre:
+   el inset va en padding para que el swap siga midiendo y moviendo la mitad completa. */
 .auth-right {
   width: 50%;
   height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  background: #ffffff;
 }
 
-.auth-right img {
+.auth-right img,
+.auth-right video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: 50% 45%;
   display: block;
 }
+
 
 /* ===== Responsivo ===== */
 
@@ -415,8 +429,6 @@
     height: auto;
     min-height: 100vh;
   }
-  .auth-left, .auth-right { width: 100%; }
-  .auth-right { display: none; }
   
   .auth-left {
     min-height: 100vh;
@@ -484,7 +496,7 @@
   }
   
   .welcome-logo {
-    width: clamp(60px, 15vw, 80px);
+    width: clamp(44px, 11vw, 56px);
   }
 }
 
@@ -494,7 +506,7 @@
     font-size: 30px;
   }
   .welcome-logo {
-    width: 64px;
+    width: 46px;
   }
   .logo-container {
     margin-bottom: 6px;
@@ -510,7 +522,7 @@
     font-size: 26px;
   }
   .welcome-logo {
-    width: 56px;
+    width: 42px;
   }
   .auth .subtitle {
     font-size: 14px;
@@ -524,60 +536,35 @@
   }
 }
 
-/* Animación de entrada */
-.auth.page-enter {
-  animation: pageEnter 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+/* ===== Intercambio de paneles Login <-> Register ===== */
+/* Las placas viajan dentro del viewport —de una mitad a la otra—, así que no hay nada que recortar
+   en el documento: el CSS solo reparte el apilado, y la placa del arte barre por delante. */
+.auth--swapping .auth-left {
+  z-index: 1;
 }
 
-/* Animación de salida */
-.auth.page-exit {
-  animation: pageExit 0.3s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+.auth--swapping .auth-right {
+  position: relative;
+  z-index: 2;
+  will-change: transform;
 }
 
-@keyframes pageEnter {
-  0% {
-    opacity: 0;
-    transform: translateX(-30px) scale(0.98);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
+/* La página que se va ya no acepta interacción; la que llega sí, desde el primer frame. */
+.auth--leaving {
+  pointer-events: none;
 }
 
-@keyframes pageExit {
-  0% {
-    opacity: 1;
-    transform: translateX(0) scale(1);
+/* Una sola regla para el arte en toda la superficie de acceso: donde Register lo oculta,
+   Login también. Así el lado que sale y el que llega resuelven el mismo movimiento; si no,
+   el cruce de dos placas termina en una página de una sola placa. */
+@media (max-width: 1200px) {
+  .auth .auth-right {
+    display: none !important;
   }
-  100% {
-    opacity: 0;
-    transform: translateX(30px) scale(0.98);
-  }
-}
 
-/* Animaciones más suaves para dispositivos móviles */
-@media (prefers-reduced-motion: reduce) {
-  .auth.page-enter,
-  .auth.page-exit {
-    animation-duration: 0.2s;
+  .auth .auth-left {
+    width: 100% !important;
   }
-  
-  @keyframes pageEnter {
-    0% { opacity: 0; }
-    100% { opacity: 1; }
-  }
-  
-  @keyframes pageExit {
-    0% { opacity: 1; }
-    100% { opacity: 0; }
-  }
-}
-
-/* Optimización de rendimiento */
-.auth {
-  will-change: transform, opacity;
-  backface-visibility: hidden;
 }
 
 /* Transición específica para el link de registro */
@@ -593,36 +580,6 @@
 
 .login-link:active {
   transform: translateY(0);
-}
-
-/* Efecto de loading durante la transición */
-.auth.page-exit .login-form {
-  pointer-events: none;
-}
-
-.auth.page-exit .login-button {
-  opacity: 0.7;
-}
-
-/* Staggered animation para elementos del formulario */
-.auth.page-enter .uv-field {
-  animation: slideInUp 0.5s ease forwards;
-}
-
-.auth.page-enter .uv-field:nth-child(1) { animation-delay: 0.1s; }
-.auth.page-enter .uv-field:nth-child(2) { animation-delay: 0.15s; }
-.auth.page-enter .login-button { animation-delay: 0.2s; }
-.auth.page-enter .login-help { animation-delay: 0.25s; }
-
-@keyframes slideInUp {
-  0% {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* ========================================= */

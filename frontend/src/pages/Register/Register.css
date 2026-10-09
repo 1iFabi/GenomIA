@@ -15,7 +15,7 @@
 
 .auth.register-layout { background: #f8fafc; }
 .auth.register-layout .auth-left { background: #f8fafc; }
-.auth.register-layout .auth-right { background: #ffffff; }
+.auth.register-layout .auth-right { background: #f8fafc; }
 
 .auth.mirror { flex-direction: row-reverse; }
 
@@ -46,12 +46,13 @@
 }
 
 /* Lado derecho (imagen) */
+/* La placa acompaña al scroll del formulario largo: siempre una pantalla de alto. */
 .register-right {
   width: 50%;
-  background: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
   overflow: hidden;
 }
 
@@ -500,35 +501,9 @@
   text-decoration: underline;
 }
 
-/* ============ PAGE TRANSITIONS ============ */
-
-.auth { 
-  will-change: transform, opacity; 
-  backface-visibility: hidden; 
-}
-
-.auth.page-enter { 
-  animation: pageEnter 0.2s cubic-bezier(0.25,0.46,0.45,0.94) forwards; 
-}
-
-.auth.page-exit { 
-  animation: pageExit 0.15s cubic-bezier(0.55,0.085,0.68,0.53) forwards; 
-}
-
-@keyframes pageEnter { 
-  0% { opacity: 0; transform: translateX(-24px) scale(0.985); } 
-  100% { opacity: 1; transform: translateX(0) scale(1); } 
-}
-
-@keyframes pageExit { 
-  0% { opacity: 1; transform: translateX(0) scale(1); } 
-  100% { opacity: 0; transform: translateX(24px) scale(0.985); } 
-}
+/* El intercambio de paneles Login <-> Register vive en Login.css y en lib/authPanelSwap.js. */
 
 @media (prefers-reduced-motion: reduce) {
-  .auth.page-enter, .auth.page-exit { animation-duration: .2s; }
-  @keyframes pageEnter { 0%{opacity:0} 100%{opacity:1} }
-  @keyframes pageExit { 0%{opacity:1} 100%{opacity:0} }
   .password-validator { animation: none; }
 }
 
@@ -538,14 +513,14 @@
 }
 /* Logo del mismo tamaño que Login */
 .register-page .welcome-logo {
-  width: 80px;
+  width: 56px;
   height: auto;
 }
 
 /* Aplicar mismo responsive que Login */
 @media (max-width: 1024px) {
   .register-page .welcome-logo {
-    width: clamp(60px, 15vw, 80px);
+    width: clamp(44px, 11vw, 56px);
   }
 }
 
@@ -902,153 +877,10 @@
 
 /* (Removido) Regla de asterisco para evitar duplicados en Register */
 
-/* ============ TERMS MODAL ============ */
-
-.terms-modal-overlay {
-  position: fixed; 
-  inset: 0;
-  background-color: rgba(0,0,0,.75);
-  display: flex; 
-  align-items: center; 
-  justify-content: center;
-  z-index: 1000; 
-  padding: 1rem; 
-  overflow-y: auto;
-}
-
-.terms-modal {
-  background: #fff; 
-  border-radius: 12px;
-  max-width: 800px; 
-  width: 100%;
-  max-height: 90vh; 
-  overflow-y: auto;
-  box-shadow: 0 25px 50px -12px rgba(0,0,0,.25);
-  animation: modalSlideIn .3s cubic-bezier(.25,.46,.45,.94);
-}
-
+/* Términos y condiciones: ver components/TermsModal/TermsModal.css */
 @keyframes modalSlideIn {
   0% { opacity: 0; transform: translateY(-30px) scale(.95); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.terms-modal-header {
-  position: sticky; 
-  top: 0;
-  background: #fff; 
-  border-bottom: 1px solid #e5e7eb;
-  padding: 1.25rem 1.75rem; 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center;
-  border-radius: 12px 12px 0 0; 
-  z-index: 10;
-}
-
-.terms-modal-header h2 {
-  color: #277EAF; 
-  font-size: 1.35rem; 
-  font-weight: 700; 
-  margin: 0; 
-  line-height: 1.2;
-}
-
-.terms-modal-close {
-  background: none; 
-  border: none; 
-  font-size: 1.5rem; 
-  color: #6b7280; 
-  cursor: pointer;
-  width: 2rem; 
-  height: 2rem; 
-  display: grid; 
-  place-items: center; 
-  border-radius: 50%;
-  transition: background-color var(--genomia-motion-duration-fast) ease, color var(--genomia-motion-duration-fast) ease;
-  flex-shrink: 0;
-}
-
-.terms-modal-close:hover { 
-  background: #f3f4f6; 
-  color: #374151; 
-}
-
-.terms-modal-close:focus { 
-  outline: 2px solid #4A90E2; 
-  outline-offset: 2px; 
-}
-
-.terms-modal-content { 
-  padding: 1.75rem; 
-  line-height: 1.6; 
-  color: #374151; 
-}
-
-.terms-modal-content h3 { 
-  color: #277EAF; 
-  font-size: 1.15rem; 
-  font-weight: 700; 
-  margin: 1.25rem 0 0.6rem 0; 
-}
-
-.terms-modal-content h4 { 
-  color: #277EAF; 
-  font-size: 1rem; 
-  font-weight: 600; 
-  margin: .85rem 0 .45rem 0; 
-}
-
-.terms-modal-content p { 
-  margin: 0 0 1rem 0; 
-  font-size: .95rem; 
-}
-
-.terms-modal-content ul { 
-  margin: .5rem 0 1rem 1rem; 
-  padding-left: 1rem; 
-}
-
-.terms-modal-content li { 
-  margin: .25rem 0; 
-  font-size: .95rem; 
-}
-
-.terms-modal-footer {
-  position: sticky; 
-  bottom: 0; 
-  background: #fff; 
-  border-top: 1px solid #e5e7eb;
-  padding: 1.25rem 1.75rem; 
-  display: flex; 
-  justify-content: flex-end; 
-  border-radius: 0 0 12px 12px;
-}
-
-.terms-modal-accept {
-  background: #4A90E2; 
-  color: #fff; 
-  border: none;
-  padding: .75rem 1.5rem; 
-  border-radius: 10px; 
-  font-size: .95rem; 
-  font-weight: 600; 
-  cursor: pointer;
-  transition: background-color var(--genomia-motion-duration-fast) ease, transform var(--genomia-motion-duration-fast) ease, box-shadow var(--genomia-motion-duration-fast) ease;
-}
-
-.terms-modal-accept:hover { 
-  background: #357abd; 
-  transform: translateY(-1px); 
-  box-shadow: 0 6px 16px rgba(74,144,226,.35); 
-}
-
-.terms-modal-accept:focus { 
-  outline: 2px solid #4A90E2; 
-  outline-offset: 2px; 
-}
-
-.terms-modal-accept:active { 
-  transform: translateY(0); 
 }
 
 .terms-link { 
@@ -1159,18 +991,7 @@
   .register-layout.mirror {
     flex-direction: column;
   }
-  
-  .register-layout.mirror .register-right,
-  .register-right { 
-    display: none !important; 
-  }
-  
-  .register-layout.mirror .register-left,
-  .register-left {
-    width: 100% !important;
-    min-height: 100vh;
-  }
-  
+
   .register-inner {
     max-width: 400px;
   }
@@ -1178,12 +999,7 @@
 
 /* Tablets */
 @media (max-width: 1024px) {
-  .register-right {
-    display: none !important;
-  }
-  
   .register-left {
-    width: 100% !important;
     padding: 2rem 1.5rem;
   }
 
@@ -1217,13 +1033,8 @@
 
 /* Mobile */
 @media (max-width: 768px) {
-  .register-right {
-    display: none !important;
-  }
-  
   .register-left { 
-    width: 100% !important;
-    padding: 1.5rem 1.5rem; 
+    padding: 1.5rem 1.5rem;
   }
   
   .login-card { 
@@ -1250,12 +1061,7 @@
 
 /* Mobile pequeño */
 @media (max-width: 480px) {
-  .register-right {
-    display: none !important;
-  }
-  
   .register-left { 
-    width: 100% !important;
     padding: 1rem 1rem; 
   }
   
@@ -1331,4 +1137,50 @@
     transform: none;
     z-index: 1;
   }
+}
+/* ============ TÍTULOS DE PASO Y BLOQUE SOCIAL ============ */
+.register-step-title {
+  margin: 0 0 1.5rem;
+  font-size: 1.5rem;
+  color: #333;
+}
+.register-step-title--compact {
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+}
+
+.register-page .register-login-help {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.register-social {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  margin: 1.25rem auto 0;
+}
+
+/* ============ PANTALLAS BAJAS (laptops) ============ */
+/* El primer paso completo, con "O regístrate con Google", cabe sin scroll. */
+@media (min-width: 1025px) and (max-height: 880px) {
+  .register-page .register-left { padding: 1rem 0; }
+  .register-page .register-inner { padding: 0.25rem 0; }
+  .register-page .logo-container { margin-bottom: 0.25rem; }
+  .register-page .welcome-logo { width: 44px; }
+  .register-page .register-title { margin-top: 0.25rem; }
+  .register-page .step-indicator-row { padding: 1rem 1.5rem; }
+  .register-page .register-step-title { margin-bottom: 1rem; font-size: 1.3rem; }
+  .register-page .register-step-title--compact { margin-bottom: 0.75rem; font-size: 1.2rem; }
+  .register-page .footer-nav { margin-top: 1.25rem; }
+  .register-social { gap: 12px; margin-top: 0.75rem; }
+}
+
+@media (min-width: 1025px) and (max-height: 700px) {
+  .register-page .register-left { padding: 0.5rem 0; }
+  .register-page .step-indicator-row { padding: 0.75rem 1.5rem; }
+  .register-page .register-login-help { margin-top: 0.75rem; }
+  .register-page .footer-nav { margin-top: 1rem; }
 }

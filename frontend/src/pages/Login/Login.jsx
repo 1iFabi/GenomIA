@@ -1,22 +1,45 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import { API_ENDPOINTS, apiRequest } from "../../config/api.js";
 import ErrorMessage from "../../components/Errormessage.jsx";
+import GoogleAuthButton, { AuthDivider } from "../../components/GoogleAuthButton/GoogleAuthButton.jsx";
+import {
+  openAuthPanel,
+  playAuthPageEntrance,
+  playAuthPlateEntry,
+  readAuthPanelSwap,
+} from "../../lib/authPanelSwap";
+import AuthPlate from "../../components/AuthPlate/AuthPlate.jsx";
 import "./Login.css";
 import ForgotPasswordModal from "./ForgotPasswordModal.jsx";
 import ResetPasswordModal from "./ResetPasswordModal.jsx";
 import VerificationModal from "./VerificationModal.jsx";
 import logo from "/cNormal.png";
-import cromo from "/login.png";
+
+gsap.registerPlugin(useGSAP);
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPwd, setShowPwd] = useState(false);
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const authRef = useRef(null);
+  // Read, never consumed: a replayed render must see the same handoff it settled into.
+  const handoff = readAuthPanelSwap("/login");
+
+  useGSAP(() => {
+    if (handoff) {
+      playAuthPlateEntry(authRef.current, {
+        focusTarget: handoff.keyboard ? authRef.current.querySelector("#login-email") : null,
+      });
+      return;
+    }
+    playAuthPageEntrance(authRef.current);
+  }, { scope: authRef });
 
   const [errors, setErrors] = useState({ email: '', password: '', global: '' });
   const [loginSuccess, setLoginSuccess] = useState(false);
@@ -202,16 +225,17 @@ export default function Login() {
 
   const handleRegisterClick = (e) => {
     e.preventDefault();
-    setIsTransitioning(true);
-    
-    // Esperar a que termine la animación de salida
-    setTimeout(() => {
-      navigate('/register');
-    }, 150); // ← Reducido de 300ms a 150ms
+    openAuthPanel({
+      root: authRef.current,
+      targetPath: '/register',
+      // A keyboard activation keeps its place: focus lands on the first field.
+      keyboard: e.detail === 0,
+      navigate,
+    });
   };
 
   return (
-    <div className={`auth login-page ${isTransitioning ? 'page-exit' : 'page-enter'}`}>
+    <div ref={authRef} className="auth login-page">
       {/* Columna izquierda */}
       <section className="auth-left">
         <div className="left-inner">
@@ -347,13 +371,16 @@ export default function Login() {
             >
               ¿Olvidaste tu contraseña?
             </button>
+
+            <AuthDivider>O ingresa con</AuthDivider>
+            <GoogleAuthButton />
           </form>
         </div>
       </section>
 
       {/* Columna derecha (imagen) */}
       <section className="auth-right">
-        <img src={cromo} alt="imagen de cromosomas" />
+        <AuthPlate />
       </section>
 
       {/* Modal de éxito */}
