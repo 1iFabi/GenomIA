@@ -21,7 +21,20 @@ def validate_rut_format(value):
     return value
 
 
+def normalize_rut(raw):
+    """Return the RUT as 12345678-K when format and check digit are valid, else None."""
+    rut = re.sub(r'[.\s]', '', str(raw or '')).upper()
+    match = re.fullmatch(r'(\d{7,8})-([\dK])', rut)
+    if not match:
+        return None
+    total = sum(int(d) * f for d, f in zip(reversed(match[1]), [2, 3, 4, 5, 6, 7] * 2))
+    check = {11: '0', 10: 'K'}.get(11 - total % 11, str(11 - total % 11))
+    return rut if check == match[2] else None
+
+
 class Profile(models.Model):
+    """Purchase identity (RUT, phone). Created only when the client starts a purchase, never at signup."""
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     phone = models.CharField(max_length=20, blank=True)
     rut = models.CharField(
