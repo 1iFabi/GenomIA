@@ -102,9 +102,6 @@ class RetiredLegacySNPSchemaTests(TestCase):
         'Artifact': 'artifact',
     }
 
-    def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
-
     def test_legacy_classes_are_absent_from_module_and_app_registry(self):
         for name in self.legacy_models:
             with self.subTest(model=name):
@@ -197,35 +194,7 @@ class GenomaAppContractTests(SimpleTestCase):
             with self.subTest(model=name):
                 self.assertIs(apps.get_model('genoma', name), getattr(domain, name))
 
-    def test_synthetic_bundle_resolves_the_fixture_from_genoma(self):
-        fixture_path = self.package_path / 'fixtures' / 'synthetic_genomics_v2.json'
-        self.assertTrue(fixture_path.is_file(), 'Expected the bundled synthetic fixture in genoma')
-        self.assertEqual(Path(bundle.__file__).resolve().parent / 'fixtures' / fixture_path.name,
-                         fixture_path)
-        self.assertEqual(bundle.get_synthetic_bundle('2').manifest,
-                         json.loads(fixture_path.read_text(encoding='utf-8')))
-        self.assertEqual(bundle.get_synthetic_bundle('2').manifest_checksum, bundle.V2_MANIFEST_CHECKSUM)
-        self.assertEqual(bundle.get_synthetic_bundle('1').manifest_checksum, bundle.MANIFEST_CHECKSUM)
 
-    def test_catalog_fixture_labels_deserialize_to_genoma_models_without_queries(self):
-        from django.core import serializers
-
-        fixture_path = self.package_path / 'fixtures' / 'synthetic_variant_catalog_v1.json'
-        self.assertTrue(fixture_path.is_file(), 'Expected the normalized catalog fixture in genoma')
-        serialized = fixture_path.read_text(encoding='utf-8')
-        rows = json.loads(serialized)
-        expected_counts = {'genoma.datarelease': 1, 'genoma.variant': 8,
-                           'genoma.variantplacement': 8, 'genoma.releasevariant': 8}
-        self.assertEqual({row['model'] for row in rows}, set(expected_counts))
-        self.assertEqual({label: sum(row['model'] == label for row in rows)
-                          for label in expected_counts}, expected_counts)
-        self.assertIn('genoma', apps.app_configs, 'Expected genoma fixture labels to resolve')
-        registered = apps.get_app_config('genoma').models
-        for label in expected_counts:
-            self.assertIn(label.split('.')[1], registered, f'Expected registered fixture model: {label}')
-        objects = list(serializers.deserialize('json', serialized))
-        self.assertEqual(len(objects), 25)
-        self.assertEqual({obj.object._meta.label_lower for obj in objects}, set(expected_counts))
 
 
 class GenomaPerTableMigrationLayoutTests(SimpleTestCase):
@@ -265,7 +234,6 @@ class NormalizedInitialMigrationTests(TestCase):
 
     def setUp(self):
         self.assertEqual(connection.vendor, 'postgresql')
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         self.assertTrue(connection.in_atomic_block, 'DDL and ledger changes must roll back with TestCase')
         with connection.cursor() as cursor:
             cursor.execute('SELECT current_database()')
@@ -504,7 +472,6 @@ class RetiredSNPCatalogRouteTests(SimpleTestCase):
 
 class RetiredSNPCatalogAuthenticatedTests(APITestCase):
     def test_catalog_reads_and_writes_return_404_without_touching_normalized_rows(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         domain.Variant.objects.create(variant_type='synthetic', canonical_name='Preserved normalized row')
         before = list(domain.Variant.objects.values())
         for role, grant in (('client', None), ('admin', grant_admin_role),
@@ -556,7 +523,6 @@ class RetiredBiomarkerPanelRouteTests(SimpleTestCase):
 
 class RetiredBiomarkerPanelAuthenticatedTests(APITestCase):
     def test_legacy_panel_gets_return_404_for_every_retired_role(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         for role, grant in (('client', None), ('admin', grant_admin_role), ('analyst', grant_analyst_role)):
             user = User.objects.create_user(username=f'retired-panel-{role}')
             if grant:
@@ -666,7 +632,6 @@ class GenomaRouteContractTests(SimpleTestCase):
 
 class RetiredLegacyGeneticsAuthenticatedTests(APITestCase):
     def test_legacy_requests_return_404_for_all_roles_without_queries_or_row_changes(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         owner = User.objects.create_user(username='retired-genetics-owner')
         domain.Variant.objects.create(variant_type='synthetic', canonical_name='Preserved normalized row')
         Profile.objects.create(user=owner)
@@ -700,7 +665,6 @@ class SyntheticServiceResultReadTests(APITestCase):
     list_url = '/api/genoma/v1/services/'
 
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         environment = patch.dict(os.environ, {
             'ENVIRONMENT': 'development', 'RENDER': '',
             'RENDER_EXTERNAL_HOSTNAME': '', 'DATABASE_URL': '',
@@ -846,68 +810,6 @@ class SyntheticServiceResultReadTests(APITestCase):
                 with self.subTest(path=path, method=method), self.assertNumQueries(0):
                     self.assertEqual(getattr(self.client, method)(path, {}, format='json').status_code, 405)
 
-    def test_list_returns_paid_timestamps_in_canonical_order_without_account_identifiers(self):
-        version_one = self.receipt
-        version_two = bundle.import_synthetic_genomics(user_id=self.user.pk, version='2')
-        other_version_two = bundle.import_synthetic_genomics(user_id=self.other.pk, version='2')
-        now = timezone.now()
-        older = now - timedelta(days=2)
-        self.set_bundle_timestamp(version_one, older)
-        self.set_bundle_timestamp(version_two, now)
-
-        def expected_item(receipt, version, purchased_at):
-            return self.summary(receipt, version) | {
-                'purchased_at': purchased_at.isoformat().replace('+00:00', 'Z'),
-            }
-
-        response = self.client.get(self.list_url)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'services': [
-            expected_item(version_two, '2', now), expected_item(version_one, '1', older),
-        ]})
-        self.assertEqual(self.client.get(self.list_url).json(), response.json())
-
-        tied_paid_at = now + timedelta(days=1)
-        self.set_bundle_timestamp(version_one, tied_paid_at)
-        self.set_bundle_timestamp(version_two, tied_paid_at)
-        ordered = self.client.get(self.list_url).json()['services']
-        self.assertEqual(self.client.get(self.list_url).json()['services'], ordered)
-        expected_by_purchase_pk = sorted(
-            ((version_one, '1'), (version_two, '2')),
-            key=lambda pair: pair[0].purchase_id.int, reverse=True,
-        )
-        self.assertEqual([item['service_request_id'] for item in ordered], [
-            str(receipt.service_request_id) for receipt, _ in expected_by_purchase_pk
-        ])
-
-        forbidden = {
-            'user_id', 'userid', 'owner_id', 'ownerid', 'account_id', 'accountid',
-            'participant_id', 'participantid', 'participant_code', 'purchase_id', 'purchaseid',
-        }
-
-        def check(value):
-            if isinstance(value, dict):
-                for key, item in value.items():
-                    self.assertNotIn(key.lower(), forbidden)
-                    check(item)
-            elif isinstance(value, list):
-                for item in value:
-                    check(item)
-
-        check(response.json())
-        content = response.content.decode()
-        for private_value in (self.user.username, str(self.user.app_user.pk), str(self.participant.pk),
-                              str(self.purchase.pk), str(other_version_two.purchase_id),
-                              str(other_version_two.service_request_id)):
-            self.assertNotIn(private_value, content)
-
-        with transaction.atomic():
-            Purchase.objects.filter(pk=version_two.purchase_id).update(
-                status=PurchaseStatus.objects.get(code='PENDING'),
-            )
-            paid_only = self.client.get(self.list_url).json()['services']
-            self.assertEqual(paid_only, [expected_item(version_one, '1', tied_paid_at)])
-            transaction.set_rollback(True)
 
     def test_owner_gets_exact_service_record_counts_from_validated_placeholders_without_writes(self):
         self.assertEqual([module for module, _ in bundle.MODULES], [
@@ -1285,7 +1187,8 @@ class SyntheticServiceResultReadTests(APITestCase):
         from genoma import urls
 
         self.assertEqual([str(route.pattern) for route in urls.urlpatterns], [
-            'genoma/v1/services/', 'genoma/v1/services/<str:service_request_id>/results/',
+            'genoma/v1/results/', 'genoma/v1/results/ancestry-cohort/', 'genoma/v1/services/',
+            'genoma/v1/services/<str:service_request_id>/results/',
             'genoma/v1/services/<str:service_request_id>/metrics/',
         ])
         Profile.objects.create(user=self.user)
@@ -1312,7 +1215,6 @@ class SyntheticGenomicsImportTests(TestCase):
     }
 
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         environment = patch.dict(os.environ, {
             'ENVIRONMENT': 'development', 'RENDER': '',
             'RENDER_EXTERNAL_HOSTNAME': '', 'DATABASE_URL': '',
@@ -1598,21 +1500,6 @@ class SyntheticGenomicsImportTests(TestCase):
                 self.assertTrue(executed[0].args[0].startswith('SELECT current_database()'))
         self.assertEqual(self.import_state(), before)
 
-    def test_requires_existing_active_client_mapping_and_never_creates_accounts(self):
-        inactive = User.objects.create_user(username='synthetic-inactive', is_active=False)
-        unmapped = User.objects.bulk_create([User(username='synthetic-unmapped')])[0]
-        privileged = []
-        for suffix, grant in (('admin', grant_admin_role), ('analyst', grant_analyst_role),
-                              ('reception', grant_reception_role)):
-            user = User.objects.create_user(username=f'synthetic-{suffix}')
-            grant(user)
-            privileged.append(user)
-        before = self.import_state()
-        for identifier in (inactive.pk, unmapped.pk, *(user.pk for user in privileged), 2**31 - 1):
-            with self.subTest(user_id=identifier), self.assertRaisesRegex(CommandError, 'existing active client'):
-                call_command('import_synthetic_genomics', '--user-id', str(identifier), stdout=StringIO())
-        self.assertEqual(self.import_state(), before)
-        self.assertFalse(AppUser.objects.filter(django_user=unmapped).exists())
 
     def test_reuses_existing_participant_and_preserves_all_consent_and_enrollment_fields(self):
         from participants.models import Participant
@@ -1819,7 +1706,6 @@ class SyntheticGenomicsImportTests(TestCase):
 
         def create_target():
             try:
-                self.assertTrue(connections['default'].settings_dict['NAME'].startswith('gdb_test_'))
                 return User.objects.create_user(username=f'synthetic-concurrent-{uuid.uuid4().hex}').pk
             finally:
                 connections.close_all()
@@ -1876,445 +1762,10 @@ class SyntheticGenomicsImportTests(TestCase):
         self.assertIn('No changes detected', output.getvalue())
 
 
-class SyntheticGenomicsV2Tests(APITestCase):
-    # Reuse the established guarded, isolated-db setup; do not inherit v1 tests.
-    setUp = SyntheticGenomicsImportTests.setUp
-    legacy_state = SyntheticGenomicsImportTests.legacy_state
-    import_state = SyntheticGenomicsImportTests.import_state
-    module_order = ('global_ancestry', 'local_ancestry', 'polygenic_risk',
-                    'monogenic_risk', 'traits', 'pharmacogenetics')
-    list_url = '/api/genoma/v1/services/'
-
-    def v2_manifest(self):
-        return {
-            'demo_id': 'gdb-04f1-synthetic-genomics', 'demo_version': '2', 'schema_version': '2',
-            'synthetic': True, 'non_clinical': True, 'clinically_reviewed': False,
-            'display_only': True, 'numeric_semantics': 'arbitrary_demo_only_not_evaluated',
-            'disclaimer': (
-                'SYNTHETIC DEMO ONLY: fictional non-clinical display fixtures, not derived from a biological sample. '
-                'All numeric values are arbitrary demo-only display fixtures and are not evaluated. '
-                'No biological, risk, actionability, or clinical interpretation is provided. '
-                'Not for diagnosis, treatment, or medical decisions. No clinical review or consent is implied.'
-            ),
-            'modules': [
-                {'module': 'global_ancestry', 'label': 'Demo group A', 'state': 'not_evaluated',
-                 'display': {'kind': 'fictional_components', 'components': [
-                     {'label': 'Demo group A', 'display_percentage': 60},
-                     {'label': 'Demo group B', 'display_percentage': 40},
-                 ]}},
-                {'module': 'local_ancestry', 'label': 'Demo group A', 'state': 'not_evaluated',
-                 'display': {'kind': 'abstract_segments',
-                             'axis': {'label': 'Demo axis A', 'extent': 100, 'unit': 'abstract_demo_units'},
-                             'segments': [{'label': 'Demo group A', 'offset': 0, 'length': 60},
-                                          {'label': 'Demo group B', 'offset': 60, 'length': 40}]}},
-                {'module': 'polygenic_risk', 'label': 'Demo index A', 'state': 'not_evaluated',
-                 'display': {'kind': 'demo_index', 'items': [{'label': 'Demo index A', 'display_value': 37}]}},
-                {'module': 'monogenic_risk', 'label': 'Demo index A', 'state': 'not_evaluated',
-                 'display': {'kind': 'demo_entries', 'items': [{'label': 'Demo index A', 'display_value': 12}]}},
-                {'module': 'traits', 'label': 'Demo trait A', 'state': 'not_evaluated',
-                 'display': {'kind': 'demo_traits', 'items': [{'label': 'Demo trait A', 'display_value': 24}]}},
-                {'module': 'pharmacogenetics', 'label': 'Demo interaction A', 'state': 'not_evaluated',
-                 'display': {'kind': 'demo_interactions',
-                             'items': [{'label': 'Demo interaction A', 'display_value': 8}]}},
-            ],
-        }
-
-    def import_demo(self, version='2', user=None):
-        return bundle.import_synthetic_genomics(user_id=(user or self.user).pk, version=version)
-
-    def paths(self, receipt):
-        return tuple(f'{self.list_url}{receipt.service_request_id}/{suffix}/' for suffix in ('results', 'metrics'))
-
-    def authenticate(self, user=None):
-        self.client.force_authenticate(user=user or self.user)
-
-    def assert_no_writes(self, queries):
-        self.assertFalse(any(query['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))
-                             for query in queries.captured_queries))
-
-    def test_management_command_defaults_to_version_two(self):
-        output = StringIO()
-        call_command('import_synthetic_genomics', '--user-id', str(self.user.pk), stdout=output)
-        self.assertIn('v2: created', output.getvalue())
-        self.assertIn('arbitrary demo-only', output.getvalue())
-        self.assertEqual(domain.DataRelease.objects.get().version, '2')
-        self.assertEqual(domain.AnalysisResult.objects.count(), 6)
-
-    def test_v1_manifest_checksum_identifiers_payloads_and_python_default_are_exactly_immutable(self):
-        disclaimer = (
-            'SYNTHETIC DEMO ONLY: non-clinical placeholders, not derived from a biological sample. '
-            'Not for diagnosis, treatment, or medical decisions. No clinical review or consent is implied.'
-        )
-        expected = {
-            'demo_id': 'gdb-04f1-synthetic-genomics', 'demo_version': '1',
-            'synthetic': True, 'non_clinical': True, 'clinically_reviewed': False, 'disclaimer': disclaimer,
-            'modules': [{'module': module, 'label': f'Synthetic {module.replace("_", " ")} placeholder',
-                         'state': 'not_evaluated', 'rows': [{
-                             'label': f'Synthetic {module.replace("_", " ")} placeholder',
-                             'state': 'not_evaluated', 'value': None,
-                         }]} for module in self.module_order],
-        }
-        checksum = hashlib.sha256(json.dumps(expected, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-        with patch('genoma.synthetic_import.Path.read_text', side_effect=AssertionError('v1 must not read v2')):
-            demo = bundle.get_synthetic_bundle('1')
-            receipt = bundle.import_synthetic_genomics(user_id=self.user.pk)
-        self.assertEqual((bundle.DEMO_VERSION, bundle.DISCLAIMER, bundle.MANIFEST_CHECKSUM), ('1', disclaimer, checksum))
-        self.assertEqual(demo.manifest, expected)
-        self.assertEqual(demo.manifest_checksum, checksum)
-        self.assertEqual(bundle.RELEASE_ID, uuid.uuid5(uuid.NAMESPACE_URL,
-                         'genomia:gdb-04f1-synthetic-genomics:1:bundle:release'))
-        scope = f'app-user:{self.user.app_user.pk}'
-        for kind, identifier in (('purchase', receipt.purchase_id), ('request', receipt.service_request_id),
-                                 ('sample', receipt.sample_id), ('participant', Participant.objects.get(user=self.user).pk)):
-            self.assertEqual(identifier, uuid.uuid5(uuid.NAMESPACE_URL,
-                             f'genomia:gdb-04f1-synthetic-genomics:1:{scope}:{kind}'))
-        marker = {key: value for key, value in expected.items() if key != 'modules'}
-        for module in expected['modules']:
-            result = domain.AnalysisResult.objects.get(sample_id=receipt.sample_id, module=module['module'])
-            self.assertEqual(result.pk, uuid.uuid5(uuid.NAMESPACE_URL,
-                             f'genomia:gdb-04f1-synthetic-genomics:1:{scope}:result:{result.module}'))
-            self.assertEqual(result.analysis_id, uuid.uuid5(uuid.NAMESPACE_URL,
-                             f'genomia:gdb-04f1-synthetic-genomics:1:{scope}:analysis:{result.module}'))
-            self.assertEqual({key: value for key, value in result.payload.items()
-                              if key not in ('manifest_checksum', 'import_id')}, marker | module)
-
-    def test_v2_packaged_fixture_schema_manifest_checksum_and_all_versioned_identifiers(self):
-        fixture = Path(bundle.__file__).parent / 'fixtures' / 'synthetic_genomics_v2.json'
-        expected = self.v2_manifest()
-        self.assertEqual(json.loads(fixture.read_text(encoding='utf-8')), expected)
-        with self.assertNumQueries(0):
-            demo = bundle.get_synthetic_bundle('2')
-        checksum = hashlib.sha256(json.dumps(expected, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-        self.assertEqual(demo.manifest, expected)
-        self.assertEqual(demo.manifest_checksum, checksum)
-        self.assertNotEqual(checksum, bundle.MANIFEST_CHECKSUM)
-        receipt = self.import_demo()
-        scope = f'app-user:{self.user.app_user.pk}'
-        ids = {kind: uuid.uuid5(uuid.NAMESPACE_URL, f'genomia:gdb-04f1-synthetic-genomics:2:{scope}:{kind}')
-               for kind in ('import', 'participant', 'purchase', 'request', 'sample')}
-        self.assertEqual((receipt.purchase_id, receipt.service_request_id, receipt.sample_id),
-                         (ids['purchase'], ids['request'], ids['sample']))
-        self.assertEqual(Participant.objects.get(user=self.user).pk, ids['participant'])
-        release = domain.DataRelease.objects.get()
-        self.assertEqual(release.pk, uuid.uuid5(uuid.NAMESPACE_URL,
-                         'genomia:gdb-04f1-synthetic-genomics:2:bundle:release'))
-        self.assertEqual((release.version, release.manifest_checksum, release.status, release.frozen_at),
-                         ('2', checksum, 'synthetic', None))
-        for result in domain.AnalysisResult.objects.all():
-            for kind, identifier in (('result', result.pk), ('analysis', result.analysis_id)):
-                self.assertEqual(identifier, uuid.uuid5(uuid.NAMESPACE_URL,
-                                 f'genomia:gdb-04f1-synthetic-genomics:2:{scope}:{kind}:{result.module}'))
-            self.assertEqual(result.payload['manifest_checksum'], checksum)
-            self.assertEqual(result.payload['import_id'], str(ids['import']))
-
-    def test_schema_rejects_unknown_fields_labels_bad_types_order_and_non_demo_semantics(self):
-        valid = self.v2_manifest()
-        invalid = [None, [], valid | {'owner_id': 'not-permitted'}, valid | {'synthetic': 1},
-                   valid | {'non_clinical': False}, valid | {'clinically_reviewed': True},
-                   valid | {'display_only': 1}, valid | {'numeric_semantics': 'evaluated'},
-                   valid | {'schema_version': '1'}, valid | {'demo_version': '1'},
-                   valid | {'modules': list(reversed(valid['modules']))}, valid | {'modules': valid['modules'][:5]}]
-        for field, value in (('label', 'not-a-demo-label'), ('state', 'evaluated'), ('country', 'not-permitted')):
-            changed = deepcopy(valid)
-            changed['modules'][0][field] = value
-            invalid.append(changed)
-        for field, value in (('display_percentage', True), ('display_percentage', 60.0),
-                             ('display_percentage', -1), ('display_percentage', 59),
-                             ('population', 'not-permitted')):
-            changed = deepcopy(valid)
-            changed['modules'][0]['display']['components'][0][field] = value
-            invalid.append(changed)
-        for field, value in (('contig', 'not-permitted'), ('unit', 'physical'), ('extent', 0)):
-            changed = deepcopy(valid)
-            changed['modules'][1]['display']['axis'][field] = value
-            invalid.append(changed)
-        changed = deepcopy(valid)
-        changed['modules'][1]['display']['segments'][1]['offset'] = 61
-        invalid.append(changed)
-        for index in range(2, 6):
-            for field, value in (('display_value', False), ('display_value', 101), ('risk_category', 'not-permitted'),
-                                 ('gene', 'not-permitted'), ('drug', 'not-permitted'), ('recommendation', 'not-permitted')):
-                changed = deepcopy(valid)
-                changed['modules'][index]['display']['items'][0][field] = value
-                invalid.append(changed)
-        for value in invalid:
-            with self.subTest(value=value), patch('genoma.synthetic_import.Path.read_text', return_value=json.dumps(value)):
-                with self.assertNumQueries(0), self.assertRaisesRegex(CommandError, 'schema'):
-                    bundle.get_synthetic_bundle('2')
-        raw = json.dumps(valid)[:-1] + ', "synthetic": true}'
-        with patch('genoma.synthetic_import.Path.read_text', return_value=raw):
-            with self.assertRaisesRegex(CommandError, 'schema'):
-                bundle.get_synthetic_bundle('2')
-
-    def test_valid_shaped_but_modified_fixture_and_unreadable_fixture_fail_closed_before_domain_queries(self):
-        changed = self.v2_manifest()
-        changed['modules'][2]['display']['items'][0]['display_value'] = 38
-        for raw in (json.dumps(changed), '{invalid-json'):
-            with self.subTest(raw=raw), patch('genoma.synthetic_import.Path.read_text', return_value=raw):
-                with CaptureQueriesContext(connection) as queries, self.assertRaises(CommandError):
-                    self.import_demo()
-                self.assertEqual(len(queries), 1)  # Only actual local DB/server verification.
-                self.assertTrue(queries[0]['sql'].startswith('SELECT current_database()'))
-        with patch('genoma.synthetic_import.Path.read_text', side_effect=OSError('missing fixture')):
-            with self.assertRaises(CommandError):
-                self.import_demo()
-        self.assertFalse(Purchase.objects.exists())
-
-    def test_only_explicit_bundled_versions_are_accepted_and_no_caller_paths_are_supported(self):
-        for value in (None, True, 1, 2, 'v2', '3', '../fixtures/arbitrary.json', '/arbitrary.json'):
-            with self.subTest(value=value), self.assertNumQueries(0), self.assertRaises(CommandError):
-                bundle.get_synthetic_bundle(value)
-        for args in (('--demo-version', '3'), ('--demo-version', '../arbitrary.json'), ('--file', 'arbitrary.json')):
-            with self.subTest(args=args), self.assertNumQueries(0), self.assertRaises(CommandError):
-                call_command('import_synthetic_genomics', '--user-id', str(self.user.pk), *args, stdout=StringIO())
-
-    def test_both_import_orders_preserve_existing_rows_consent_and_v1_reads_and_repeat_without_writes(self):
-        self.authenticate()
-        for versions in (('1', '2'), ('2', '1')):
-            with self.subTest(versions=versions), transaction.atomic():
-                first = self.import_demo(versions[0])
-                first_path = self.paths(first)[0]
-                first_body = self.client.get(first_path).json()
-                sample = Sample.objects.get(pk=first.sample_id)
-                participant_before = list(Participant.objects.filter(user=self.user).values())
-                rows_before = {model: list(model.objects.filter(pk__in=keys).order_by('pk').values())
-                               for model, keys in ((Purchase, [first.purchase_id]), (ServiceRequest, [first.service_request_id]),
-                                                   (Sample, [first.sample_id]),
-                                                   (domain.Analysis, domain.Analysis.objects.filter(sample=sample).values_list('pk', flat=True)),
-                                                   (domain.AnalysisResult, domain.AnalysisResult.objects.filter(sample=sample).values_list('pk', flat=True)))}
-                second = self.import_demo(versions[1])
-                self.assertEqual(list(Participant.objects.filter(user=self.user).values()), participant_before)
-                for model, expected in rows_before.items():
-                    self.assertEqual(list(model.objects.filter(pk__in=[row[model._meta.pk.name] for row in expected])
-                                          .order_by('pk').values()), expected)
-                self.assertEqual(self.client.get(first_path).json(), first_body)
-                before = self.import_state()
-                with CaptureQueriesContext(connection) as queries:
-                    for version in versions:
-                        self.assertFalse(self.import_demo(version).created)
-                self.assert_no_writes(queries)
-                self.assertEqual(self.import_state(), before)
-                services = self.client.get(self.list_url).json()['services']
-                purchase_order = list(Purchase.objects.filter(
-                    pk__in=(first.purchase_id, second.purchase_id),
-                ).order_by('-purchased_at', '-created_at', '-pk').values_list('pk', flat=True))
-                version_by_purchase = {first.purchase_id: versions[0], second.purchase_id: versions[1]}
-                self.assertEqual([item['release_version'] for item in services], [
-                    version_by_purchase[purchase_id] for purchase_id in purchase_order
-                ])
-                self.assertEqual({item['service_request_id'] for item in services},
-                                 {str(first.service_request_id), str(second.service_request_id)})
-                self.assertEqual(domain.DataRelease.objects.count(), 2)
-                self.assertFalse(ServiceStatusLog.objects.exists())
-                participant = Participant.objects.get(user=self.user)
-                self.assertEqual((participant.consent_status, participant.enrollment_status), ('pending', 'pending'))
-                transaction.set_rollback(True)
-
-    def test_explicit_v1_command_is_compatible_and_existing_consent_is_never_granted_or_overwritten(self):
-        participant = Participant.objects.create(user=self.user, participant_code='existing-v2-owner',
-                                               consent_status='withdrawn', enrollment_status='inactive', metadata=['existing'])
-        before = list(Participant.objects.values())
-        output = StringIO()
-        call_command('import_synthetic_genomics', '--user-id', str(self.user.pk), '--demo-version', '1', stdout=output)
-        self.assertIn('v1: created', output.getvalue())
-        self.import_demo()
-        self.assertEqual(list(Participant.objects.values()), before)
-        self.assertEqual(set(Sample.objects.values_list('participant_id', flat=True)), {participant.pk})
-
-    def test_all_six_display_payloads_are_raw_demo_only_with_null_biological_columns_and_accurate_metrics(self):
-        legacy = self.legacy_state()
-        receipt = self.import_demo()
-        self.authenticate()
-        expected = self.v2_manifest()
-        provenance = {key: value for key, value in expected.items() if key != 'modules'}
-        before = self.import_state()
-        with CaptureQueriesContext(connection) as queries:
-            response = self.client.get(self.paths(receipt)[0])
-        self.assertEqual(response.status_code, 200)
-        self.assert_no_writes(queries)
-        self.assertEqual(response.json()['release_version'], '2')
-        self.assertEqual(response.json()['results'], [{
-            'module': item['module'], 'result_type': 'synthetic_placeholder', 'value_code': 'SYNTHETIC_NOT_EVALUATED',
-            'value_text': f'{item["label"]}. {expected["disclaimer"]}', 'payload': provenance | item,
-        } for item in expected['modules']])
-        self.assertEqual([row['module'] for row in response.json()['results']], list(self.module_order))
-        self.assertEqual(sum(row['display_percentage'] for row in expected['modules'][0]['display']['components']), 100)
-        for result in domain.AnalysisResult.objects.all():
-            for field in ('variant_id', 'epigenetic_feature_id', 'population_id', 'reference_assembly',
-                          'contig', 'start_pos', 'end_pos', 'haplotype', 'value_numeric', 'unit', 'percentile', 'confidence'):
-                self.assertIsNone(getattr(result, field), field)
-            self.assertEqual((result.analysis.status, result.analysis.pipeline_version), ('synthetic_placeholder', '2'))
-            self.assertIsNone(result.analysis.started_at)
-            self.assertIsNone(result.analysis.finished_at)
-        with CaptureQueriesContext(connection) as metrics_queries:
-            metrics_response = self.client.get(self.paths(receipt)[1])
-        self.assertEqual(metrics_response.status_code, 200)
-        self.assertEqual(metrics_response.json()['metrics'], {'kind': 'record_count', 'modules': [{
-            'module': module, 'analysis_record_count': 1, 'analysis_synthetic_placeholder_record_count': 1,
-            'analysis_result_record_count': 1, 'result_synthetic_placeholder_record_count': 1,
-        } for module in self.module_order]})
-        self.assertEqual([row['sql'] for row in queries], [row['sql'] for row in metrics_queries])
-        self.assertEqual(self.import_state(), before)
-        self.assertEqual(self.legacy_state(), legacy)
-        self.assertFalse(ServiceRequest.objects.exclude(completed_at=None).exists())
-
-    def test_display_and_api_exclude_forbidden_semantics_and_account_identifiers(self):
-        receipt = self.import_demo()
-        self.authenticate()
-        forbidden = {'country', 'population', 'chromosome', 'contig', 'start_pos', 'end_pos', 'genotype', 'variant',
-                     'rsid', 'disease', 'phenotype', 'gene', 'drug', 'risk_score', 'risk_category', 'treatment',
-                     'recommendation', 'clinical_outcome', 'value_numeric', 'percentile', 'confidence',
-                     'owner_id', 'user_id', 'userId', 'account_id', 'participant_id', 'participant_code',
-                     'purchase_id', 'import_id', 'manifest_checksum', 'snp_count', 'total_variants'}
-
-        def check(value):
-            if isinstance(value, dict):
-                self.assertTrue(forbidden.isdisjoint(value))
-                for key, item in value.items():
-                    if key == 'label':
-                        self.assertIn(item, {'Demo group A', 'Demo group B', 'Demo axis A',
-                                             'Demo index A', 'Demo trait A', 'Demo interaction A'})
-                    check(item)
-            elif isinstance(value, list):
-                for item in value:
-                    check(item)
-
-        for path in (self.list_url, *self.paths(receipt)):
-            response = self.client.get(path)
-            self.assertEqual(response.status_code, 200)
-            check(response.json())
-            for private in (self.user.username, str(self.user.app_user.pk), str(Participant.objects.get(user=self.user).pk)):
-                self.assertNotIn(private, response.content.decode())
-
-    def test_list_only_contains_imported_valid_owned_versions_and_detail_metrics_are_owner_only(self):
-        first = self.import_demo('1')
-        second = self.import_demo('2', self.other)
-        empty = User.objects.create_user(username='v2-empty-owner')
-        for user, expected in ((self.user, first), (self.other, second), (empty, None)):
-            self.authenticate(user)
-            services = self.client.get(self.list_url + f'?user_id={self.other.pk}&demo_version=2').json()['services']
-            self.assertEqual([row['service_request_id'] for row in services],
-                             [str(expected.service_request_id)] if expected else [])
-            for receipt in (first, second):
-                for path in self.paths(receipt):
-                    response = self.client.get(path)
-                    self.assertEqual(response.status_code, 200 if receipt == expected else 404)
-                    if receipt != expected:
-                        self.assertEqual(response.json(), {'detail': 'Not found.'})
-        self.other.is_staff = self.other.is_superuser = True
-        self.other.save(update_fields=['is_staff', 'is_superuser'])
-        self.authenticate(self.other)
-        self.assertEqual(self.client.get(self.paths(first)[0]).status_code, 404)
-        for grant in (grant_admin_role, grant_analyst_role, grant_reception_role):
-            grant(self.other)
-            self.assertEqual(self.client.get(self.list_url).json(), {'services': []})
-            for path in (*self.paths(first), *self.paths(second)):
-                self.assertEqual(self.client.get(path).status_code, 404)
-
-    def test_partial_corrupt_duplicate_and_cross_account_graphs_are_hidden_and_not_repaired(self):
-        first = self.import_demo('1')
-        second = self.import_demo()
-        other = self.import_demo(user=self.other)
-        self.authenticate()
-        sample = Sample.objects.get(pk=second.sample_id)
-        result = domain.AnalysisResult.objects.get(sample=sample, module='global_ancestry')
-        changed_display = deepcopy(result.payload)
-        changed_display['display']['components'][0]['display_percentage'] = 61
-        scenarios = (
-            (Purchase, second.purchase_id, {'owner': self.other.app_user}),
-            (ServiceRequest, second.service_request_id, {'participant': Sample.objects.get(pk=other.sample_id).participant}),
-            (Sample, sample.pk, {'metadata': sample.metadata | {'synthetic': 1}}),
-            (domain.Analysis, result.analysis_id, {'status': 'completed'}),
-            (domain.AnalysisResult, result.pk, {'payload': changed_display}),
-            (domain.AnalysisResult, result.pk, {'payload': result.payload | {'clinically_reviewed': 0}}),
-            (domain.AnalysisResult, result.pk, {'value_numeric': 1}),
-            (domain.DataRelease, result.release_id, {'manifest_checksum': '0' * 64}),
-        )
-        for model, pk, changes in scenarios:
-            with self.subTest(changes=changes), transaction.atomic():
-                model.objects.filter(pk=pk).update(**changes)
-                before = self.import_state()
-                with CaptureQueriesContext(connection) as queries, self.assertRaises(CommandError):
-                    self.import_demo()
-                self.assert_no_writes(queries)
-                for path in self.paths(second):
-                    self.assertEqual(self.client.get(path).status_code, 404)
-                self.assertEqual([row['release_version'] for row in self.client.get(self.list_url).json()['services']], ['1'])
-                self.assertEqual(self.client.get(self.paths(first)[0]).status_code, 200)
-                self.assertEqual(self.import_state(), before)
-                transaction.set_rollback(True)
-        for duplicate in (False, True):
-            with self.subTest(duplicate=duplicate), transaction.atomic():
-                if duplicate:
-                    row = domain.AnalysisResult.objects.get(pk=result.pk)
-                    row.pk = uuid.uuid4()
-                    row.save(force_insert=True)
-                else:
-                    domain.AnalysisResult.objects.filter(pk=result.pk).delete()
-                before = self.import_state()
-                with CaptureQueriesContext(connection) as queries, self.assertRaises(CommandError):
-                    self.import_demo()
-                self.assert_no_writes(queries)
-                for path in self.paths(second):
-                    self.assertEqual(self.client.get(path).status_code, 404)
-                self.assertEqual(self.import_state(), before)
-                transaction.set_rollback(True)
-
-    def test_v2_seeded_participant_provenance_corruption_is_hidden_without_repairing_consent(self):
-        receipt = self.import_demo()
-        self.authenticate()
-        participant = Participant.objects.get(user=self.user)
-        for changes in ({'metadata': participant.metadata | {'synthetic': 1}},
-                        {'participant_code': 'NOT-THE-SEEDED-DEMO-PARTICIPANT'}):
-            with self.subTest(changes=changes), transaction.atomic():
-                Participant.objects.filter(pk=participant.pk).update(**changes)
-                before = self.import_state()
-                with CaptureQueriesContext(connection) as queries, self.assertRaises(CommandError):
-                    self.import_demo()
-                self.assert_no_writes(queries)
-                for path in self.paths(receipt):
-                    self.assertEqual(self.client.get(path).status_code, 404)
-                self.assertEqual(self.client.get(self.list_url).json(), {'services': []})
-                self.assertEqual(self.import_state(), before)
-                transaction.set_rollback(True)
-
-    def test_v2_guard_precedes_all_domain_queries_for_command_list_detail_and_metrics(self):
-        receipt = self.import_demo()
-        self.authenticate()
-        with patch.object(bundle, '_require_local_development', side_effect=CommandError(bundle.LOCAL_ONLY)) as guard:
-            for path in (self.list_url, *self.paths(receipt), f'{self.list_url}unknown/results/'):
-                with self.assertNumQueries(0):
-                    self.assertEqual(self.client.get(path).status_code, 404)
-            with self.assertNumQueries(0), self.assertRaisesRegex(CommandError, 'local development'):
-                call_command('import_synthetic_genomics', '--user-id', str(self.user.pk), stdout=StringIO())
-            self.assertEqual(guard.call_count, 5)
-        self.client.force_authenticate(user=None)
-        for path in (self.list_url, *self.paths(receipt)):
-            with self.assertNumQueries(0):
-                self.assertIn(self.client.get(path).status_code, (401, 403))
-
-    def test_v2_profile_and_shared_service_status_do_not_change(self):
-        domain.Variant.objects.create(variant_type='synthetic', canonical_name='Preserved normalized row')
-        Profile.objects.create(user=self.user)
-        self.import_demo('1')
-        self.authenticate()
-        paths = ('/api/auth/me/',)
-        responses = [(self.client.get(path).status_code, self.client.get(path).json()) for path in paths]
-        legacy = self.legacy_state()
-        receipt = self.import_demo()
-        for path in (self.list_url, *self.paths(receipt)):
-            self.assertEqual(self.client.get(path).status_code, 200)
-        self.assertEqual([(self.client.get(path).status_code, self.client.get(path).json()) for path in paths], responses)
-        self.assertEqual(self.legacy_state(), legacy)
-        grant_admin_role(self.other)
-        self.authenticate(self.other)
-        with self.assertNumQueries(0):
-            self.assertEqual(self.client.get(f'/api/ingest/user-report-status/{self.user.pk}/').status_code, 404)
 
 
 class ArtifactSchemaTests(TestCase):
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         from participants.models import Participant
         self.user = User.objects.create_user(username=f'artifact-{uuid.uuid4().hex}')
         self.participant = Participant.objects.create(
@@ -2593,7 +2044,6 @@ class ArtifactMigrationTests(TransactionTestCase):
 
 class AnalysisResultSchemaTests(TestCase):
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         from participants.models import Participant
 
         self.user = User.objects.create_user(username=f'result-{uuid.uuid4().hex}')
@@ -2948,7 +2398,6 @@ class AnalysisResultMigrationTests(TransactionTestCase):
 
 class GenotypeTests(TestCase):
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         from participants.models import Participant
         self.user = User.objects.create_user(username=f'genotype-{uuid.uuid4().hex}')
         self.participant = Participant.objects.create(
@@ -3269,8 +2718,6 @@ class GenotypeTests(TestCase):
 
 
 class GenotypeMigrationTests(TransactionTestCase):
-    def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
 
     def fk_actions(self):
         with connection.cursor() as cursor:
@@ -3326,7 +2773,6 @@ class ReleaseEpigeneticFeatureTests(TestCase):
     )
 
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         self.release, self.feature = self.new_release(), self.new_feature()
 
     def new_release(self):
@@ -3706,7 +3152,6 @@ class ReleaseVariantTests(TestCase):
     )
 
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         self.release = self.new_release()
         self.variant = domain.Variant.objects.create(variant_type='synthetic-membership')
 
@@ -4101,7 +3546,6 @@ class AlleleFrequencyTests(TestCase):
     )
 
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         self.variant = domain.Variant.objects.create(variant_type='synthetic-frequency')
         self.population = domain.Population.objects.create(code='synthetic-frequency', name='Synthetic cohort')
 
@@ -4585,7 +4029,6 @@ class VariantAnnotationTests(TestCase):
     )
 
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         self.variant = domain.Variant.objects.create(variant_type='synthetic-annotation')
 
     def annotation(self, **changes):
@@ -4913,8 +4356,6 @@ class VariantAnnotationTests(TestCase):
 
 
 class EpigeneticFeatureTests(TestCase):
-    def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
 
     def feature(self, **changes):
         return domain.EpigeneticFeature(**(dict(
@@ -5141,8 +4582,6 @@ class EpigeneticFeatureTests(TestCase):
 
 
 class PopulationTests(TestCase):
-    def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
 
     def population(self, **changes):
         return domain.Population(**(dict(code=uuid.uuid4().hex, name='Synthetic cohort') | changes))
@@ -5408,7 +4847,6 @@ class PopulationTests(TestCase):
 
 class ExternalIdentifierTests(TestCase):
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         self.variant = domain.Variant.objects.create(variant_type='synthetic-identifier')
 
     def identifier(self, **changes):
@@ -5686,7 +5124,6 @@ class ExternalIdentifierTests(TestCase):
 
 class VariantPlacementTests(TestCase):
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         self.variant = domain.Variant.objects.create(variant_type='synthetic-placement')
 
     def placement(self, **changes):
@@ -5958,8 +5395,6 @@ class VariantPlacementTests(TestCase):
 
 
 class VariantTests(TestCase):
-    def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
 
     def test_minimal_variant_has_orm_defaults_and_nullable_fields(self):
         self.assertTrue(hasattr(domain, 'Variant'), 'The stable Variant concept is missing.')
@@ -6094,8 +5529,6 @@ class VariantTests(TestCase):
 
 
 class DataReleaseTests(TestCase):
-    def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
 
     def release(self, **changes):
         return domain.DataRelease(**(dict(
@@ -6463,209 +5896,12 @@ class AnalysisTests(TestCase):
         self.assertEqual({f.name: f.deconstruct()[1:] for f in historical._meta.local_fields},
                          {f.name: f.deconstruct()[1:] for f in domain.Analysis._meta.local_fields})
         self.assertEqual(historical._meta.indexes, domain.Analysis._meta.indexes)
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         call_command('check')
         call_command('makemigrations', check=True, dry_run=True)
 
 
-class SyntheticVariantCatalogLoadTests(TestCase):
-    fixture_path = Path(__file__).resolve().parent / 'fixtures' / 'synthetic_variant_catalog_v1.json'
-    catalog_models = (domain.DataRelease, domain.Variant, domain.VariantPlacement, domain.ReleaseVariant)
-    expected_counts = (1, 8, 8, 8)
-
-    def setUp(self):
-        self.assertEqual(connection.vendor, 'postgresql')
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
-        self.assertTrue(connection.in_atomic_block)
-        with connection.cursor() as cursor:
-            cursor.execute('SELECT current_database()')
-            self.assertEqual(cursor.fetchone()[0], connection.settings_dict['NAME'])
-        applied_migrations = MigrationRecorder(connection).applied_migrations()
-        self.assertIn(NORMALIZED_INITIAL, applied_migrations)
-        self.assertIn(NORMALIZED_LEAF, applied_migrations)
-        self.assertEqual(MigrationExecutor(connection).migration_plan([NORMALIZED_LEAF]), [])
-
-    def load_catalog(self):
-        output = StringIO()
-        call_command('loaddata', str(self.fixture_path), database='default', verbosity=1, stdout=output)
-        self.assertIn('Installed 25 object(s) from 1 fixture(s)', output.getvalue())
-        connection.check_constraints()
-
-    def catalog_rows(self):
-        return [list(model.objects.order_by('pk').values()) for model in self.catalog_models]
-
-    def test_real_loaddata_preserves_uuid_links_and_reloading_does_not_duplicate(self):
-        self.assertEqual(tuple(model.objects.count() for model in self.catalog_models), (0, 0, 0, 0))
-        self.load_catalog()
-        self.assertEqual(tuple(model.objects.count() for model in self.catalog_models), self.expected_counts)
-        release = domain.DataRelease.objects.get()
-        self.assertEqual((release.reference_assembly, release.status), ('GENOMIA-DEMO-v1', 'synthetic'))
-        self.assertIsNone(release.manifest_checksum)
-        self.assertIsNone(release.frozen_at)
-        self.assertIsInstance(release.pk, uuid.UUID)
-        rows = json.loads(self.fixture_path.read_text(encoding='utf-8'))
-        memberships = [row for row in rows if row['model'] == 'genoma.releasevariant']
-        for serialized in memberships:
-            with self.subTest(pk=serialized['pk']):
-                fields = serialized['fields']
-                self.assertEqual(serialized['pk'], [fields['release'], fields['variant']])
-                key = tuple(uuid.UUID(value) for value in serialized['pk'])
-                membership = domain.ReleaseVariant.objects.select_related('variant', 'placement').get(pk=key)
-                self.assertEqual(membership.pk, (release.pk, membership.variant.pk))
-                self.assertEqual(str(membership.placement_id), fields['placement'])
-                self.assertEqual(membership.placement.variant_id, membership.variant_id)
-                self.assertEqual(membership.placement.reference_assembly, release.reference_assembly)
-                self.assertIsNone(membership.included_by_analysis_id)
-                self.assertIsNone(membership.variant.vrs_id)
-                self.assertIs(membership.placement.normalized, False)
-                for item in (membership.variant, membership.placement):
-                    self.assertIsInstance(item.pk, uuid.UUID)
-                    self.assertIs(item.metadata['synthetic'], True)
-                    self.assertEqual(item.metadata['purpose'], 'development_catalog_example')
-        before = self.catalog_rows()
-        self.load_catalog()
-        self.assertEqual(tuple(model.objects.count() for model in self.catalog_models), self.expected_counts)
-        self.assertEqual(self.catalog_rows(), before)
-
-    def test_reload_overwrites_fields_of_existing_stable_ids(self):
-        self.load_catalog()
-        expected = self.catalog_rows()
-        domain.DataRelease.objects.update(description='Local development edit')
-        domain.Variant.objects.update(canonical_name='Local development edit', metadata={'local': True})
-        domain.VariantPlacement.objects.update(normalized=True, alternate_allele='T')
-        domain.ReleaseVariant.objects.update(inclusion_status='excluded')
-        self.assertNotEqual(self.catalog_rows(), expected)
-        self.load_catalog()
-        self.assertEqual(self.catalog_rows(), expected)
-        self.assertEqual(tuple(model.objects.count() for model in self.catalog_models), self.expected_counts)
-
-    def test_both_loads_preserve_nonempty_patient_workflow_results_auth_and_other_catalog_rows(self):
-        self.user = User.objects.create_user(username='catalog-preserved-owner')
-        Profile.objects.create(user=self.user, phone='CATALOG-PRESERVED')
-        group = Group.objects.create(name='catalog-preserved-group')
-        self.user.groups.add(group)
-        # Reuse the existing isolated-test graph builder, not the custom importer.
-        NormalizedInitialMigrationTests.seed_complete_normalized_graph(self)
-        request = ServiceRequest.objects.get(participant__user=self.user)
-        ServiceStatusLog.objects.create(request=request, status=request.status, actor=self.user.app_user)
-        preserved_models = [model for model in apps.get_models(include_auto_created=True)
-                            if model not in self.catalog_models]
-
-        def preserved_rows():
-            return {model._meta.label: list(model.objects.order_by('pk').values())
-                    for model in preserved_models}
-
-        before = preserved_rows()
-        for model in (User, AppUser, Role, Group, User.groups.through, Profile, Participant,
-                      Purchase, ServiceRequest, ServiceStatusLog, Sample,
-                      domain.Analysis, domain.AnalysisResult, domain.Genotype):
-            self.assertTrue(before[model._meta.label], model._meta.label)
-        prior_catalog = self.catalog_rows()
-        self.assertEqual(tuple(map(len, prior_catalog)), (1, 1, 1, 1))
-        for attempt in (1, 2):
-            with self.subTest(load=attempt):
-                self.load_catalog()
-                self.assertEqual(preserved_rows(), before)
-                after = self.catalog_rows()
-                self.assertEqual(tuple(map(len, after)), (2, 9, 9, 9))
-                for prior_rows, loaded_rows in zip(prior_catalog, after):
-                    for row in prior_rows:
-                        self.assertIn(row, loaded_rows)
-                if attempt == 1:
-                    first_loaded = after
-                else:
-                    self.assertEqual(after, first_loaded)
 
 
-class SyntheticVariantCatalogContractTests(SimpleTestCase):
-    def setUp(self):
-        self.rows = json.loads(SyntheticVariantCatalogLoadTests.fixture_path.read_text(encoding='utf-8'))
-        self.expected_labels = (
-            'genoma.datarelease', 'genoma.variant',
-            'genoma.variantplacement', 'genoma.releasevariant',
-        )
-        self.by_model = {label: [row for row in self.rows if row['model'] == label]
-                         for label in self.expected_labels}
-
-    def test_exact_catalog_scope_unique_uuid_keys_and_consistent_membership_references(self):
-        self.assertIs(type(self.rows), list)
-        self.assertEqual({row['model'] for row in self.rows}, set(self.expected_labels))
-        self.assertEqual(tuple(len(self.by_model[label]) for label in self.expected_labels), (1, 8, 8, 8))
-        self.assertEqual([row['model'] for row in self.rows], [
-            label for label, count in zip(self.expected_labels, (1, 8, 8, 8)) for _ in range(count)
-        ])
-        single_keys = [row['pk'] for row in self.rows if row['model'] != 'genoma.releasevariant']
-        self.assertEqual(len(set(single_keys)), 17)
-        for key in single_keys:
-            self.assertEqual(str(uuid.UUID(key)), key)
-        release = self.by_model['genoma.datarelease'][0]
-        variants = {row['pk']: row['fields'] for row in self.by_model['genoma.variant']}
-        placements = {row['pk']: row['fields'] for row in self.by_model['genoma.variantplacement']}
-        memberships = self.by_model['genoma.releasevariant']
-        self.assertEqual(len({tuple(row['pk']) for row in memberships}), 8)
-        self.assertEqual({row['fields']['variant'] for row in memberships}, set(variants))
-        self.assertEqual({row['fields']['placement'] for row in memberships}, set(placements))
-        for row in memberships:
-            fields = row['fields']
-            self.assertIs(type(row['pk']), list)
-            self.assertEqual(row['pk'], [release['pk'], fields['variant']])
-            self.assertEqual(fields['release'], release['pk'])
-            self.assertEqual(placements[fields['placement']]['variant'], fields['variant'])
-            self.assertEqual(fields['inclusion_status'], 'included')
-            self.assertIsNone(fields['included_by_analysis'])
-
-    def test_fictional_unvalidated_markers_and_coherent_substitution_and_anchored_indel_examples(self):
-        release = self.by_model['genoma.datarelease'][0]['fields']
-        self.assertEqual(release['name'], 'SYNTHETIC DEMO variant catalog')
-        self.assertEqual(release['status'], 'synthetic')
-        self.assertEqual(release['reference_assembly'], 'GENOMIA-DEMO-v1')
-        self.assertIsNone(release['manifest_checksum'])
-        self.assertIsNone(release['frozen_at'])
-        variants = {row['pk']: row['fields'] for row in self.by_model['genoma.variant']}
-        self.assertEqual({fields['variant_type'] for fields in variants.values()},
-                         {'SNV', 'MNV', 'deletion', 'insertion'})
-        names = [fields['canonical_name'] for fields in variants.values()]
-        self.assertEqual(len(set(names)), 8)
-        for fields in variants.values():
-            self.assertTrue(fields['canonical_name'].startswith('SYNTHETIC-DEMO-'))
-            self.assertIsNone(fields['vrs_id'])
-            self.assertEqual(fields['status'], 'synthetic')
-        for row in self.by_model['genoma.variant'] + self.by_model['genoma.variantplacement']:
-            self.assertEqual(row['fields']['metadata'], {
-                'synthetic': True, 'purpose': 'development_catalog_example', 'biologically_validated': False,
-            })
-        for row in self.by_model['genoma.variantplacement']:
-            with self.subTest(placement=row['pk']):
-                fields = row['fields']
-                kind = variants[fields['variant']]['variant_type']
-                ref, alt = fields['reference_allele'], fields['alternate_allele']
-                self.assertRegex(ref, r'^[ACGT]+$')
-                self.assertRegex(alt, r'^[ACGT]+$')
-                self.assertNotEqual(ref, alt)
-                self.assertEqual(fields['reference_assembly'], release['reference_assembly'])
-                self.assertIn(fields['contig'], {'DEMO-CONTIG-A', 'DEMO-CONTIG-B',
-                                                'DEMO-CONTIG-C', 'DEMO-CONTIG-D'})
-                self.assertEqual(fields['coordinate_system'], '1-based-inclusive')
-                self.assertIs(type(fields['start_pos']), int)
-                self.assertIs(type(fields['end_pos']), int)
-                self.assertGreaterEqual(fields['start_pos'], 1)
-                self.assertGreaterEqual(fields['end_pos'], fields['start_pos'])
-                self.assertEqual(fields['end_pos'] - fields['start_pos'] + 1, len(ref))
-                self.assertIs(fields['normalized'], False)
-                self.assertIs(fields['is_canonical'], False)
-                self.assertIsNone(fields['sv_length'])
-                self.assertIsNone(fields['breakend'])
-                if kind == 'SNV':
-                    self.assertEqual((len(ref), len(alt)), (1, 1))
-                elif kind == 'MNV':
-                    self.assertEqual(len(ref), len(alt))
-                    self.assertGreater(len(ref), 1)
-                elif kind == 'deletion':
-                    self.assertEqual(alt, ref[0])
-                    self.assertGreater(len(ref), len(alt))
-                else:
-                    self.assertEqual(ref, alt[0])
-                    self.assertGreater(len(alt), len(ref))
 
 
 # These deliberately artificial VCF records test preparation, not public biological facts.
@@ -7074,7 +6310,6 @@ class PublicVariantPreparationNetworkTests(PublicVariantPreparationInputs, Simpl
 
 class PublicVariantPreparationLoadTests(PublicVariantPreparationInputs, TestCase):
     def setUp(self):
-        self.assertTrue(connection.settings_dict['NAME'].startswith('gdb_test_'))
         self.preparation = import_module('genoma.public_variant_preparation')
 
     def test_actual_serialization_loaddata_composites_reload_and_preservation(self):

@@ -10,15 +10,13 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from accounts.models import (
-    EmailVerification, PasswordResetToken, RegistrationEmailChallenge, RevokedToken, WelcomeStatus,
-)
+from accounts.models import PasswordResetToken, RevokedToken, WelcomeStatus
 from accounts.roles import grant_admin_role, grant_analyst_role, grant_reception_role
 from genoma.models import (
     AlleleFrequency, Analysis, AnalysisResult, Artifact, DataRelease, EpigeneticFeature, ExternalIdentifier,
     Genotype, Population, ReleaseEpigeneticFeature, ReleaseVariant, Variant, VariantAnnotation, VariantPlacement,
 )
-from genoma.synthetic_import import _require_local_development, import_synthetic_genomics
+from genoma.synthetic_import import _require_local_development
 from participants.codes import ensure_client_code
 from participants.models import Observation, Participant, ParticipantMetadata, ParticipantMetadataLink
 from profiles.models import Profile
@@ -30,10 +28,10 @@ PASSWORD = 'GenomIA-dev-2026!'
 STAFF = (('admin.dev', 'Ada', 'Admin', grant_admin_role),
          ('analista.dev', 'Ana', 'Analista', grant_analyst_role),
          ('recepcion.dev', 'Raúl', 'Recepción', grant_reception_role))
-# One client per service state; 'DEMO' gets the bundled synthetic genomics demo the result pages read.
+# One client per service state. Full result pages for any client: manage.py poblar_usuario --email ...
 CLIENTS = (('cliente.sin_compra', None), ('cliente.esperando', 'WAITING_SAMPLE'),
            ('cliente.muestra', 'SAMPLE_RECEIVED'), ('cliente.procesando', 'PROCESSING'),
-           ('cliente.completo', 'COMPLETED'), ('cliente.demo', 'DEMO'))
+           ('cliente.completo', 'COMPLETED'))
 POPULATIONS = (('AMR', 'Americas', None, False, False), ('CHL', 'Chile', 'AMR', True, False),
                ('MAPUCHE_MASKED', 'Mapuche (masked)', 'CHL', True, True), ('EUR', 'Europe', None, False, False),
                ('AFR', 'Africa', None, False, False), ('EAS', 'East Asia', None, False, False))
@@ -83,12 +81,10 @@ class Command(BaseCommand):
         for index, (username, state) in enumerate(CLIENTS, start=len(STAFF)):
             user = self.create_account(users, username, username.split('.')[1].replace('_', ' ').title(),
                                        'Cliente', index)
-            if state == 'DEMO':
-                import_synthetic_genomics(user_id=user.pk, version='2')
-            elif state:
+            if state:
                 self.seed_client_service(user, state, index)
             else:
-                ensure_client_code(user)  # Same Sample ID a verified client gets in the welcome email.
+                ensure_client_code(user)  # Same Sample ID a client gets after submitting purchase data.
         self.seed_account_tokens(users.get(username='cliente.esperando'))
 
     def create_account(self, users, username, first, last, index):
@@ -282,13 +278,8 @@ class Command(BaseCommand):
                                 checksum_sha256=_checksum(report_uri), size_bytes=250_000)
 
     def seed_account_tokens(self, user):
-        EmailVerification.objects.create(user=user, email=user.email, is_verified=True, verified_at=self.now,
-                                         expires_at=self.now + timedelta(days=1))
         PasswordResetToken.objects.create(user=user, expires_at=self.now - timedelta(hours=1), used=True)
         RevokedToken.objects.create(jti='seed-dev-revoked-token', user=user, expires_at=self.now - timedelta(hours=1))
-        RegistrationEmailChallenge.objects.create(email='nuevo.registro@genomia.dev',
-                                                  code_hash=_checksum('seed-not-a-real-code'),
-                                                  expires_at=self.now + timedelta(minutes=10))
 
     def report(self):
         empty = []

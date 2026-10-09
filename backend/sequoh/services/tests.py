@@ -834,7 +834,7 @@ class ConfirmPaymentTests(ServiceFlowTestCase):
     def test_sample_reuses_the_welcome_client_code_and_repeat_purchases_get_a_suffix(self):
         from participants.codes import ensure_client_code
 
-        code = ensure_client_code(self.owner)  # Issued with the welcome email after verification.
+        code = ensure_client_code(self.owner)  # Issued when the client submits purchase data.
         self.assertRegex(code, r'^GX-[0-9A-F]{8}$')
         self.assertIsNone(ensure_client_code(self.analyst))  # Staff never get a client code.
         first = self.confirm()
