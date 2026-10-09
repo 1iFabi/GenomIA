@@ -338,12 +338,18 @@
   font-weight: 600;
   font-size: 16px;
   margin-top: 4px;
-  transition: background var(--genomia-motion-duration-fast) ease, transform var(--genomia-motion-duration-fast) ease, opacity var(--genomia-motion-duration-fast) ease;
+  transition: background var(--genomia-motion-duration-fast) ease, transform 120ms ease-out, opacity var(--genomia-motion-duration-fast) ease;
 }
 
 .login-button:hover:not(:disabled) {
   background: linear-gradient(135deg, #3b7ede 0%, #2a62a4 100%);
   transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+}
+
+/* Press: feedback en el mismo frame del pointer-down, sin esperar al click. */
+.login-button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .login-button:disabled {

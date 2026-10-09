@@ -196,6 +196,19 @@
     --genomia-motion-ease-emphasis: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
+/* Reduced motion en las páginas de acceso: las animaciones CSS pasan a instantáneas, sin slides ni
+   loops. Conservan su estado final (forwards), así que el check de éxito sigue dibujado. La entrada
+   en JS ya hace su propio cross-fade (authPanelSwap). */
+@media (prefers-reduced-motion: reduce) {
+  .auth *,
+  .auth *::before,
+  .auth *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 html {
     padding: 0;
 }
