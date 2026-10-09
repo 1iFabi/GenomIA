@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { cwd } from 'node:process';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Link, MemoryRouter, useLocation } from 'react-router-dom';
@@ -11,9 +8,10 @@ import { AuthProvider } from '../../contexts/AuthContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import Rasgos from './Rasgos';
 
-const pageStyles = readFileSync(resolve(cwd(), 'src/pages/Rasgos/Rasgos.css'), 'utf8');
 
-vi.mock('../../hooks/useLatestGenomicsResults', () => ({ useLatestGenomicsResults: vi.fn() }));
+vi.mock('../../hooks/useLatestGenomicsResults', async (importOriginal) => ({
+  ...await importOriginal(), useLatestGenomicsResults: vi.fn(),
+}));
 vi.mock('../../config/api', async (importOriginal) => ({
   ...await importOriginal(), apiRequest: vi.fn(), clearToken: vi.fn(),
 }));
@@ -28,21 +26,16 @@ vi.mock('../../components/Sidebar/Sidebar', () => ({
   ),
 }));
 
-const provenance = {
-  synthetic: true, non_clinical: true, clinically_reviewed: false, display_only: true,
-  numeric_semantics: 'arbitrary_demo_only_not_evaluated',
-  disclaimer: 'Synthetic, non-clinical, display-only demonstration.',
-};
-const makeModule = (module = 'traits', kind = 'demo_traits', value = 24) => ({
-  module, result_type: 'synthetic_placeholder', value_code: 'SYNTHETIC_NOT_EVALUATED',
-  payload: {
-    ...provenance, module, label: 'Demo trait A', state: 'not_evaluated',
-    display: { kind, items: [{ label: 'Demo trait A', display_value: value }] },
-  },
+const disclaimer = 'Resultados de desarrollo. Solo el riesgo monogénico usa datos reales de ClinVar; '
+  + 'el resto es simulado y no tiene valor clínico.';
+const makeTrait = (result = 'Rápido', overrides = {}) => ({
+  trait: 'cafeina', label: 'Metabolismo de la cafeína', category: 'Metabolismo', gene: 'CYP1A2', rsid: 'rs762551',
+  description: 'CYP1A2 elimina la cafeína.', result, explanation: `Eliminas la cafeína ${result.toLowerCase()}.`,
+  simulated: true, ...overrides,
 });
 const makeState = () => ({
-  status: 'ready', loading: false, service: { service_request_id: 'latest' }, error: null,
-  data: { ...provenance, results: [makeModule()] }, retry: vi.fn(),
+  status: 'ready', loading: false, error: null, retry: vi.fn(),
+  data: { disclaimer, sample_code: 'SEED-1', modules: { traits: [makeTrait()] } },
 });
 
 let state;
@@ -76,10 +69,15 @@ const expectNeutralCopy = () => {
     /demo|demostraci[oó]n|sint[eé]tic[oa]s?|synthetic|no[\s_-]+evaluad[oa]s?|not[\s_-]+evaluated|no cl[ií]nic[oa]s?|non[\s_-]+clinical|sin revisi[oó]n cl[ií]nica|arbitrari[oa]s?/i
   );
 };
-const expectNoValues = () => expect(container.querySelector('dd')).toBeNull();
+const expectNoValues = () => expect(container.querySelector('.rasgos-trait')).toBeNull();
+const categoryButtons = () => [...container.querySelectorAll('.rasgos-overview__legend-item')];
+const openCategory = async (name = 'Metabolismo') => {
+  await act(async () => categoryButtons().find((button) => button.textContent.includes(name)).click());
+};
 const expectShell = () => {
   expect(container.querySelector('h1')).not.toBeNull();
-  expect(container.querySelector('h1').textContent).toBe('Rasgos');
+  expect(container.querySelector('h1').textContent.replace(/\s+/g, ' ').trim()).toBe('Rasgos genéticos');
+  expect(container.querySelector('h1 .rasgos-header__accent').textContent).toBe('genéticos');
   expect(container.querySelector('main.rasgos-layout__main')).not.toBeNull();
   expect(container.querySelector('aside.rasgos-layout__sidebar nav')).not.toBeNull();
   expectNeutralCopy();
@@ -87,6 +85,8 @@ const expectShell = () => {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // jsdom lacks ResizeObserver, which the category pie chart needs to size itself.
+  window.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
   state = makeState();
   useLatestGenomicsResults.mockImplementation(() => state);
   apiRequest.mockResolvedValue({ ok: true, data: { user: { name: 'Demo account' } } });
@@ -104,21 +104,43 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-describe('normalized traits results', () => {
-  it('renders the localized category and raw value without visible or accessible disclosure copy', async () => {
-    const rawData = structuredClone(state.data);
+describe('traits results', () => {
+  it('shows trait results without the ready banner or summary disclaimer', async () => {
+    state.data.modules.traits = [makeTrait('Rápido', {
+      options: [{ result: 'Rápido', frequency: 0.5 }, { result: 'Lento', frequency: 0.48 }],
+    })];
     await renderPage();
     expectShell();
-    expect(container.querySelector('dt').textContent).toBe('Rasgo A');
-    expect(state.data).toEqual(rawData);
-    expect(container.querySelector('dd').textContent).toBe('24');
-    expect(getStatus().textContent).toBe('Datos disponibles.');
-    expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
-    expect(getStatus().getAttribute('role')).toBe('status');
-    expect(getRetry().getAttribute('aria-label')).toBe('Reintentar carga de resultados');
-    expect(container.textContent).not.toMatch(/%|predisposición|magnitud|genotipo|fenotipo|diagnóstico|predicción|promedio/i);
-    expect(getStatus().textContent).toContain('disponibles');
-    expect(getRetry()).not.toBeNull();
+    expect(categoryButtons().map((button) => button.getAttribute('aria-label')))
+      .toEqual(['Abrir categoría Metabolismo, 1 rasgo']);
+    expect(container.querySelector('.rasgos-overview__chart').getAttribute('aria-label'))
+      .toBe('Distribución de rasgos por categoría. Total: 1 rasgo.');
+    expectNoValues();
+    expect(container.querySelector('.rasgos-report__intro, .rasgos-disclaimer')).toBeNull();
+    expect(container.textContent).not.toContain(disclaimer);
+    expect(getRetry()).toBeUndefined();
+    await openCategory();
+    expect(container.querySelector('#traits-title').textContent).toBe('Metabolismo');
+    expect(container.querySelector('.rasgos-trait__title').textContent).toBe('Metabolismo de la cafeína');
+    expect(container.querySelector('.rasgos-trait__result').textContent).toBe('RápidoComo el 51% de las personas');
+    const texts = (selector) => [...container.querySelectorAll(selector)].map((node) => node.textContent);
+    expect(texts('.rasgos-bars__label')).toEqual(['RápidoTú', 'Lento']);
+    expect(texts('.rasgos-bars__value')).toEqual(['51%', '49%']);
+    const rows = [...container.querySelectorAll('.rasgos-bars__row')];
+    expect(rows.map((row) => [row.getAttribute('aria-label'), row.className.includes('is-mine'), row.tabIndex]))
+      .toEqual([
+        ['Rápido: 51% de las personas · tu resultado', true, 0],
+        ['Lento: 49% de las personas', false, 0],
+      ]);
+    expect([...container.querySelectorAll('.rasgos-bars__fill')].map((fill) => fill.style.width)).toEqual(['51%', '49%']);
+    expect(texts('.rasgos-bars__tip')).toEqual(['51% de las personas · tu resultado', '49% de las personas']);
+    expect(container.querySelector('.rasgos-bars figcaption').textContent)
+      .toBe('Cómo se reparte Metabolismo de la cafeína en las personas');
+    expect(container.querySelector('.rasgos-trait__explanation').textContent).toBe('Eliminas la cafeína rápido.');
+    expect(container.querySelector('.rasgos-trait__about').textContent).toBe('Qué hace CYP1A2CYP1A2 elimina la cafeína.');
+    expect(container.querySelector('.rasgos-trait__gene').textContent).toBe('Gen CYP1A2 · rs762551');
+    expect(container.querySelector('.rasgos-detail__pager')).toBeNull();
+    expect(container.querySelector('.rasgos-report__intro, .rasgos-disclaimer')).toBeNull();
   });
 
   it('reuses the StrictMode guard profile and retains it after the result page remounts', async () => {
@@ -135,186 +157,56 @@ describe('normalized traits results', () => {
     expect(apiRequest.mock.calls.map(([url]) => url)).toEqual([API_ENDPOINTS.ME]);
   });
 
-  it.each([0, -7.25, 137, 0.001, 1e100])('preserves raw finite value %s without units, clamping or rounding', async (value) => {
-    state.data.results[0].payload.display.items[0].display_value = value;
+  it('groups traits by category in the canonical order and returns to the overview', async () => {
+    state.data.modules.traits = [
+      makeTrait('Liso', { trait: 'cabello', label: 'Tipo de cabello', category: 'Apariencia Física' }),
+      makeTrait('Rápido'),
+      makeTrait('Tolerante', { trait: 'lactosa', label: 'Tolerancia a la lactosa' }),
+      makeTrait('Raro', { trait: 'nuevo', label: 'Rasgo nuevo', category: undefined }),
+    ];
     await renderPage();
-    expect(container.querySelector('dd').textContent).toBe(String(value));
-    expect(container.textContent).not.toMatch(/%|riesgo|puntaje|score|probabilidad|predicción|diagnóstico|tratamiento/i);
-    expect(container.querySelector('[role="img"]')).toBeNull();
+    expect(categoryButtons().map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Abrir categoría Metabolismo, 2 rasgos', 'Abrir categoría Apariencia Física, 1 rasgo',
+      'Abrir categoría Otros rasgos, 1 rasgo',
+    ]);
+    await openCategory('Metabolismo');
+    const titles = () => [...container.querySelectorAll('.rasgos-trait__title')].map((title) => title.textContent);
+    expect(titles()).toEqual(['Metabolismo de la cafeína', 'Tolerancia a la lactosa']);
+    // Without options there is no comparison bar, only the plain result.
+    expect(container.querySelector('.rasgos-trait__result').textContent).toBe('Rápido');
+    expect(container.querySelector('.rasgos-bars')).toBeNull();
+    const tabs = () => [...container.querySelectorAll('.rasgos-tabs__tab')];
+    expect(tabs().map((tab) => [tab.textContent, tab.getAttribute('aria-current')])).toEqual([
+      ['Metabolismo', 'true'], ['Apariencia Física', null], ['Otros rasgos', null],
+    ]);
+    await act(async () => tabs()[1].click());
+    expect(container.querySelector('#traits-title').textContent).toBe('Apariencia Física');
+    expect(titles()).toEqual(['Tipo de cabello']);
+    await act(async () => tabs()[2].click());
+    expect(container.querySelector('#traits-title').textContent).toBe('Otros rasgos');
+    await act(async () => [...container.querySelectorAll('button')].find((button) => button.textContent.includes('Todas las categorías')).click());
+    expectNoValues();
+    expect(categoryButtons()).toHaveLength(3);
   });
 
-  it('neutralizes label prefixes and localizes alternate categories without exposing biological fields', async () => {
-    const payload = state.data.results[0].payload;
-    Object.assign(payload, {
-      name: 'Legacy trait', fenotipo: 'Legacy phenotype', genotipo: 'AA', rsid: 'rs123',
-      nivel_riesgo: 'Alto', magnitud_efecto: 99, description: 'Legacy advice', group: 'Bienestar y Salud',
-    });
-    Object.assign(payload.display.items[0], { label: '  Demo label retained  ', unit: '%', interpretation: 'Legacy prediction' });
-    payload.display.items.push({ label: 'Demo trait B', display_value: 6.75 });
-    await renderPage();
-    expect([...container.querySelectorAll('dt')].map((item) => item.textContent)).toEqual(['  label retained  ', 'Rasgo B']);
-    expect([...container.querySelectorAll('dd')].map((item) => item.textContent)).toEqual(['24', '6.75']);
-    expect(payload.display.items.map((item) => item.label)).toEqual(['  Demo label retained  ', 'Demo trait B']);
-    expectNeutralCopy();
-    expect(container.textContent).not.toMatch(/Legacy|AA|rs123|99|Alto|Bienestar|%/);
-  });
-
-  it.each(['Etiqueta conservada', '  Etiqueta conservada  '])('preserves other usable display labels exactly: %s', async (label) => {
-    state.data.results[0].payload.display.items[0].label = label;
-    await renderPage();
-    expect(container.querySelector('dt').textContent).toBe(label);
-    expect(container.querySelector('dd').textContent).toBe('24');
-    expectNeutralCopy();
-  });
-
-  it('does not manufacture a display from a v1 release version', async () => {
-    state.service.release_version = '1';
-    delete state.data.results[0].payload.display;
-    state.data.results[0].payload.rows = [{ label: 'Demo trait A', state: 'not_evaluated', value: null }];
+  it('reports a missing module when the service only has other results', async () => {
+    state.data.modules = { pharmacogenetics: [{ gene: 'CYP2D6', diplotype: '*1/*1', phenotype: 'Normal', drugs: [] }] };
     await renderPage();
     expectNoValues();
-    expect(getStatus().textContent).toContain('los datos no son válidos');
-    expectShell();
-  });
-
-  it('does not borrow a value when the traits module is missing', async () => {
-    state.data.results = ['global_ancestry', 'local_ancestry', 'polygenic_risk', 'monogenic_risk', 'pharmacogenetics']
-      .map((module) => makeModule(module, 'demo_traits', 99));
-    await renderPage();
-    expectNoValues();
-    expect(getStatus().getAttribute('role')).toBe('status');
-    expect(getStatus().textContent).toContain('El módulo de rasgos no está disponible');
-    expect(container.textContent).not.toMatch(/Demo trait A|99/);
-    expectShell();
-  });
-
-  it('ignores displays in the other known modules when traits is present', async () => {
-    state.data.results.push(...['global_ancestry', 'local_ancestry', 'polygenic_risk', 'monogenic_risk', 'pharmacogenetics']
-      .map((module) => ({ module, payload: { display: { kind: 'other', items: [{ label: 'Other module', display_value: 99 }] } } })));
-    await renderPage();
-    expect(container.querySelectorAll('dd')).toHaveLength(1);
-    expect(container.querySelector('dd').textContent).toBe('24');
-    expect(container.textContent).not.toMatch(/Other module|99/);
-  });
-
-  const invalidModules = [
-    ['duplicate traits module', (result, data) => data.results.push(structuredClone(result))],
-    ['unexpected module ID', (result) => { result.module = 'unexpected_traits'; }],
-    ['missing payload', (result) => { delete result.payload; }],
-    ['null payload', (result) => { result.payload = null; }],
-    ['array payload', (result) => { result.payload = []; }],
-    ['mismatched payload module', (result) => { result.payload.module = 'polygenic_risk'; }],
-    ['missing state', (result) => { delete result.payload.state; }],
-    ['evaluated state', (result) => { result.payload.state = 'evaluated'; }],
-    ['unexpected result type', (result) => { result.result_type = 'clinical'; }],
-    ['missing value code', (result) => { delete result.value_code; }],
-    ['non-synthetic payload', (result) => { result.payload.synthetic = false; }],
-    ['missing non-clinical payload', (result) => { delete result.payload.non_clinical; }],
-    ['clinically reviewed payload', (result) => { result.payload.clinically_reviewed = true; }],
-    ['missing review provenance', (result) => { delete result.payload.clinically_reviewed; }],
-    ['non-display-only payload', (result) => { result.payload.display_only = false; }],
-    ['missing numeric semantics', (result) => { delete result.payload.numeric_semantics; }],
-    ['clinical numeric semantics', (result) => { result.payload.numeric_semantics = 'probability'; }],
-    ['missing disclaimer', (result) => { delete result.payload.disclaimer; }],
-    ['blank disclaimer', (result) => { result.payload.disclaimer = '  '; }],
-    ['missing module label', (result) => { delete result.payload.label; }],
-    ['blank module label', (result) => { result.payload.label = '  '; }],
-    ['missing display', (result) => { delete result.payload.display; }],
-    ['null display', (result) => { result.payload.display = null; }],
-    ['array display', (result) => { result.payload.display = []; }],
-    ['unexpected display kind', (result) => { result.payload.display.kind = 'probability'; }],
-    ['other demo display kind', (result) => { result.payload.display.kind = 'demo_entries'; }],
-    ['missing items', (result) => { delete result.payload.display.items; }],
-    ['non-array items', (result) => { result.payload.display.items = {}; }],
-    ['empty items', (result) => { result.payload.display.items = []; }],
-    ['null item', (result) => { result.payload.display.items = [null]; }],
-    ['array item', (result) => { result.payload.display.items = [[]]; }],
-    ['missing item label', (result) => { delete result.payload.display.items[0].label; }],
-    ['blank item label', (result) => { result.payload.display.items[0].label = '  '; }],
-    ['non-text item label', (result) => { result.payload.display.items[0].label = 24; }],
-    ['duplicate item label', (result) => { result.payload.display.items.push({ ...result.payload.display.items[0] }); }],
-    ['missing value', (result) => { delete result.payload.display.items[0].display_value; }],
-    ...[NaN, Infinity, -Infinity, '24', null, true, {}].map((value) => [
-      `non-finite or non-numeric value ${String(value)}`,
-      (result) => { result.payload.display.items[0].display_value = value; },
-    ]),
-    ['malformed second item', (result) => { result.payload.display.items.push({ label: 'Demo trait B', display_value: NaN }); }],
-  ];
-  it.each(invalidModules)('rejects %s without partial values or fallback', async (_name, mutate) => {
-    mutate(state.data.results[0], state.data);
-    await renderPage();
-    expectNoValues();
-    expect(getStatus().getAttribute('role')).toBe('alert');
-    expect(getStatus().textContent).toContain('los datos no son válidos');
-    expect(getRetry()).not.toBeNull();
-    expectShell();
-    expect(apiRequest.mock.calls.map(([url]) => url)).toEqual([API_ENDPOINTS.ME]);
-  });
-
-  it.each(Object.keys(provenance).filter((field) => field !== 'disclaimer'))('requires root provenance %s', async (field) => {
-    delete state.data[field];
-    await renderPage();
-    expectNoValues();
-    expect(getStatus().getAttribute('role')).toBe('alert');
-    expect(getStatus().textContent).toContain('los datos no son válidos');
-    expectShell();
-  });
-
-  it.each([
-    ['synthetic', false], ['synthetic', 'true'], ['non_clinical', false], ['non_clinical', 1],
-    ['clinically_reviewed', true], ['clinically_reviewed', 'false'],
-    ['display_only', false], ['display_only', 'true'], ['numeric_semantics', 'risk'], ['numeric_semantics', null],
-  ])('requires exact root provenance %s=%j', async (field, value) => {
-    state.data[field] = value;
-    await renderPage();
-    expectNoValues();
-    expect(getStatus().getAttribute('role')).toBe('alert');
-    expect(getStatus().textContent).toContain('los datos no son válidos');
-    expectShell();
-  });
-
-  it.each([
-    ['missing envelope', () => { state.data = null; }],
-    ['non-object envelope', () => { state.data = []; }],
-    ['missing results', () => { delete state.data.results; }],
-    ['non-array results', () => { state.data.results = {}; }],
-    ['malformed result', () => { state.data.results.push(null); }],
-    ['missing module ID', () => { state.data.results.push({ payload: {} }); }],
-    ['non-text module ID', () => { state.data.results[0].module = 1; }],
-    ['duplicate other module', () => { state.data.results.push({ module: 'global_ancestry' }, { module: 'global_ancestry' }); }],
-    ['unexpected other module', () => { state.data.results.push({ module: 'unknown' }); }],
-    ['missing root disclaimer', () => { delete state.data.disclaimer; }],
-    ['blank root disclaimer', () => { state.data.disclaimer = ' '; }],
-  ])('rejects %s', async (_name, mutate) => {
-    mutate();
-    await renderPage();
-    expectNoValues();
-    expect(getStatus().textContent).toContain('los datos no son válidos');
-    expectShell();
+    expect(getStatus().textContent).toContain('no tiene resultados de rasgos');
   });
 });
 
 const stateCases = [
-  ['loading', { status: 'loading', loading: true, service: null }, 'Cargando datos', 'status'],
-  ['loading status', { status: 'loading', loading: false }, 'Cargando datos', 'status'],
-  ['no service', { status: 'empty', service: null }, 'No hay un servicio', 'status'],
-  ['ready without service', { status: 'ready', service: null }, 'No hay un servicio', 'status'],
-  ['empty results', { status: 'empty' }, 'no tiene resultados', 'status'],
-  ['permission', { status: 'permission', error: { status: 403 } }, 'No tienes permiso', 'alert'],
-  ['unauthenticated', { status: 'permission', error: { status: 401 } }, 'No tienes permiso', 'alert'],
-  ['connection error', { status: 'error', error: { kind: 'connection', status: 0 } }, 'No fue posible cargar', 'alert'],
-  ['HTTP error', { status: 'error', error: { kind: 'http', status: 404 } }, 'No fue posible cargar', 'alert'],
-  ['invalid response error', { status: 'error', error: { kind: 'invalid_data' } }, 'No fue posible cargar', 'alert'],
-  ['unknown state', { status: 'unexpected' }, 'No fue posible cargar', 'alert'],
+  ['loading', { status: 'loading', loading: true, data: null }, 'Cargando datos', 'status'],
+  ['empty', { status: 'empty', data: null }, 'Aún no tienes resultados', 'status'],
+  ['permission', { status: 'permission', data: null, error: { status: 403 } }, 'No tienes permiso', 'alert'],
+  ['unauthenticated', { status: 'permission', data: null, error: { status: 401 } }, 'No tienes permiso', 'alert'],
+  ['connection error', { status: 'error', data: null, error: { kind: 'connection', status: 0 } }, 'No fue posible cargar', 'alert'],
+  ['HTTP error', { status: 'error', data: null, error: { kind: 'http', status: 500 } }, 'No fue posible cargar', 'alert'],
+  ['invalid response error', { status: 'error', data: null, error: { kind: 'invalid_data' } }, 'No fue posible cargar', 'alert'],
 ];
 describe('result states and preserved independent shell', () => {
-  it('reuses page-scoped visible focus for the menu and native retry', () => {
-    expect(pageStyles).toMatch(/\.rasgos-layout button:focus-visible\s*\{[^}]*outline:\s*3px solid #145f9f;[^}]*outline-offset:\s*3px;/);
-  });
-
-  it('keeps raw definition terms and values aligned and wrappable on narrow screens', () => {
-    expect(/\.rasgos-page \.rasgos-field dt\s*,\s*\.rasgos-page \.rasgos-field dd\s*\{[^}]*margin:\s*0;[^}]*overflow-wrap:\s*anywhere;/.test(pageStyles)).toBe(true);
-  });
 
   it.each(stateCases)('keeps neutral status copy and ME profile in %s without stale values', async (_name, override, message, role) => {
     Object.assign(state, override);
@@ -325,7 +217,13 @@ describe('result states and preserved independent shell', () => {
     expect(getStatus().getAttribute('role')).toBe(role);
     const loading = override.status === 'loading';
     expect(getStatus().getAttribute('aria-busy')).toBe(String(loading));
-    expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
+    if (loading) {
+      expect(getStatus().querySelector('.rasgos-loading__donut')).not.toBeNull();
+      expect(getStatus().querySelectorAll('.rasgos-loading__legend-item')).toHaveLength(5);
+      expect(getStatus().querySelector('.dashboard-page-skeleton__content')?.getAttribute('aria-hidden')).toBe('true');
+    } else {
+      expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
+    }
     expect(Boolean(getRetry())).toBe(!loading);
     if (!loading) expect(getRetry().getAttribute('aria-label')).toBe('Reintentar carga de resultados');
     expect(container.querySelector('nav').textContent).toContain('Demo account');
@@ -333,7 +231,7 @@ describe('result states and preserved independent shell', () => {
     expect(apiRequest.mock.calls.map(([url]) => url)).toEqual([API_ENDPOINTS.ME]);
   });
 
-  it.each(['no service', 'empty results', 'permission', 'connection error'])('uses only the named hook retry in %s', async (name) => {
+  it.each(['empty', 'permission', 'connection error'])('uses only the named hook retry in %s', async (name) => {
     Object.assign(state, stateCases.find(([key]) => key === name)[1]);
     await renderPage();
     expect(getRetry().tagName).toBe('BUTTON');
@@ -345,8 +243,10 @@ describe('result states and preserved independent shell', () => {
     expect(apiRequest).toHaveBeenCalledTimes(1);
   });
 
-  it('clears the old display during retry and shows only the next normalized values', async () => {
+  it('retries missing traits and shows only the newly loaded results', async () => {
+    state.data.modules.traits = [];
     await renderPage();
+    expect(getStatus().textContent).toContain('no tiene resultados de rasgos');
     const retry = state.retry;
     retry.mockImplementation(() => { state = { ...state, status: 'loading', loading: true, data: null, service: null }; });
     await act(async () => getRetry().click());
@@ -355,16 +255,18 @@ describe('result states and preserved independent shell', () => {
     expectShell();
     expect(getStatus().textContent).toContain('Cargando datos');
     state = makeState();
-    state.data.results[0].payload.display.items[0].display_value = 8;
+    state.data.modules.traits = [makeTrait('Lento')];
     await renderPage();
-    expect(container.querySelector('dd').textContent).toBe('8');
+    expect(getRetry()).toBeUndefined();
+    await openCategory();
+    expect(container.querySelector('.rasgos-trait__result strong').textContent).toBe('Lento');
     expect(apiRequest).toHaveBeenCalledTimes(1);
   });
 
-  it('distinguishes an empty result array from a missing traits module', async () => {
-    state.data.results = [];
+  it('treats an empty traits module as missing', async () => {
+    state.data.modules = { traits: [] };
     await renderPage();
-    expect(getStatus().textContent).toContain('no tiene resultados');
+    expect(getStatus().textContent).toContain('no tiene resultados de rasgos');
     expectNoValues();
     expectShell();
   });
@@ -380,8 +282,8 @@ describe('result states and preserved independent shell', () => {
   it('does not turn a failed ME response into a traits failure', async () => {
     apiRequest.mockResolvedValue({ ok: false, data: null });
     await renderPage();
-    expect(container.querySelector('dd').textContent).toBe('24');
-    expect(getStatus().textContent).toContain('disponibles');
+    await openCategory();
+    expect(container.querySelector('.rasgos-trait__result strong').textContent).toBe('Rápido');
   });
 
   it.each(['ready', 'loading', 'permission', 'error'])('keeps only retained navigation links in %s', async (status) => {
@@ -389,7 +291,7 @@ describe('result states and preserved independent shell', () => {
     await renderPage();
     expect([...container.querySelectorAll('nav a')].map((link) => link.getAttribute('href'))).toEqual([
       '/dashboard/ancestria', '/dashboard/rasgos', '/dashboard/farmacogenetica',
-      '/dashboard/enfermedades',
+      '/dashboard/enfermedades', '/dashboard/modulos',
     ]);
     await act(async () => container.querySelector('a[href="/dashboard/ancestria"]').click());
     expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/dashboard/ancestria');

@@ -1,76 +1,84 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { ChevronRight, Menu, X } from 'lucide-react';
+import { PieChart } from '../../components/charts/pie-chart';
+import { PieSlice } from '../../components/charts/pie-slice';
+import { PieCenter } from '../../components/charts/pie-center';
 import { clearToken } from '../../config/api';
-import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
+import { RESULT_NAV_ITEMS } from '../../config/resultNav';
+import { moduleRows, useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
 import { useSession } from '../../hooks/useSession';
 import Sidebar from '../../components/Sidebar/Sidebar';
+import { animatedSidebarIcons } from '../../components/Sidebar/animatedSidebarIcons';
+import RasgosDetail from './RasgosDetail';
+import { RasgosHeader, RasgosLoadingContent } from './RasgosLoading';
 import '../../styles/cards.css';
 import './Rasgos.css';
 
-const knownModules = new Set([
-  'global_ancestry', 'local_ancestry', 'polygenic_risk', 'monogenic_risk', 'traits', 'pharmacogenetics',
-]);
-const demoProvenance = {
-  synthetic: true, non_clinical: true, clinically_reviewed: false, display_only: true,
-  numeric_semantics: 'arbitrary_demo_only_not_evaluated',
-};
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-const isText = (value) => typeof value === 'string' && value.trim().length > 0;
-const hasDemoProvenance = (value) => isObject(value) && isText(value.disclaimer)
-  && Object.entries(demoProvenance).every(([key, expected]) => value[key] === expected);
-
-// Never derive trait values from legacy fields or another module. Invalid bundles
-// and v1 placeholders remain unavailable, rather than implying an absent trait.
-const readTraitsDisplay = (data) => {
-  const invalid = { status: 'invalid', display: null };
-  if (!hasDemoProvenance(data) || !Array.isArray(data.results)) return invalid;
-  const seen = new Set();
-  let traits = null;
-  for (const result of data.results) {
-    if (!isObject(result) || !knownModules.has(result.module) || seen.has(result.module)) return invalid;
-    seen.add(result.module);
-    if (result.module === 'traits') traits = result;
-  }
-  if (!data.results.length) return { status: 'empty', display: null };
-  if (!traits) return { status: 'missing', display: null };
-
-  const payload = traits.payload;
-  if (traits.result_type !== 'synthetic_placeholder' || traits.value_code !== 'SYNTHETIC_NOT_EVALUATED'
-    || !hasDemoProvenance(payload) || payload.module !== 'traits' || payload.state !== 'not_evaluated'
-    || !isText(payload.label) || !isObject(payload.display) || payload.display.kind !== 'demo_traits'
-    || !Array.isArray(payload.display.items) || !payload.display.items.length) return invalid;
-  const labels = new Set();
-  for (const item of payload.display.items) {
-    if (!isObject(item) || !isText(item.label) || labels.has(item.label)
-      || typeof item.display_value !== 'number' || !Number.isFinite(item.display_value)) return invalid;
-    labels.add(item.label);
-  }
-  return { status: 'ready', display: payload.display };
-};
-
-// Localize known categories and neutralize other display prefixes without mutating data.
-const formatTraitLabel = (label) => label
-  .replace(/^(\s*)Demo trait ([A-Z]+)(\s*)$/, '$1Rasgo $2$3')
-  .replace(/^(\s*)Demo\s+/i, '$1');
-
 const resultMessages = {
-  loading: 'Cargando datos…',
-  noService: 'No hay un servicio disponible para mostrar resultados.',
-  empty: 'El servicio seleccionado no tiene resultados.',
-  missing: 'El módulo de rasgos no está disponible en los resultados del servicio seleccionado.',
-  invalid: 'El módulo de rasgos no está disponible: los datos no son válidos.',
+  empty: 'Aún no tienes resultados disponibles.',
+  missing: 'Tu último servicio no tiene resultados de rasgos.',
   permission: 'No tienes permiso para consultar estos resultados.',
   error: 'No fue posible cargar los datos. Puedes reintentar.',
-  ready: 'Datos disponibles.',
 };
-const getTraitsResult = (results) => {
-  if (results.loading || results.status === 'loading') return { status: 'loading', display: null };
-  if (results.status === 'permission') return { status: 'permission', display: null };
-  if (!['ready', 'empty'].includes(results.status)) return { status: 'error', display: null };
-  if (!results.service) return { status: 'noService', display: null };
-  if (results.status === 'empty') return { status: 'empty', display: null };
-  return readTraitsDisplay(results.data);
+
+const CATEGORY_ORDER = [
+  'Metabolismo', 'Rendimiento Físico y Sensorial', 'Cognición', 'Bienestar y Salud', 'Apariencia Física',
+];
+const CATEGORY_COLORS = {
+  Metabolismo: '#00a896',
+  'Rendimiento Físico y Sensorial': '#f15a24',
+  Cognición: '#6c5ce7',
+  'Bienestar y Salud': '#e9b949',
+  'Apariencia Física': '#e8488a',
+};
+const CATEGORY_DESCRIPTIONS = {
+  Metabolismo: 'Rasgos asociados a cómo tu cuerpo transforma alimentos y sustancias.',
+  'Rendimiento Físico y Sensorial': 'Rasgos vinculados al desempeño físico y a cómo percibes los estímulos.',
+  Cognición: 'Rasgos ligados a procesos mentales como la atención, la memoria y el manejo del estrés.',
+  'Bienestar y Salud': 'Rasgos relacionados con tu equilibrio físico y tus ritmos diarios.',
+  'Apariencia Física': 'Rasgos asociados a características externas como el cabello o los ojos.',
+};
+const PATTERN_WHITE = { fill: 'none', stroke: '#ffffff', strokeWidth: 1.5 };
+const CATEGORY_PATTERNS = {
+  Metabolismo: { id: 'rasgos-pattern-dots', size: 16, shape: (
+    <><circle cx="4" cy="4" r="1.8" fill="#ffffff" fillOpacity="0.25" /><circle cx="12" cy="12" r="1.8" fill="#ffffff" fillOpacity="0.25" /></>
+  ) },
+  'Rendimiento Físico y Sensorial': { id: 'rasgos-pattern-rings', size: 18, shape: (
+    <><circle cx="9" cy="9" r="4" {...PATTERN_WHITE} strokeOpacity="0.27" /><circle cx="0" cy="0" r="4" {...PATTERN_WHITE} strokeOpacity="0.2" /></>
+  ) },
+  Cognición: { id: 'rasgos-pattern-cross', size: 16, shape: <path d="M8 2v12M2 8h12" {...PATTERN_WHITE} strokeOpacity="0.24" /> },
+  'Bienestar y Salud': { id: 'rasgos-pattern-diagonal', size: 14, shape: (
+    <path d="M-3 3 3-3M0 14 14 0M11 17 17 11" {...PATTERN_WHITE} strokeOpacity="0.2" strokeWidth="2" />
+  ) },
+  'Apariencia Física': { id: 'rasgos-pattern-diamond', size: 18, shape: (
+    <path d="m9 3 6 6-6 6-6-6 6-6Z" {...PATTERN_WHITE} strokeOpacity="0.22" />
+  ) },
+};
+const OTHER_COLOR = '#64748b';
+
+// PieChart moves children whose name contains "Pattern" into its <defs>.
+function CategoryPattern({ id, size, color, children }) {
+  return (
+    <pattern id={id} width={size} height={size} patternUnits="userSpaceOnUse">
+      <rect width={size} height={size} fill={color} />
+      {children}
+    </pattern>
+  );
+}
+CategoryPattern.displayName = 'CategoryPattern';
+
+const OTHER_CATEGORY = 'Otros rasgos';
+const traitCount = (count) => `${count} ${count === 1 ? 'rasgo' : 'rasgos'}`;
+
+const groupByCategory = (traits) => {
+  const groups = new Map();
+  for (const trait of traits) {
+    const name = trait.category || OTHER_CATEGORY;
+    groups.set(name, [...(groups.get(name) || []), trait]);
+  }
+  const rank = (name) => (CATEGORY_ORDER.includes(name) ? CATEGORY_ORDER.indexOf(name) : CATEGORY_ORDER.length);
+  return [...groups].map(([name, items]) => ({ name, traits: items })).sort((a, b) => rank(a.name) - rank(b.name));
 };
 
 const Rasgos = () => {
@@ -79,8 +87,12 @@ const Rasgos = () => {
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 1024 : false);
   const navigate = useNavigate();
   const results = useLatestGenomicsResults();
-  const { status, display } = getTraitsResult(results);
-  const failed = ['permission', 'error', 'invalid'].includes(status);
+  const traits = moduleRows(results, 'traits');
+  const status = results.status === 'ready' && !traits.length ? 'missing' : results.status;
+  const failed = ['permission', 'error'].includes(status);
+  const groups = useMemo(() => groupByCategory(traits), [traits]);
+  const [categoryName, setCategoryName] = useState(null);
+  const category = groups.find((group) => group.name === categoryName);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -98,12 +110,6 @@ const Rasgos = () => {
     navigate('/');
   };
 
-  const sidebarItems = useMemo(() => [
-    { label: 'Ancestría', href: '/dashboard/ancestria' },
-    { label: 'Rasgos', href: '/dashboard/rasgos' },
-    { label: 'Farmacogenética', href: '/dashboard/farmacogenetica' },
-    { label: 'Enfermedades', href: '/dashboard/enfermedades' },
-  ], []);
 
   return (
     <div className="rasgos-layout">
@@ -120,7 +126,8 @@ const Rasgos = () => {
       )}
       <aside className="rasgos-layout__sidebar">
         <Sidebar
-          items={sidebarItems}
+          iconOverrides={animatedSidebarIcons}
+          items={RESULT_NAV_ITEMS}
           onLogout={handleLogout}
           user={user}
           isMobileMenuOpen={isMobileMenuOpen}
@@ -129,41 +136,100 @@ const Rasgos = () => {
       </aside>
       <main className="rasgos-layout__main">
         <div className="rasgos-page">
-          <header className="rasgos-header">
-            <span className="rasgos-header__kicker">Resultados</span>
-            <h1 className="rasgos-header__title">Rasgos</h1>
-            <p className="rasgos-header__subtitle">
-              Consulta los valores del módulo de rasgos.
-            </p>
-          </header>
-          <div className={failed ? 'rasgos-page__error' : status === 'loading' ? 'rasgos-page__loading' : 'rasgos-report__intro'}>
-            <p
-              role={failed ? 'alert' : 'status'}
-              aria-label="Estado de los resultados"
-              aria-busy={status === 'loading'}
-            >
-              {resultMessages[status]}
-            </p>
-            {status !== 'loading' && (
+          <RasgosHeader />
+          {status === 'loading' ? (
+            <RasgosLoadingContent />
+          ) : status !== 'ready' ? (
+            <div className={failed ? 'rasgos-page__error' : 'rasgos-report__intro'}>
+              <p role={failed ? 'alert' : 'status'} aria-label="Estado de los resultados" aria-busy={false}>
+                {resultMessages[status]}
+              </p>
               <button type="button" className="rasgos-back" aria-label="Reintentar carga de resultados" onClick={results.retry}>
                 Reintentar
               </button>
-            )}
-          </div>
-          {display && (
-            <section className="rasgos-trait-detail" aria-labelledby="traits-title">
-              <header className="rasgos-trait-detail__header">
-                <h2 className="rasgos-trait-detail__title" id="traits-title">Módulo de rasgos</h2>
-              </header>
-              <dl className="rasgos-field-grid">
-                {display.items.map((item) => (
-                  <div className="rasgos-field" key={item.label}>
-                    <dt className="rasgos-trait-row__title">{formatTraitLabel(item.label)}</dt>
-                    <dd className="rasgos-field__value">{item.display_value}</dd>
-                  </div>
+            </div>
+          ) : null}
+          {status === 'ready' && !category && (
+            <section className="rasgos-overview" aria-labelledby="rasgos-overview-title">
+              <div className="rasgos-overview__intro">
+                <span id="rasgos-overview-title" className="rasgos-report__eyebrow">Explorar resultados</span>
+                <span className="rasgos-report__hint">Selecciona una categoría</span>
+              </div>
+              <div className="rasgos-overview__body">
+              <div
+                className="rasgos-overview__chart"
+                role="group"
+                aria-label={`Distribución de rasgos por categoría. Total: ${traitCount(traits.length)}.`}
+              >
+                <PieChart
+                  data={groups.map((group) => ({
+                    label: group.name,
+                    value: group.traits.length,
+                    color: CATEGORY_COLORS[group.name] || OTHER_COLOR,
+                    fill: CATEGORY_PATTERNS[group.name] ? `url(#${CATEGORY_PATTERNS[group.name].id})` : undefined,
+                  }))}
+                  innerRadius={78}
+                  padAngle={0.025}
+                  cornerRadius={3}
+                  hoverOffset={8}
+                  className="rasgos-overview__pie"
+                >
+                  {groups.filter((group) => CATEGORY_PATTERNS[group.name]).map((group) => {
+                    const pattern = CATEGORY_PATTERNS[group.name];
+                    return (
+                      <CategoryPattern key={pattern.id} id={pattern.id} size={pattern.size} color={CATEGORY_COLORS[group.name]}>
+                        {pattern.shape}
+                      </CategoryPattern>
+                    );
+                  })}
+                  {groups.map((group, index) => (
+                    <PieSlice
+                      key={group.name}
+                      index={index}
+                      ariaLabel={`Abrir categoría ${group.name}, ${traitCount(group.traits.length)}`}
+                      onClick={() => setCategoryName(group.name)}
+                    />
+                  ))}
+                  <PieCenter defaultLabel="rasgos" valueClassName="rasgos-overview__center-value" labelClassName="rasgos-overview__center-label">
+                    {({ value, label, isHovered }) => (
+                      <span className="rasgos-overview__center-content">
+                        <strong>{value}</strong>
+                        <span>{isHovered ? label : 'rasgos'}</span>
+                      </span>
+                    )}
+                  </PieCenter>
+                </PieChart>
+              </div>
+              <div className="rasgos-overview__legend" aria-label="Categorías de rasgos">
+                {groups.map((group) => (
+                  <button
+                    key={group.name}
+                    type="button"
+                    className="rasgos-overview__legend-item"
+                    onClick={() => setCategoryName(group.name)}
+                    aria-label={`Abrir categoría ${group.name}, ${traitCount(group.traits.length)}`}
+                  >
+                    <span className="rasgos-overview__legend-marker" style={{ backgroundColor: CATEGORY_COLORS[group.name] || '#64748b' }} aria-hidden="true" />
+                    <span className="rasgos-overview__legend-copy">
+                      <span className="rasgos-overview__legend-name">{group.name}</span>
+                      <span className="rasgos-overview__legend-count">{traitCount(group.traits.length)}</span>
+                    </span>
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </button>
                 ))}
-              </dl>
+              </div>
+              </div>
             </section>
+          )}
+          {status === 'ready' && category && (
+            <RasgosDetail
+              groups={groups}
+              category={category}
+              colors={(name) => CATEGORY_COLORS[name] || OTHER_COLOR}
+              descriptions={CATEGORY_DESCRIPTIONS}
+              onSelect={setCategoryName}
+              onBack={() => setCategoryName(null)}
+            />
           )}
         </div>
       </main>
