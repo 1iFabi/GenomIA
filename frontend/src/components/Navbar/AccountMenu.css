@@ -99,7 +99,8 @@
 .account-menu-item--profile {
   color: var(--text-700, #374151);
 }
-.account-menu-item--dashboard {
+.account-menu-item--dashboard,
+.account-menu-item--purchase {
   color: var(--primary, #0b7ad0);
 }
 .account-menu-item--logout {
@@ -149,7 +150,8 @@
 .account-menu-content--dark .account-menu-item--profile {
   color: #e2e8f0;
 }
-.account-menu-content--dark .account-menu-item--dashboard {
+.account-menu-content--dark .account-menu-item--dashboard,
+.account-menu-content--dark .account-menu-item--purchase {
   color: #7ec8ff;
 }
 .account-menu-content--dark .account-menu-item--logout {

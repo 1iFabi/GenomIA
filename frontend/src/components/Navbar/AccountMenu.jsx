@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, UserRound, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, LogOut, ShoppingCart, UserRound, ChevronDown } from 'lucide-react';
 import { clearToken } from '../../config/api';
+import DashboardSkeleton from '../DashboardSkeleton/DashboardSkeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +15,7 @@ import './AccountMenu.css';
 /**
  * Menú desplegable de cuenta (shadcn DropdownMenu) para el Navbar del landing.
  * Se muestra cuando hay sesión activa, en lugar del botón "Inicia Sesión".
- * Ofrece: Perfil, Ir al dashboard y Cerrar sesión.
+ * Ofrece: Perfil, Ir al dashboard y Cerrar sesión. Al cliente sin servicio le ofrece Adquirir servicio en su lugar.
  */
 const AccountMenu = ({ user, onNavigate, theme = 'light' }) => {
   const navigate = useNavigate();
@@ -28,6 +29,9 @@ const AccountMenu = ({ user, onNavigate, theme = 'light' }) => {
 
   const goProfile = goTo('/profile');
   const goDashboard = goTo('/dashboard');
+  const goAcquire = goTo('/no-purchased');
+  // Mismo criterio que ProtectedRoute: solo clientes sin servicio.
+  const needsService = DashboardSkeleton.getRoleVariant(user) === 'user' && user?.service_status === 'NO_PURCHASED';
 
   const logout = async () => {
     closeMenu();
@@ -63,21 +67,33 @@ const AccountMenu = ({ user, onNavigate, theme = 'light' }) => {
 
           <DropdownMenuSeparator className="account-menu-separator" />
 
-          <DropdownMenuItem
-            className="account-menu-item account-menu-item--profile"
-            onSelect={goProfile}
-          >
-            <UserRound size={16} className="text-current" aria-hidden="true" />
-            <span>Perfil</span>
-          </DropdownMenuItem>
+          {needsService ? (
+            <DropdownMenuItem
+              className="account-menu-item account-menu-item--purchase"
+              onSelect={goAcquire}
+            >
+              <ShoppingCart size={16} className="text-current" aria-hidden="true" />
+              <span>Adquirir servicio</span>
+            </DropdownMenuItem>
+          ) : (
+            <>
+              <DropdownMenuItem
+                className="account-menu-item account-menu-item--profile"
+                onSelect={goProfile}
+              >
+                <UserRound size={16} className="text-current" aria-hidden="true" />
+                <span>Perfil</span>
+              </DropdownMenuItem>
 
-          <DropdownMenuItem
-            className="account-menu-item account-menu-item--dashboard"
-            onSelect={goDashboard}
-          >
-            <LayoutDashboard size={16} className="text-current" aria-hidden="true" />
-            <span>Ir al dashboard</span>
-          </DropdownMenuItem>
+              <DropdownMenuItem
+                className="account-menu-item account-menu-item--dashboard"
+                onSelect={goDashboard}
+              >
+                <LayoutDashboard size={16} className="text-current" aria-hidden="true" />
+                <span>Ir al dashboard</span>
+              </DropdownMenuItem>
+            </>
+          )}
 
           <DropdownMenuSeparator className="account-menu-separator" />
 

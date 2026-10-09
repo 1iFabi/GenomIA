@@ -96,23 +96,30 @@
 }
 
 /* Ajuste para SpinningCoin en el centro de la navbar */
-/* El tamaño base lo define el componente (size={60}).
-   En responsive, escalamos visualmente para que se vea más grande sin afectar layout. */
+/* El tamaño lo define el componente (`size`: 48 en portada, 60 en el resto) y las caras
+   llenan la escena (`inset: 0`). Un `height` fijo aquí dejaba el arte desplazado
+   respecto del centro de su caja. En pantallas angostas se escala visualmente, sin
+   afectar el layout. */
 .nav-logo .coin-scene {
   transform-origin: center;
 }
 
 .nav-logo img {
-  height: 60px;
-  width: auto;
   display: block;
   transition: transform 0.2s ease;
 }
 
-/* En móviles, agrandar visualmente el logo (sin cambiar width/height inline) */
+/* Escala visual del logo en pantallas angostas (41px y 55px de arte, como antes),
+   aplicada a la escena para que el arte siga centrado en su caja. */
+@media (max-width: 720px) {
+  .nav-logo .coin-scene {
+    transform: scale(0.854);
+  }
+}
+
 @media (max-width: 640px) {
   .nav-logo .coin-scene {
-    transform: scale(1.35);
+    transform: scale(1.153);
   }
 }
 
@@ -425,7 +432,6 @@
     margin-left: 12px;     /* mismo “colchón” que el botón (right: 10px aprox.) */
     display: flex;         /* garantiza centrado del contenido */
     align-items: center;
-    transform: translateY(10px);
   }
   .nav-toggle {
     display: inline-flex;
@@ -436,9 +442,6 @@
 @media (max-width: 720px) {
   .navbar {
     column-gap: 12px;
-  }
-  .nav-logo img {
-    height: 44px;
   }
 }
 

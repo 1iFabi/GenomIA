@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api.js';
 import { useNavigate } from 'react-router-dom';
 import ModalShell from '../../components/ModalShell/ModalShell';
+import { GoogleCredentialButton } from '../GoogleAuthButton/GoogleAuthButton.jsx';
+import { useSession } from '../../hooks/useSession';
 
 const DeleteAccountModal = ({ isOpen, onClose, userName }) => {
   const [password, setPassword] = useState('');
@@ -11,15 +13,11 @@ const DeleteAccountModal = ({ isOpen, onClose, userName }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
+  const { user } = useSession();
+  // Google-only accounts have no password: they confirm by signing in with Google again.
+  const usesGoogle = user?.has_password === false;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!password) {
-      setError('Debes ingresar tu contraseña');
-      return;
-    }
-
+  const deleteAccount = async (proof) => {
     if (confirmText.toLowerCase() !== 'eliminar') {
       setError('Debes escribir "ELIMINAR" para confirmar');
       return;
@@ -31,10 +29,7 @@ const DeleteAccountModal = ({ isOpen, onClose, userName }) => {
     try {
       const result = await apiRequest(API_ENDPOINTS.DELETE_ACCOUNT, {
         method: 'DELETE',
-        body: JSON.stringify({
-          password: password,
-          confirmation: confirmText
-        }),
+        body: JSON.stringify({ ...proof, confirmation: confirmText }),
       });
 
       if (result.ok) {
@@ -53,6 +48,15 @@ const DeleteAccountModal = ({ isOpen, onClose, userName }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!password) {
+      setError('Debes ingresar tu contraseña');
+      return;
+    }
+    deleteAccount({ password });
   };
 
   const handleClose = () => {
@@ -116,47 +120,49 @@ const DeleteAccountModal = ({ isOpen, onClose, userName }) => {
           </div>
 
           <form onSubmit={handleSubmit} className="delete-account-form">
-            {/* Campo de contraseña */}
-            <div className="uv-field">
-              <span className="uv-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="20" height="20">
-                  <path
-                    d="M17 10h-1V7a4 4 0 10-8 0v3H7a2 2 0 00-2 2v7a2 2 0 002 2h10a2 2 0 002-2v-7a2 2 0 00-2-2zm-6 0V7a3 3 0 016 0v3h-6z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </span>
-              <input
-                className="uv-input"
-                type={showPassword ? "text" : "password"}
-                name="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder=" "
-                required
-                disabled={loading}
-              />
-              <label className="uv-label">Confirma tu Contraseña</label>
-              <span className="uv-focus-bg" />
-              <button
-                type="button"
-                className="pwd-toggle"
-                onClick={() => setShowPassword(s => !s)}
-                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-              >
-                {showPassword ? (
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
+            {/* Campo de contraseña (solo cuentas con contraseña) */}
+            {!usesGoogle && (
+              <div className="uv-field">
+                <span className="uv-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path
+                      d="M17 10h-1V7a4 4 0 10-8 0v3H7a2 2 0 00-2 2v7a2 2 0 002 2h10a2 2 0 002-2v-7a2 2 0 00-2-2zm-6 0V7a3 3 0 016 0v3h-6z"
+                      fill="currentColor"
+                    />
                   </svg>
-                ) : (
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                  </svg>
-                )}
-              </button>
-            </div>
+                </span>
+                <input
+                  className="uv-input"
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder=" "
+                  required
+                  disabled={loading}
+                />
+                <label className="uv-label">Confirma tu Contraseña</label>
+                <span className="uv-focus-bg" />
+                <button
+                  type="button"
+                  className="pwd-toggle"
+                  onClick={() => setShowPassword(s => !s)}
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showPassword ? (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* Campo de confirmación */}
             <div className="confirmation-field">
@@ -180,13 +186,23 @@ const DeleteAccountModal = ({ isOpen, onClose, userName }) => {
               </div>
             )}
 
-            <button
-              type="submit"
-              className="modal-delete-btn"
-              disabled={loading || !password || confirmText.toLowerCase() !== 'eliminar'}
-            >
-              {loading ? 'Eliminando cuenta...' : 'Eliminar Cuenta Permanentemente'}
-            </button>
+            {usesGoogle ? (
+              <div className="delete-account-google">
+                <p className="disclaimer-text">Confirma con tu cuenta de Google para eliminarla:</p>
+                <GoogleCredentialButton
+                  text="continue_with"
+                  onCredential={(googleCredential) => deleteAccount({ googleCredential })}
+                />
+              </div>
+            ) : (
+              <button
+                type="submit"
+                className="modal-delete-btn"
+                disabled={loading || !password || confirmText.toLowerCase() !== 'eliminar'}
+              >
+                {loading ? 'Eliminando cuenta...' : 'Eliminar Cuenta Permanentemente'}
+              </button>
+            )}
 
             <p className="disclaimer-text">
               {userName && `Hola ${userName}, `}

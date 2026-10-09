@@ -11,6 +11,17 @@
   overflow: hidden;
 }
 
+/* Desktop: the sidebar stays in view while the page scrolls; long menus scroll inside it. */
+@media (min-width: 1025px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    height: 100dvh;
+  }
+}
+
 .sidebar:hover,
 .sidebar--unfolded {
   width: 280px;

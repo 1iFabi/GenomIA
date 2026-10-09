@@ -23,6 +23,8 @@ const Navbar = ({ theme: forcedTheme }) => {
   const activeTheme = forcedTheme || autoTheme;
   const isLight = activeTheme === "light";
   const logoSrc = isLight ? `${base}cNormal.png` : `${base}cSolido.png`;
+  // La moneda del hero (landing) va un poco más chica; en el resto de páginas queda igual.
+  const isHome = location.pathname === "/";
 
   // Bloquear scroll cuando el drawer está abierto
   useEffect(() => {
@@ -205,7 +207,7 @@ const Navbar = ({ theme: forcedTheme }) => {
             className="logo-link"
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
-            <SpinningCoin src={logoSrc} size={60} speed="8s" />
+            <SpinningCoin src={logoSrc} size={isHome ? 48 : 60} speed="8s" />
           </button>
         </div>
 
