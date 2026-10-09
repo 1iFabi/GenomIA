@@ -1,16 +1,23 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Menu, X, Users, FileText, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clearToken } from '../../config/api';
 import AdminSidebar from '../../components/AdminSidebar/AdminSidebar';
 import { useAdminStats } from '../../hooks/useAdminStats';
+import { SkeletonBlock } from '../../components/DashboardSkeleton/DashboardSkeleton';
 import './PostloginAnalyst.css'; // Use the new CSS file
 
 const PostloginAnalyst = ({ user }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
-  const { stats } = useAdminStats();
+  const { stats, loading } = useAdminStats();
+  const statsLoaded = useRef(false);
+  const showStatsSkeleton = loading && !statsLoaded.current;
+
+  useEffect(() => {
+    if (!loading) statsLoaded.current = true;
+  }, [loading]);
   const isAdmin = false; // Hardcoded for analyst
 
   useEffect(() => {
@@ -83,13 +90,20 @@ const PostloginAnalyst = ({ user }) => {
         </header>
 
         <section className="postlogin-analyst__stats" aria-label="Estadísticas">
+          {showStatsSkeleton && (
+            <span className="dashboard-skeleton__announcement" role="status">
+              Cargando estadísticas…
+            </span>
+          )}
           <div className="postlogin-analyst__stats-grid">
             <div className="postlogin-analyst__stat-card">
               <div className="postlogin-analyst__stat-header">
                 <span className="postlogin-analyst__stat-label">Usuarios Totales</span>
                 <Users size={24} className="postlogin-analyst__stat-icon" style={{ color: '#0b7ad0' }} />
               </div>
-              <div className="postlogin-analyst__stat-value">{stats.totalUsers.toLocaleString()}</div>
+              <div className="postlogin-analyst__stat-value">
+                {showStatsSkeleton ? <SkeletonBlock className="postlogin-analyst__stat-placeholder" /> : stats.totalUsers.toLocaleString()}
+              </div>
             </div>
 
             <div className="postlogin-analyst__stat-card">
@@ -97,7 +111,9 @@ const PostloginAnalyst = ({ user }) => {
                 <span className="postlogin-analyst__stat-label">Reportes Pendientes</span>
                 <FileText size={24} className="postlogin-analyst__stat-icon" style={{ color: '#f97316' }} />
               </div>
-              <div className="postlogin-analyst__stat-value">{stats.pendingReports.toLocaleString()}</div>
+              <div className="postlogin-analyst__stat-value">
+                {showStatsSkeleton ? <SkeletonBlock className="postlogin-analyst__stat-placeholder" /> : stats.pendingReports.toLocaleString()}
+              </div>
             </div>
 
             <div className="postlogin-analyst__stat-card">
@@ -105,7 +121,9 @@ const PostloginAnalyst = ({ user }) => {
                 <span className="postlogin-analyst__stat-label">Análisis Completados</span>
                 <Activity size={24} className="postlogin-analyst__stat-icon" style={{ color: '#10b981' }} />
               </div>
-              <div className="postlogin-analyst__stat-value">{stats.completedAnalysis.toLocaleString()}</div>
+              <div className="postlogin-analyst__stat-value">
+                {showStatsSkeleton ? <SkeletonBlock className="postlogin-analyst__stat-placeholder" /> : stats.completedAnalysis.toLocaleString()}
+              </div>
             </div>
           </div>
         </section>

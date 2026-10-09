@@ -53,7 +53,7 @@ describe('Dashboard result navigation', () => {
     expect([...view.querySelectorAll('main article a')].map((link) => link.getAttribute('href')))
       .toEqual(expectedPaths);
     expect([...view.querySelectorAll('aside nav a')].map((link) => link.getAttribute('href')))
-      .toEqual(expectedPaths);
+      .toEqual([...expectedPaths, '/dashboard/modulos']);
     expect(view.querySelector('#postlogin-biomarcadores, #postlogin-biometricas')).toBeNull();
   });
 });

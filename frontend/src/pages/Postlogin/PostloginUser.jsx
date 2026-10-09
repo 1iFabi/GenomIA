@@ -6,6 +6,7 @@ import Ancestria from '../Ancestria/Ancestria';
 import Rasgos from '../Rasgos/Rasgos';
 import Enfermedades from '../Enfermedades/Enfermedades';
 import Farmacogenetica from '../Farmacogenetica/Farmacogenetica';
+import GuiaModulos from '../GuiaModulos/GuiaModulos';
 
 const PostloginUser = ({ user }) => {
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ const PostloginUser = ({ user }) => {
       <Route path="rasgos" element={<Rasgos />} />
       <Route path="enfermedades" element={<Enfermedades />} />
       <Route path="farmacogenetica" element={<Farmacogenetica/>} />
+      <Route path="modulos" element={<GuiaModulos />} />
     </Routes>
   );
 };

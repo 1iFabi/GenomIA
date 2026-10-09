@@ -356,6 +356,31 @@
   flex-wrap: wrap;
 }
 
+.analyst-access__row--placeholder .dashboard-skeleton__block {
+  height: 1rem;
+  background: #e8edf3;
+}
+
+.analyst-access__placeholder-name {
+  width: 70%;
+}
+
+.analyst-access__placeholder-email {
+  width: 80%;
+}
+
+.analyst-access__row--placeholder .analyst-access__placeholder-role {
+  width: 6rem;
+  height: 1.5rem;
+  border-radius: 6px;
+}
+
+.analyst-access__row--placeholder .analyst-access__placeholder-action {
+  width: 8rem;
+  height: 2rem;
+  border-radius: 8px;
+}
+
 .analyst-access__chip {
   padding: 4px 10px;
   border-radius: 6px;

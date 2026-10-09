@@ -101,4 +101,19 @@ describe('reception', () => {
     expect(rutCheckbox().checked).toBe(true);
     expect(rutCheckbox().disabled).toBe(true);
   });
+  it('shows result-shaped placeholders without a spinning search icon while lookup is pending', async () => {
+    let resolveSearch;
+    apiRequest.mockReturnValue(new Promise((resolve) => { resolveSearch = resolve; }));
+    await render();
+    await typeInto(container.querySelector('.search-sample-input'), 'GX-ABCD1234');
+    act(() => container.querySelector('.search-sample-form').requestSubmit());
+    expect(container.querySelector('.search-sample-button').disabled).toBe(true);
+    expect(container.querySelector('.search-sample-button').textContent).toBe('Buscar');
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('Buscando muestra');
+    expect(container.querySelectorAll('.reception-skeleton')).toHaveLength(2);
+    expect(container.querySelectorAll('.reception-skeleton__check-row')).toHaveLength(6);
+    expect(container.querySelector('.loader-spinner, .spin')).toBeNull();
+    await act(async () => resolveSearch({ ok: true, data: { results: [] } }));
+  });
+
 });

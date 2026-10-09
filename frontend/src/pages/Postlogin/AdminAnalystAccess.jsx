@@ -3,6 +3,7 @@ import { UserPlus, UserMinus, RefreshCw, Menu, X, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import AdminSidebar from '../../components/AdminSidebar/AdminSidebar';
+import { SkeletonBlock } from '../../components/DashboardSkeleton/DashboardSkeleton';
 import './AdminAnalystAccess.css';
 
 const AdminAnalystAccess = ({ user }) => {
@@ -282,7 +283,27 @@ const AdminAnalystAccess = ({ user }) => {
           </div>
 
           {loading ? (
-            <div className="analyst-access__loading">Cargando usuarios...</div>
+            <div className="analyst-access__table" role="status">
+              <span className="dashboard-skeleton__announcement">Cargando usuarios…</span>
+              <div aria-hidden="true">
+                <div className="analyst-access__row analyst-access__row--head">
+                  <span>Usuario</span>
+                  <span>Email</span>
+                  <span>Rol asignado</span>
+                  <span className="analyst-access__align-center">Acción</span>
+                </div>
+                {[0, 1, 2].map((row) => (
+                  <div key={row} className="analyst-access__row analyst-access__row--placeholder">
+                    <SkeletonBlock className="analyst-access__placeholder-name" />
+                    <SkeletonBlock className="analyst-access__placeholder-email" />
+                    <SkeletonBlock className="analyst-access__placeholder-role" />
+                    <span className="analyst-access__align-center">
+                      <SkeletonBlock className="analyst-access__placeholder-action" />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
             <div className="analyst-access__table" role="table" aria-label="Usuarios y permisos">
               <div className="analyst-access__row analyst-access__row--head" role="row">

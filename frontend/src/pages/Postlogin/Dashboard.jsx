@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Menu, X } from 'lucide-react';
 import GridBento from '../../components/GridBento/GridBento';
 import Sidebar from '../../components/Sidebar/Sidebar';
+import { animatedSidebarIcons } from '../../components/Sidebar/animatedSidebarIcons';
 import Buttondownload from '../../components/Buttondownload';
 import './Dashboard.css';
 
@@ -135,10 +136,10 @@ const Dashboard = ({ user, onLogout }) => {
 
   const sidebarItems = useMemo(
     () =>
-      cards.map(card => ({
+      [...cards.map(card => ({
         label: card.navLabel ?? card.title ?? card.label,
         href: card.cta?.href ?? '#'
-      })),
+      })), { label: 'Guía de módulos', href: '/dashboard/modulos' }],
     [cards]
   );
 
@@ -161,7 +162,8 @@ const Dashboard = ({ user, onLogout }) => {
       )}
 
       <aside className="dashboard__sidebar">
-        <Sidebar 
+        <Sidebar
+          iconOverrides={animatedSidebarIcons}
           items={sidebarItems} 
           onLogout={onLogout} 
           user={user}

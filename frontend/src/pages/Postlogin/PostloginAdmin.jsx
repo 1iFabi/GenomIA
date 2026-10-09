@@ -1,16 +1,23 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Menu, X, Users, FileText, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clearToken } from '../../config/api';
 import AdminSidebar from '../../components/AdminSidebar/AdminSidebar';
 import { useAdminStats } from '../../hooks/useAdminStats';
+import { SkeletonBlock } from '../../components/DashboardSkeleton/DashboardSkeleton';
 import './PostloginAdmin.css';
 
 const PostloginAdmin = ({ user, mode = 'admin' }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
-  const { stats } = useAdminStats();
+  const { stats, loading } = useAdminStats();
+  const statsLoaded = useRef(false);
+  const showStatsSkeleton = loading && !statsLoaded.current;
+
+  useEffect(() => {
+    if (!loading) statsLoaded.current = true;
+  }, [loading]);
   const isAdmin = mode === 'admin';
 
   useEffect(() => {
@@ -89,13 +96,20 @@ const PostloginAdmin = ({ user, mode = 'admin' }) => {
         </header>
 
         <section className="postlogin-admin__stats" aria-label="Estadísticas">
+          {showStatsSkeleton && (
+            <span className="dashboard-skeleton__announcement" role="status">
+              Cargando estadísticas…
+            </span>
+          )}
           <div className="postlogin-admin__stats-grid">
             <div className="postlogin-admin__stat-card">
               <div className="postlogin-admin__stat-header">
                 <span className="postlogin-admin__stat-label">Usuarios Totales</span>
                 <Users size={24} className="postlogin-admin__stat-icon" style={{ color: '#0b7ad0' }} />
               </div>
-              <div className="postlogin-admin__stat-value">{stats.totalUsers.toLocaleString()}</div>
+              <div className="postlogin-admin__stat-value">
+                {showStatsSkeleton ? <SkeletonBlock className="postlogin-admin__stat-placeholder" /> : stats.totalUsers.toLocaleString()}
+              </div>
             </div>
 
             <div className="postlogin-admin__stat-card">
@@ -103,7 +117,9 @@ const PostloginAdmin = ({ user, mode = 'admin' }) => {
                 <span className="postlogin-admin__stat-label">Reportes Pendientes</span>
                 <FileText size={24} className="postlogin-admin__stat-icon" style={{ color: '#f97316' }} />
               </div>
-              <div className="postlogin-admin__stat-value">{stats.pendingReports.toLocaleString()}</div>
+              <div className="postlogin-admin__stat-value">
+                {showStatsSkeleton ? <SkeletonBlock className="postlogin-admin__stat-placeholder" /> : stats.pendingReports.toLocaleString()}
+              </div>
             </div>
 
             <div className="postlogin-admin__stat-card">
@@ -111,7 +127,9 @@ const PostloginAdmin = ({ user, mode = 'admin' }) => {
                 <span className="postlogin-admin__stat-label">Análisis Completados</span>
                 <Activity size={24} className="postlogin-admin__stat-icon" style={{ color: '#10b981' }} />
               </div>
-              <div className="postlogin-admin__stat-value">{stats.completedAnalysis.toLocaleString()}</div>
+              <div className="postlogin-admin__stat-value">
+                {showStatsSkeleton ? <SkeletonBlock className="postlogin-admin__stat-placeholder" /> : stats.completedAnalysis.toLocaleString()}
+              </div>
             </div>
           </div>
         </section>

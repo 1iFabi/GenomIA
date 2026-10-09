@@ -6,7 +6,7 @@ import SearchSample from '../../components/SearchSample/SearchSample';
 import './PostloginReception.css';
 import { AlertCircle, CheckCircle2, Printer, CheckSquare, X } from 'lucide-react';
 
-import SkeletonCard from '../../components/SkeletonCard/SkeletonCard';
+import { SkeletonBlock } from '../../components/DashboardSkeleton/DashboardSkeleton';
 
 const STATUS_LABELS = {
   NO_PURCHASED: 'Sin servicio',
@@ -222,9 +222,36 @@ const PostloginReception = ({ user }) => {
           </div>
 
           {loadingSearch ? (
-            <div className="reception-details">
-              <SkeletonCard />
-              <SkeletonCard />
+            <div className="reception-details" aria-hidden="true">
+              <div className="reception-user-card reception-skeleton">
+                <div className="reception-user-card__header">
+                  <div>
+                    <SkeletonBlock className="reception-skeleton__field-label" />
+                    <SkeletonBlock className="reception-skeleton__code" />
+                  </div>
+                  <SkeletonBlock className="reception-skeleton__badge" />
+                </div>
+                <div className="reception-user-card__body">
+                  <SkeletonBlock className="reception-skeleton__field-label" />
+                  <SkeletonBlock className="reception-skeleton__patient" />
+                </div>
+              </div>
+              <div className="reception-checklist-card reception-skeleton">
+                <SkeletonBlock className="reception-skeleton__title" />
+                <div className="reception-checklist">
+                  {[0, 1, 2].map((group) => (
+                    <div key={group} className="reception-checklist-group">
+                      <SkeletonBlock className="reception-skeleton__group-title" />
+                      {[0, 1].map((item) => (
+                        <div key={item} className="reception-skeleton__check-row">
+                          <SkeletonBlock className="reception-skeleton__check-icon" />
+                          <SkeletonBlock className="reception-skeleton__check-label" />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : selectedUser ? (
             <div className="reception-details">
