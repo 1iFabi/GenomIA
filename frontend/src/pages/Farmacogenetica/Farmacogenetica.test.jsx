@@ -24,12 +24,6 @@ vi.mock('../../components/Sidebar/Sidebar', () => ({
     </nav>
   ),
 }));
-vi.mock('../../components/SunburstChart/SunburstChart', () => ({
-  default: () => <div data-legacy-chart="true">Legacy chart</div>,
-}));
-vi.mock('../../components/GeneticTraitBar/GeneticTraitBar', () => ({
-  default: () => <div data-legacy-trait="true">Legacy trait</div>,
-}));
 
 const disclaimer = 'Resultados de desarrollo. Solo el riesgo monogénico usa datos reales de ClinVar; '
   + 'el resto es simulado y no tiene valor clínico.';

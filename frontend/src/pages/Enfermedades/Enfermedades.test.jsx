@@ -24,16 +24,6 @@ vi.mock('../../components/Sidebar/Sidebar', () => ({
     </nav>
   ),
 }));
-vi.mock('echarts-for-react', () => ({ default: () => <div>Legacy chart</div> }));
-vi.mock('../../components/CircularProgress/CircularProgress', () => ({
-  default: () => <div>Legacy score</div>,
-}));
-vi.mock('../../components/GlossaryCarousel/GlossaryCarousel', () => ({
-  default: () => <div>Legacy glossary</div>,
-}));
-vi.mock('../../components/PriorityCard/PriorityCard', () => ({
-  default: () => <div>Legacy priority</div>,
-}));
 
 const disclaimer = 'Resultados de desarrollo. Solo el riesgo monogénico usa datos reales de ClinVar; '
   + 'el resto es simulado y no tiene valor clínico.';
