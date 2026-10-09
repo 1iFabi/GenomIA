@@ -1,0 +1,178 @@
+.guia-layout {
+  display: flex;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f3f7ff 0%, #ffffff 60%);
+  color: #1e293b;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.guia-layout__main {
+  flex: 1;
+  min-width: 0;
+  padding: 1.5rem 2.5rem;
+}
+
+.guia-burger {
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 1100;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
+  color: #ffffff;
+}
+
+.guia-header__kicker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0b7ad0;
+}
+
+.guia-header h1 {
+  margin: 0.25rem 0;
+  font-size: 2rem;
+}
+
+.guia-header p,
+.guia-disclaimer,
+.guia-status {
+  max-width: 70ch;
+  color: #475569;
+}
+
+.guia-disclaimer {
+  font-size: 0.875rem;
+}
+
+.guia-grid {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.guia-card {
+  min-width: 0;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.guia-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.guia-card h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.guia-card h3 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.guia-card code {
+  font-size: 0.8rem;
+  color: #0955a3;
+}
+
+.guia-card__meta,
+.guia-card__fields {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.guia-card__meta div,
+.guia-card__fields div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) 1fr;
+  gap: 0.75rem;
+}
+
+.guia-card dt {
+  font-weight: 600;
+}
+
+.guia-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.guia-card__table {
+  overflow-x: auto;
+}
+
+.guia-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.guia-card th,
+.guia-card td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.guia-card th {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  color: #0955a3;
+}
+
+.guia-card__empty,
+.guia-card__more {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.guia-layout a:focus-visible,
+.guia-layout button:focus-visible {
+  outline: 3px solid #145f9f;
+  outline-offset: 3px;
+}
+
+@media (max-width: 1024px) {
+  .guia-layout__main {
+    padding: 5rem 1rem 1.5rem;
+  }
+
+  .guia-card__meta div,
+  .guia-card__fields div {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}
+
+.guia-loading-status { height: 0; }
+.guia-card__loading {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+.guia-card__loading-row {
+  display: grid;
+  grid-template-columns: minmax(5rem, 14rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+.guia-card__loading-field { width: 70%; height: 0.75rem; }
+.guia-card__loading-value { width: 80%; height: 0.75rem; }
+@media (max-width: 600px) {
+  .guia-card__loading-row { grid-template-columns: 1fr; gap: 0.35rem; }
+  .guia-card__loading-field { width: 35%; }
+}
