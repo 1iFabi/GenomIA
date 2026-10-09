@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, update_last_login
 from django.db import IntegrityError, transaction
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.utils.decorators import method_decorator
@@ -17,13 +17,16 @@ from allauth.account.models import EmailAddress
 from .email_utils import (
     EmailDeliveryError,
     send_welcome_email,
+    send_client_code_email,
     send_password_reset_email,
     send_email,
     build_branded_html,
 )
 from .jwt_utils import encode_jwt, decode_jwt
 from .authentication import JWTAuthentication
-from profiles.models import Profile
+from participants.codes import ensure_client_code
+from participants.models import Participant
+from profiles.models import Profile, normalize_rut
 from services.status import ClientStatus, get_service_projection, get_service_projections
 from services.models import ServiceRequest
 from .models import AppUser, RevokedToken, Role, WelcomeStatus
@@ -66,8 +69,29 @@ def normalize_cl_phone(raw: str):
         return "+569" + s[2:]
     # 9XXXXXXXX
     if re.fullmatch(r"9\d{8}", s):
-        return "+569" + s
+        return "+56" + s
     return None
+
+
+def issue_auth_cookie(resp, user, *, remember=False):
+    """Emite el JWT en cookie HttpOnly y registra el login; compartido por login local y Google."""
+    token = encode_jwt({
+        "sub": str(user.id),
+        "email": user.email,
+    })
+    cookie_name = getattr(settings, 'AUTH_COOKIE_NAME', 'access_token')
+    samesite = getattr(settings, 'AUTH_COOKIE_SAMESITE', 'Lax')
+    secure = bool(getattr(settings, 'AUTH_COOKIE_SECURE', False))
+    if remember:
+        # Cookie persistente: sobrevive al reinicio, acotada al TTL del token (8h).
+        max_age = int(getattr(settings, 'JWT_EXPIRATION_HOURS', 8)) * 3600
+        resp.set_cookie(cookie_name, token, httponly=True, samesite=samesite, secure=secure, path='/', max_age=max_age)
+    else:
+        # Cookie de sesión: muere al cerrar el navegador (acotada al TTL del token).
+        resp.set_cookie(cookie_name, token, httponly=True, samesite=samesite, secure=secure, path='/')
+    resp["Cache-Control"] = "no-store"
+    update_last_login(None, user)
+    return resp
 
 
 class CsrfCookieAPIView(APIView):
@@ -120,25 +144,8 @@ class LoginAPIView(APIView):
                             "requires_verification": True
                         }, status=400)
 
-                # Generar JWT (stateless) para Vercel/Render
-                token = encode_jwt({
-                    "sub": str(user.id),
-                    "email": user.email,
-                })
-                remember = bool(data.get('remember', False))
-                cookie_name = getattr(settings, 'AUTH_COOKIE_NAME', 'access_token')
-                samesite = getattr(settings, 'AUTH_COOKIE_SAMESITE', 'Lax')
-                secure = bool(getattr(settings, 'AUTH_COOKIE_SECURE', False))
                 resp = Response({"mensaje": "Inicio de sesión exitoso", "success": True})
-                if remember:
-                    # Cookie persistente: sobrevive al reinicio, acotada al TTL del token (8h).
-                    max_age = int(getattr(settings, 'JWT_EXPIRATION_HOURS', 8)) * 3600
-                    resp.set_cookie(cookie_name, token, httponly=True, samesite=samesite, secure=secure, path='/', max_age=max_age)
-                else:
-                    # Cookie de sesión: muere al cerrar el navegador (acotada al TTL del token).
-                    resp.set_cookie(cookie_name, token, httponly=True, samesite=samesite, secure=secure, path='/')
-                resp["Cache-Control"] = "no-store"
-                return resp
+                return issue_auth_cookie(resp, user, remember=bool(data.get('remember', False)))
             else:
                 # Detectar caso de usuario pendiente de verificación (is_active=False)
                 try:
@@ -200,11 +207,79 @@ class MeAPIView(APIView):
             "user_type": user_type,
             "service_status": projection.service_status,
             "can_view_results": projection.can_view_results,
+            # True once the client submitted RUT/phone to start a purchase (POST auth/me/purchase-profile/).
+            "purchase_profile_complete": Profile.objects.filter(user=u, rut__isnull=False).exists(),
+            # False for Google-only accounts: the UI asks for Google re-auth instead of a password.
+            "has_password": u.has_usable_password(),
+            # The client's own Sample ID (issued with the purchase data); shown on /no-purchased.
+            "client_code": Participant.objects.filter(user=u).values_list('participant_code', flat=True).first(),
         }
         # Evitar cacheo del perfil actual
         resp = Response({"user": data})
         resp["Cache-Control"] = "no-store"
         return resp
+
+
+PURCHASE_NAME_MAX_LENGTH = 30
+
+
+class PurchaseProfileAPIView(CSRFDoubleSubmitMixin, APIView):
+    """Datos que se piden recién al iniciar la compra (Ley 21.719: no en el registro).
+
+    Guarda nombre legal, RUT y teléfono (Profile) y sexo/año de nacimiento (Participant),
+    y emite el Sample ID del cliente.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'register'
+
+    def post(self, request):
+        user = request.user
+        if not AppUser.objects.filter(django_user=user, role__code=Role.Code.CLIENTE).exists():
+            return Response({"error": "Solo los clientes pueden iniciar una compra"}, status=status.HTTP_403_FORBIDDEN)
+        data = request.data if isinstance(request.data, dict) else {}
+
+        nombre = data.get('nombre').strip() if isinstance(data.get('nombre'), str) else ''
+        apellido = data.get('apellido').strip() if isinstance(data.get('apellido'), str) else ''
+        if not all(is_valid_registration_name(name) and len(name) <= PURCHASE_NAME_MAX_LENGTH
+                   for name in (nombre, apellido)):
+            return Response({"error": f"Nombres y apellidos son obligatorios, válidos y de hasta "
+                                      f"{PURCHASE_NAME_MAX_LENGTH} caracteres"},
+                            status=status.HTTP_400_BAD_REQUEST)
+        rut = normalize_rut(data.get('rut'))
+        if rut is None:
+            return Response({"error": "El RUT no es válido (formato 12345678-K)"}, status=status.HTTP_400_BAD_REQUEST)
+        phone = normalize_cl_phone(data.get('telefono') if isinstance(data.get('telefono'), str) else '')
+        if phone is None:
+            return Response({"error": "El teléfono debe tener formato +569XXXXXXXX"}, status=status.HTTP_400_BAD_REQUEST)
+        sex = data.get('sexoAlNacer')
+        if sex not in Participant.SexAtBirth.values:
+            return Response({"error": "Sexo no válido"}, status=status.HTTP_400_BAD_REQUEST)
+        year = data.get('anioNacimiento')
+        if type(year) is not int or not 1900 <= year <= timezone.now().year:
+            return Response({"error": "Año de nacimiento no válido"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # The RUT is what reception verifies against the ID card, so it is set once.
+        if Profile.objects.filter(user=user, rut__isnull=False).exists():
+            return Response({"error": "Tus datos de compra ya fueron registrados"}, status=status.HTTP_409_CONFLICT)
+        rut_taken = Response({"error": "Este RUT ya está registrado", "rut_exists": True},
+                             status=status.HTTP_400_BAD_REQUEST)
+        if Profile.objects.filter(rut=rut).exists():
+            return rut_taken
+
+        try:
+            with transaction.atomic():
+                user.first_name, user.last_name = nombre[:150], apellido[:150]
+                user.save(update_fields=['first_name', 'last_name'])
+                Profile.objects.update_or_create(user=user, defaults={'rut': rut, 'phone': phone})
+                code = ensure_client_code(user)
+                Participant.objects.filter(user=user).update(sex_at_birth=sex, birth_year=year)
+        except IntegrityError:
+            return rut_taken
+
+        email_sent = send_client_code_email(user, code)
+        return Response({"success": True, "clientCode": code, "emailSent": email_sent},
+                        status=status.HTTP_201_CREATED)
 
 
 class ChangePasswordAPIView(CSRFDoubleSubmitMixin, APIView):
@@ -293,12 +368,7 @@ class DeleteAccountAPIView(CSRFDoubleSubmitMixin, APIView):
 
         password = data.get('password', '')
         confirmation = (data.get('confirmation') or '').strip().lower()
-
-        if not password:
-            return Response(
-                {"error": "Debes ingresar tu contrasena actual"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        user = request.user
 
         if confirmation != 'eliminar':
             return Response(
@@ -306,12 +376,25 @@ class DeleteAccountAPIView(CSRFDoubleSubmitMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        user = request.user
-        if not user.check_password(password):
-            return Response(
-                {"error": "Contrasena incorrecta"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if user.has_usable_password():
+            if not password:
+                return Response(
+                    {"error": "Debes ingresar tu contrasena actual"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if not user.check_password(password):
+                return Response(
+                    {"error": "Contrasena incorrecta"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            # Google-only account: re-authenticate with a fresh Google sign-in instead of a password.
+            from .google_auth import is_fresh_google_reauth
+            if not is_fresh_google_reauth(user, data.get('googleCredential')):
+                return Response(
+                    {"error": "Vuelve a ingresar con Google para confirmar", "requires_google_reauth": True},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         try:
             user.delete()
@@ -463,24 +546,20 @@ class RegisterAPIView(APIView):
             nombre = data.get('nombre') if isinstance(data.get('nombre'), str) else ''
             apellido = data.get('apellido') if isinstance(data.get('apellido'), str) else ''
             correo = data.get('correo') if isinstance(data.get('correo'), str) else ''
-            telefono = data.get('telefono') if isinstance(data.get('telefono'), str) else ''
-            rut = data.get('rut') if isinstance(data.get('rut'), str) else ''
             contraseña = data.get('contraseña', '')
             repetir_contraseña = data.get('repetirContraseña', '')
             terminos = data.get('terminos', False)
+            # RUT y teléfono ya no se piden aquí (Ley 21.719): se piden al iniciar la compra.
 
             nombre = nombre.strip()
             apellido = apellido.strip()
             correo = correo.strip().lower()
-            telefono = telefono.strip()
-            rut = rut.strip().upper()  # Normalizar a mayúsculas para la K
-            
+
             # Validaciones básicas
             if not correo:
                 return Response({"error": "El correo no es válido."}, status=status.HTTP_400_BAD_REQUEST)
             if (
-                not telefono
-                or not isinstance(contraseña, str)
+                not isinstance(contraseña, str)
                 or not contraseña
                 or not isinstance(repetir_contraseña, str)
                 or not repetir_contraseña
@@ -503,11 +582,6 @@ class RegisterAPIView(APIView):
             if password_errors:
                 return Response({"error": password_errors}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Validación/normalización de teléfono (Chile: +569XXXXXXXX)
-            telefono_norm = normalize_cl_phone(telefono)
-            if not telefono_norm:
-                return Response({"error": "El teléfono debe tener formato +569XXXXXXXX"}, status=status.HTTP_400_BAD_REQUEST)
-            
             # Validate email syntax and MX records again before creating a user.
             email_validation = validate_registration_email(correo)
             if not email_validation.valid:
@@ -515,19 +589,6 @@ class RegisterAPIView(APIView):
             correo = email_validation.normalized_email
 
             require_email_verification = bool(getattr(settings, 'REQUIRE_EMAIL_VERIFICATION', False))
-            
-            # Validación de RUT legacy, only when supplied.
-            rut_pattern = r'^\d{7,8}-[0-9K]$'
-            if rut and not re.fullmatch(rut_pattern, rut):
-                return Response({"error": "El RUT debe tener el formato XXXXXXX-R (ejemplo: 12345678-9 o 1234567-K)"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verificar si el RUT ya existe, only when a legacy RUT was supplied.
-            from profiles.models import Profile
-            if rut and Profile.objects.filter(rut=rut).exists():
-                return Response({
-                    "error": "Este RUT ya está registrado",
-                    "rut_exists": True
-                }, status=status.HTTP_400_BAD_REQUEST)
 
             # Verificar identificadores existentes con comparación insensible a mayúsculas.
             if User.objects.filter(username__iexact=normalized_username).exists():
@@ -542,7 +603,7 @@ class RegisterAPIView(APIView):
                     "email_exists": True
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Crear el usuario y su perfil como una sola operación.
+            # Crear el usuario y su confirmación de correo como una sola operación.
             try:
                 with transaction.atomic():
                     user = User.objects.create_user(
@@ -551,11 +612,6 @@ class RegisterAPIView(APIView):
                         password=contraseña,
                         first_name=nombre,
                         last_name=apellido,
-                    )
-                    Profile.objects.create(
-                        user=user,
-                        phone=telefono_norm,
-                        rut=rut or None,
                     )
                     if require_email_verification:
                         # Keep the allauth confirmation record in the same transaction
@@ -584,11 +640,6 @@ class RegisterAPIView(APIView):
                     return Response({
                         "error": "Este correo ya está registrado",
                         "email_exists": True
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                if rut and Profile.objects.filter(rut=rut).exists():
-                    return Response({
-                        "error": "Este RUT ya está registrado",
-                        "rut_exists": True
                     }, status=status.HTTP_400_BAD_REQUEST)
                 return Response(
                     {"error": "No se pudo completar el registro. Inténtalo nuevamente."},

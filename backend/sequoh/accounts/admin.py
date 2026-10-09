@@ -4,8 +4,9 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from profiles.models import Profile
 from services.status import ClientStatus, get_service_projection
-from services.models import ServiceRequest, ServiceStatus, Sample, Purchase
-from .models import AppUser, EmailVerification, WelcomeStatus, PasswordResetToken
+from django.utils import timezone
+from services.models import Purchase, Sample, ServiceRequest, ServiceStatus, ServiceStatusLog
+from .models import AppUser, WelcomeStatus, PasswordResetToken
 
 
 class ProfileInline(admin.StackedInline):
@@ -79,20 +80,6 @@ admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
 
 
-@admin.register(EmailVerification)
-class EmailVerificationAdmin(admin.ModelAdmin):
-    list_display = ('email', 'user', 'is_verified', 'created_at', 'expires_at', 'is_expired')
-    list_filter = ('is_verified', 'created_at')
-    search_fields = ('email', 'user__username')
-    readonly_fields = ('token', 'created_at', 'verified_at')
-    ordering = ('-created_at',)
-
-    def is_expired(self, obj):
-        return obj.is_expired
-    is_expired.boolean = True
-    is_expired.short_description = 'Expirado'
-
-
 @admin.register(WelcomeStatus)
 class WelcomeStatusAdmin(admin.ModelAdmin):
     list_display = ('user', 'welcome_sent', 'sent_at')
@@ -119,7 +106,16 @@ class ServiceRequestAdmin(admin.ModelAdmin):
     list_display = ('purchase', 'participant', 'status', 'created_at', 'completed_at')
     list_filter = ('status', 'created_at')
     search_fields = ('participant__user__email', 'purchase__owner__django_user__email')
-    readonly_fields = ('purchase', 'participant', 'created_at', 'started_at')
+    readonly_fields = ('purchase', 'participant', 'created_at', 'started_at', 'completed_at')
+
+    def save_model(self, request, obj, form, change):
+        # The client's status is read from the latest log, so every admin change must log it too.
+        if change and 'status' in form.changed_data:
+            obj.completed_at = timezone.now() if obj.status.code == 'COMPLETED' else None
+            super().save_model(request, obj, form, change)
+            ServiceStatusLog.objects.create(request=obj, status=obj.status, actor=request.user.app_user)
+        else:
+            super().save_model(request, obj, form, change)
 
 
 admin.site.register(ServiceStatus)

@@ -47,7 +47,6 @@ class RegistrationEmailValidationTests(TestCase):
         return {
             'username': username,
             'correo': email,
-            'telefono': '+56912345678',
             'contraseña': 'SecurePassword1!',
             'repetirContraseña': 'SecurePassword1!',
             'terminos': True,
@@ -383,9 +382,8 @@ class RegistrationEmailValidationTests(TestCase):
         self.assertEqual(user.username, 'ana.user-1')
         self.assertEqual(user.first_name, '')
         self.assertEqual(user.last_name, '')
-        profile = Profile.objects.get(user=user)
-        self.assertEqual(profile.phone, '+56912345678')
-        self.assertIsNone(profile.rut)
+        # RUT/phone belong to the purchase step, so signup creates no Profile.
+        self.assertFalse(Profile.objects.filter(user=user).exists())
         self.assertEqual(response.data['username'], 'ana.user-1')
 
     @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
@@ -467,12 +465,13 @@ class RegistrationEmailValidationTests(TestCase):
 
     @override_settings(ALLOWED_EMAIL_DOMAINS='', REQUIRE_EMAIL_VERIFICATION=False)
     @patch('accounts.views.send_welcome_email', return_value=True)
-    def test_final_registration_stores_optional_legacy_fields_when_valid(self, _send_welcome):
+    def test_final_registration_stores_names_and_ignores_rut_and_phone(self, _send_welcome):
         payload = self._registration_payload()
         payload.update({
             'nombre': '  Ana María  ',
             'apellido': "  O'Connor  ",
-            'rut': '12345678-k',
+            'rut': 'invalid-rut',
+            'telefono': 'not-a-phone',
         })
         with patch('accounts.email_validation.dns.resolver.resolve', return_value=self._mx_answer()):
             response = self.client.post(
@@ -485,23 +484,7 @@ class RegistrationEmailValidationTests(TestCase):
         user = User.objects.get(username='person_handle')
         self.assertEqual(user.first_name, 'Ana María')
         self.assertEqual(user.last_name, "O'Connor")
-        self.assertEqual(Profile.objects.get(user=user).rut, '12345678-K')
-
-    @override_settings(ALLOWED_EMAIL_DOMAINS='', REQUIRE_EMAIL_VERIFICATION=False)
-    @patch('accounts.views.send_welcome_email', return_value=True)
-    def test_final_registration_rejects_invalid_legacy_rut_when_supplied(self, _send_welcome):
-        payload = self._registration_payload()
-        payload['rut'] = 'invalid-rut'
-        with patch('accounts.email_validation.dns.resolver.resolve', return_value=self._mx_answer()):
-            response = self.client.post(
-                '/api/auth/register/',
-                data=json.dumps(payload),
-                content_type='application/json',
-            )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('RUT', response.data['error'])
-        self.assertEqual(User.objects.count(), 0)
+        self.assertFalse(Profile.objects.exists())
 
 
 class GmailVerificationDeliveryTests(TestCase):

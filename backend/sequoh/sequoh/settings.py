@@ -290,6 +290,8 @@ ACCOUNT_ADAPTER = 'accounts.adapters.GmailAPIAccountAdapter'
 
 # Verificación obligatoria y URLs de redirección tras confirmar
 REQUIRE_EMAIL_VERIFICATION = True
+# Google Sign-In: OAuth client ID (type "Web application"). Used as the ID-token audience; no secret needed.
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 EMAIL_VERIFICATION_EXPIRE_HOURS = 24
 EMAIL_VALIDATION_DNS_TIMEOUT_SECONDS = float(os.getenv('EMAIL_VALIDATION_DNS_TIMEOUT_SECONDS', '3'))
 EMAIL_VALIDATION_DNS_FALLBACK_NAMESERVERS = os.getenv(

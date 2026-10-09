@@ -500,12 +500,12 @@ def send_verification_email(user_email: str, user_name: str, verification_url: s
 
 
 def send_welcome_email(user) -> bool:
-    """Envía email de bienvenida tras verificación, con el Sample ID del cliente."""
-    from participants.codes import ensure_client_code
+    """Envía email de bienvenida tras verificación.
 
+    El Sample ID ya no se emite aquí: se genera cuando el cliente completa sus datos de compra.
+    """
     try:
-        code = ensure_client_code(user)
-        subject = f'¡Bienvenido a GenomIA! Tu Sample ID es {code}' if code else '¡Bienvenido a GenomIA!'
+        subject = '¡Bienvenido a GenomIA!'
         login_url = getattr(
             settings,
             'FRONTEND_LOGIN_REDIRECT',
@@ -522,17 +522,10 @@ def send_welcome_email(user) -> bool:
             logo_src = _asset_url('cNormal.png')
 
         safe_first_name = escape(user.first_name or '')
-        code_html = f"""
-          <div style="background:#F0F9FF; border-left:4px solid #0EA5E9; padding:20px; border-radius:12px; margin:24px 0;">
-            <h3 style="color:#0369A1; margin:0 0 12px 0; font-size:18px;">Tu Sample ID</h3>
-            <p style="margin:8px 0; color:#1E40AF;">Preséntalo en recepción para confirmar tu compra y entregar tu muestra:</p>
-            <p style="font-size: 20px; font-weight: 700; letter-spacing: 0.8px;">{escape(code)}</p>
-          </div>""" if code else ""
         btn_html = email_button(login_url, "Acceder a mi cuenta", kind="primary")
         inner = f"""
           <p>Hola {safe_first_name},</p>
           <p>¡Bienvenido a GenomIA! Tu registro ha sido exitoso y tu cuenta ha sido verificada.</p>
-          {code_html}
           <div style="text-align:center; margin: 28px 0;">
             {btn_html}
           </div>
@@ -541,7 +534,7 @@ def send_welcome_email(user) -> bool:
             inner_html=inner,
             title_text='¡Bienvenido a GenomIA!',
             logo_src=logo_src,
-            preheader=f"Tu Sample ID es {code}" if code else "Tu cuenta ya está verificada."
+            preheader="Tu cuenta ya está verificada."
         )
 
         text_content = text_block(
@@ -549,7 +542,6 @@ def send_welcome_email(user) -> bool:
             "",
             "Tu registro ha sido exitoso y tu cuenta ha sido verificada.",
             "",
-            *([f"Tu Sample ID es: {code}", "Preséntalo en recepción para confirmar tu compra.", ""] if code else []),
             f"Accede a tu cuenta: {login_url}",
             "",
             f"Equipo {BRAND['name']}"
@@ -640,6 +632,45 @@ def send_password_reset_email(user_email: str, user_name: str, reset_url: str) -
             _recipient_domain(user_email),
             type(e).__name__,
         )
+        return False
+
+
+def send_client_code_email(user, code: str) -> bool:
+    """Envía el Sample ID del cliente cuando completa sus datos de compra."""
+    try:
+        inline_images = {}
+        logo_bytes = load_logo_bytes()
+        if logo_bytes:
+            inline_images['logo_cid'] = logo_bytes
+            logo_src = 'cid:logo_cid'
+        else:
+            logo_src = _asset_url('cNormal.png')
+        inner = f"""
+          <p>Hola {escape(user.first_name or '')},</p>
+          <div style="background:#F0F9FF; border-left:4px solid #0EA5E9; padding:20px; border-radius:12px; margin:24px 0;">
+            <h3 style="color:#0369A1; margin:0 0 12px 0; font-size:18px;">Tu Sample ID</h3>
+            <p style="margin:8px 0; color:#1E40AF;">Preséntalo en recepción para confirmar tu compra y entregar tu muestra:</p>
+            <p style="font-size: 20px; font-weight: 700; letter-spacing: 0.8px;">{escape(code)}</p>
+          </div>
+        """
+        ok = send_email(
+            to_email=user.email,
+            subject=f'Tu Sample ID GenomIA es {code}',
+            html_body=build_branded_html(inner_html=inner, title_text='Tu Sample ID',
+                                         logo_src=logo_src, preheader=f'Tu Sample ID es {code}'),
+            text_body=text_block(f"Hola {user.first_name},", "", f"Tu Sample ID es: {code}",
+                                 "Preséntalo en recepción para confirmar tu compra.", "",
+                                 f"Equipo {BRAND['name']}"),
+            inline_images=inline_images or None,
+            from_name="Genomia",
+            from_email=_safe_sender(),
+        )
+        if ok:
+            logger.info("Email de Sample ID enviado (dominio=%s)", _recipient_domain(user.email))
+        return ok
+    except Exception as e:
+        logger.error("Error enviando Sample ID (dominio=%s; error=%s)",
+                     _recipient_domain(user.email), type(e).__name__)
         return False
 
 
