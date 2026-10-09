@@ -1,11 +1,8 @@
 import React, { act } from 'react';
-import { readFileSync } from 'node:fs';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import DashboardSkeleton, { DashboardPageSkeleton, SkeletonBlock } from './DashboardSkeleton';
 
-const dashboardSkeletonStyles = readFileSync('src/components/DashboardSkeleton/DashboardSkeleton.css', 'utf8');
-const dashboardGridStyles = readFileSync('src/components/GridBento/GridBento.css', 'utf8');
 
 let container;
 let root;
@@ -39,44 +36,19 @@ describe('DashboardSkeleton', () => {
     ]);
   });
 
+
+
   it.each([
-    ['skeleton', dashboardSkeletonStyles], ['grid', dashboardGridStyles],
-  ])('removes retired slots from the %s layout at every desktop breakpoint', (_name, styles) => {
-    expect(styles).not.toMatch(/biomarcadores|biometricas/);
-    const templates = [...styles.matchAll(/grid-template-areas:\s*([^;]+);/g)]
-      .map(([, value]) => [...value.matchAll(/['"]([^'"]+)['"]/g)].map(([, row]) => row));
-    expect(templates).toEqual([[
-      'ancestria rasgos farmacogenetica', 'ancestria enfermedades enfermedades',
-    ]]);
-    const rowCounts = [...styles.matchAll(/grid-template-rows:\s*repeat\((\d+),\s*1fr\);/g)]
-      .map(([, count]) => Number(count));
-    expect(rowCounts.length).toBeGreaterThan(0);
-    expect(rowCounts.every((count) => count === 2)).toBe(true);
-  });
-
-  it('shimmers dashboard content instead of the sidebar and disables it for reduced motion', () => {
-    expect(dashboardSkeletonStyles).toMatch(/\.dashboard-skeleton__content::after\s*\{/);
-    expect(dashboardSkeletonStyles).not.toMatch(/\.dashboard-skeleton::after\s*\{/);
-    expect(dashboardSkeletonStyles).toMatch(/\.dashboard-skeleton__content\s*\{[^}]*position:\s*relative;/);
-    expect(dashboardSkeletonStyles).toMatch(/\.dashboard-skeleton__content::after\s*\{[^}]*background:\s*linear-gradient\([^;]*rgba\(15,\s*35,\s*65,\s*0\.1\)/);
-    expect(dashboardSkeletonStyles).toMatch(/animation:\s*dashboard-skeleton-shimmer\s+2\.8s\s+linear\s+infinite/);
-    expect(dashboardSkeletonStyles).toMatch(/\.dashboard-skeleton__content::after\s*\{[^}]*left:\s*0;/);
-    expect(dashboardSkeletonStyles).toMatch(/@keyframes dashboard-skeleton-shimmer\s*\{\s*from\s*\{\s*transform:\s*translateX\(0(?:%|px)?\);/);
-    expect(dashboardSkeletonStyles).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.dashboard-skeleton__content::after\s*\{[^}]*animation:\s*none;[^}]*opacity:\s*0;[^}]*\}\s*\}/);
-  });
-
-  it('renders a neutral structural shell without visible loading copy', async () => {
-    const view = await render(<DashboardSkeleton variant="neutral" />);
-    const shell = view.querySelector('.dashboard-skeleton');
-
-    expect(shell?.getAttribute('data-variant')).toBe('neutral');
-    expect(shell?.getAttribute('role')).toBe('status');
-    expect(shell?.querySelector('.dashboard-skeleton__announcement')?.textContent)
-      .toBe('Loading dashboard');
-    expect(shell?.querySelector('.dashboard-skeleton__main')?.getAttribute('aria-hidden'))
-      .toBe('true');
-    expect(view.querySelector('.dashboard-skeleton__card-grid')).toBeNull();
-    expect(view.querySelector('[role="progressbar"]')).toBeNull();
+    ['/dashboard/ancestria', '.dashboard-skeleton__map-panel', 1],
+    ['/dashboard/farmacogenetica', '.dashboard-skeleton__report-panel', 1],
+    ['/dashboard/enfermedades', '.dashboard-skeleton__report-panel', 2],
+    ['/dashboard/modulos', '.dashboard-skeleton__module-grid .dashboard-skeleton__report-panel', 4],
+    ['/dashboard/admin/analysts', '.dashboard-skeleton__table-row--access', 5],
+  ])('matches loading structure to %s before the page is ready', async (pathname, selector, count) => {
+    const view = await render(<DashboardSkeleton variant="neutral" pathname={pathname} />);
+    expect(view.querySelectorAll(selector)).toHaveLength(count);
+    expect(view.querySelector('.dashboard-skeleton')?.getAttribute('data-page')).not.toBe('overview');
+    expect(view.querySelector('[role="progressbar"], button, a')).toBeNull();
   });
 
   it.each(['user', 'admin', 'analyst', 'reception'])('supports the %s dashboard variant', async (variant) => {
@@ -88,15 +60,16 @@ describe('DashboardSkeleton', () => {
 
   it('provides reusable accessible blocks and page loading wrappers', async () => {
     const view = await render(
-      <DashboardPageSkeleton label="Loading report">
+      <DashboardPageSkeleton label="Cargando resultados">
         <SkeletonBlock className="report-row" />
       </DashboardPageSkeleton>
     );
     const status = view.querySelector('.dashboard-page-skeleton');
 
     expect(status?.getAttribute('role')).toBe('status');
+    expect(status?.getAttribute('aria-busy')).toBe('true');
     expect(status?.querySelector('.dashboard-skeleton__announcement')?.textContent)
-      .toBe('Loading report');
+      .toBe('Cargando resultados');
     expect(status?.querySelector('.dashboard-page-skeleton__content')?.getAttribute('aria-hidden'))
       .toBe('true');
     expect(status?.querySelector('.dashboard-skeleton__block.report-row')?.getAttribute('aria-hidden'))

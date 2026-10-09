@@ -28,7 +28,7 @@ const renderRoute = async (path, element) => {
           <MemoryRouter initialEntries={[path]}>
             <Routes>
               <Route path={`${path.split('/').slice(0, 2).join('/')}/*`} element={element} />
-              {['/login', '/dashboard', '/no-purchased', '/pending']
+              {['/', '/login', '/dashboard', '/no-purchased', '/pending']
                 .filter((destination) => destination !== path.split('/').slice(0, 2).join('/'))
                 .map((destination) => (
                   <Route key={destination} path={destination} element={<output>{destination}</output>} />
@@ -65,7 +65,6 @@ describe('ProtectedRoute', () => {
 
     const view = await renderRoute('/dashboard', <ProtectedRoute><Dashboard /></ProtectedRoute>);
 
-    expect(view.querySelector('.dashboard-skeleton')?.getAttribute('data-variant')).toBe('neutral');
     expect(view.querySelector('[role="progressbar"]')).toBeNull();
     expect(apiRequest).toHaveBeenCalledTimes(1);
 
@@ -75,15 +74,47 @@ describe('ProtectedRoute', () => {
     expect(apiRequest).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the resolved role for a suspended dashboard entry', async () => {
+  it('keeps one Rasgos loading shape through authentication and lazy module loading', async () => {
     let resolveMe;
-    const response = new Promise((resolve) => { resolveMe = resolve; });
-    apiRequest.mockReturnValue(response);
-    const SuspendedDashboard = lazy(() => new Promise(() => {}));
+    apiRequest.mockReturnValue(new Promise((resolve) => { resolveMe = resolve; }));
+    const SuspendedRasgos = lazy(() => new Promise(() => {}));
     const view = await renderRoute(
-      '/dashboard',
+      '/dashboard/rasgos',
+      <ProtectedRoute><SuspendedRasgos /></ProtectedRoute>
+    );
+
+    const expectSingleRasgosSkeleton = () => {
+      expect(view.querySelector('.dashboard-skeleton')).toBeNull();
+      expect(view.querySelectorAll('.rasgos-loading')).toHaveLength(1);
+      expect(view.querySelectorAll('.rasgos-loading__donut')).toHaveLength(1);
+      expect(view.querySelectorAll('.rasgos-loading__legend-item')).toHaveLength(5);
+      expect(view.querySelector('[role="progressbar"], button, a')).toBeNull();
+    };
+    expectSingleRasgosSkeleton();
+
+    await act(async () => resolveMe({
+      ok: true,
+      data: { user: { id: 7, service_status: 'COMPLETED' } },
+    }));
+
+    expectSingleRasgosSkeleton();
+    expect(view.querySelector('.rasgos-header__title')?.textContent).toContain('Rasgos');
+  });
+
+  it.each(['/dashboard', '/dashboard/'])('keeps loading feedback while resolving the role at %s', async (pathname) => {
+    let resolveMe;
+    let resolveDashboard;
+    apiRequest.mockReturnValue(new Promise((resolve) => { resolveMe = resolve; }));
+    const SuspendedDashboard = lazy(() => new Promise((resolve) => { resolveDashboard = resolve; }));
+    const Dashboard = () => <div data-testid="protected-dashboard">Ready</div>;
+    const view = await renderRoute(
+      pathname,
       <ProtectedRoute><SuspendedDashboard /></ProtectedRoute>
     );
+
+    expect(view.querySelector('.dashboard-skeleton')).toBeNull();
+    expect(view.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(view.querySelector('[data-testid="protected-dashboard"]')).toBeNull();
 
     await act(async () => resolveMe({
       ok: true,
@@ -92,6 +123,13 @@ describe('ProtectedRoute', () => {
 
     expect(view.querySelector('.dashboard-skeleton')?.getAttribute('data-variant'))
       .toBe('reception');
+    expect(view.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(view.querySelector('[data-testid="protected-dashboard"]')).toBeNull();
+
+    await act(async () => resolveDashboard({ default: Dashboard }));
+
+    expect(view.querySelector('[data-testid="protected-dashboard"]')?.textContent).toBe('Ready');
+    expect(view.querySelector('.dashboard-skeleton')).toBeNull();
     expect(apiRequest).toHaveBeenCalledTimes(1);
   });
 
@@ -99,7 +137,7 @@ describe('ProtectedRoute', () => {
     ['unauthenticated', '/dashboard', false, true, null, '/login'],
     ['connection error', '/dashboard', false, true, null, '/login'],
     ['non-admin', '/dashboard', true, true, { is_staff: false }, '/dashboard'],
-    ['no purchase', '/dashboard', false, true, { service_status: 'NO_PURCHASED' }, '/no-purchased'],
+    ['no purchase', '/dashboard', false, true, { service_status: 'NO_PURCHASED' }, '/'],
     ['pending', '/dashboard', false, true, { service_status: 'PENDING' }, '/pending'],
     ['purchased', '/no-purchased', false, false, { service_status: 'COMPLETED' }, '/dashboard'],
     ['completed', '/pending', false, false, { service_status: 'COMPLETED' }, '/dashboard'],
@@ -123,6 +161,9 @@ describe('ProtectedRoute', () => {
     ['/profile', { service_status: 'NO_PURCHASED' }, false, false],
     ['/no-purchased', { service_status: 'NO_PURCHASED' }, false, false],
     ['/pending', { service_status: 'PENDING' }, false, false],
+    ['/dashboard', { roles: ['ADMIN'], service_status: 'NO_PURCHASED' }, false, true],
+    ['/dashboard', { roles: ['ANALISTA'], service_status: 'NO_PURCHASED' }, false, true],
+    ['/dashboard', { roles: ['RECEPCION'], service_status: 'NO_PURCHASED' }, false, true],
   ])('retains access for %s with user %j', async (path, user, requireAdmin, requireService) => {
     apiRequest.mockResolvedValue({ ok: true, data: user });
     const view = await renderRoute(path, (
