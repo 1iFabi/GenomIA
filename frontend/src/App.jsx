@@ -3,17 +3,21 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar/Navbar";
 import Hero from "./pages/Hero/Hero";
+import PurchaseEmailNotice from "./components/PurchaseEmailNotice/PurchaseEmailNotice";
 import Loader from "./components/Loader/Loader";
 import DashboardSkeleton from "./components/DashboardSkeleton/DashboardSkeleton";
+import RasgosLoading from "./pages/Rasgos/RasgosLoading";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login/Login";
+// Static, like Login: the plate exchange must never suspend into the route fallback.
+import Register from "./pages/Register/Register";
 
 // Componentes bajo el pliegue (below-the-fold) y rutas secundarias: carga diferida.
 const Descubre = lazy(() => import("./pages/Descubre/Descubre"));
 const Conoce = lazy(() => import("./pages/Conoce/Conoce"));
-const Register = lazy(() => import("./pages/Register/Register"));
 const PostloginRouter = lazy(() => import("./pages/Postlogin/PostloginRouter"));
 const Profile = lazy(() => import("./pages/Profile/Profile"));
+const GoogleSignup = lazy(() => import("./pages/GoogleSignup/GoogleSignup"));
 const NoPurchased = lazy(() => import("./pages/NoPurchased/NoPurchased"));
 const Pending = lazy(() => import("./pages/Pending/Pending"));
 const GenomaPricing = lazy(() => import("./pages/GenomaPricing/GenomaPricing"));
@@ -32,6 +36,7 @@ export default function App() {
   const hideNavbar =
     normalizedPath === "/login" ||
     normalizedPath === "/register" ||
+    normalizedPath === "/register/google" ||
     normalizedPath === "/no-purchased" ||
     normalizedPath === "/pending" ||
     normalizedPath === "/profile" ||
@@ -43,7 +48,11 @@ export default function App() {
       {!hideNavbar && <Navbar />}
       <Suspense
         fallback={
-          isDashboardRoute ? <DashboardSkeleton variant="neutral" /> : <Loader />
+          normalizedPath === "/dashboard/rasgos"
+            ? <RasgosLoading />
+            : isDashboardRoute
+              ? <DashboardSkeleton variant="neutral" pathname={normalizedPath} />
+              : <Loader />
         }
       >
         <Routes>
@@ -51,6 +60,7 @@ export default function App() {
             path="/"
             element={
               <>
+                <PurchaseEmailNotice />
                 <Hero />
                 <Suspense fallback={<Loader />}>
                   <Descubre />
@@ -75,6 +85,7 @@ export default function App() {
           />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/register/google" element={<GoogleSignup />} />
           <Route
             path="/no-purchased"
             element={
