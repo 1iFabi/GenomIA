@@ -13,15 +13,15 @@ export const API_ENDPOINTS = {
   ME: `${API_BASE}/auth/me/`,
   DELETE_ACCOUNT: `${API_BASE}/auth/me/delete-account/`,
   LOGOUT: `${API_BASE}/auth/logout/`,
+  GOOGLE_LOGIN: `${API_BASE}/auth/google/`,
+  GOOGLE_COMPLETE: `${API_BASE}/auth/google/complete/`,
+  PURCHASE_PROFILE: `${API_BASE}/auth/me/purchase-profile/`,
   DASHBOARD: `${API_BASE}/auth/dashboard/`,
   CONTACT: `${API_BASE}/contact/`,
   GET_USERS: `${API_BASE}/admin/users/`,
   ADMIN_ANALYSTS: `${API_BASE}/admin/analysts/`,
-  GENOMICS_SERVICES: `${API_BASE}/genoma/v1/services/`,
-  GENOMICS_SERVICE_RESULTS: (serviceRequestId) =>
-    `${API_BASE}/genoma/v1/services/${encodeURIComponent(serviceRequestId)}/results/`,
-  GENOMICS_SERVICE_METRICS: (serviceRequestId) =>
-    `${API_BASE}/genoma/v1/services/${encodeURIComponent(serviceRequestId)}/metrics/`,
+  GENOMICS_RESULTS: `${API_BASE}/genoma/v1/results/`,
+  ANCESTRY_COHORT: `${API_BASE}/genoma/v1/results/ancestry-cohort/`,
   RECEPTION_SEARCH: `${API_BASE}/reception/search/`,
   RECEPTION_VERIFY_RUT: `${API_BASE}/reception/verify-rut/`,
   CONFIRM_PAYMENT: `${API_BASE}/services/payments/`,
@@ -38,6 +38,10 @@ const notifyAuthChange = (change) => {
   authRevision += 1;
   authListeners.forEach((listener) => listener(change));
 };
+// Google endpoints that may open a session; GOOGLE_LOGIN also answers 200 without one (needs_username).
+const GOOGLE_SESSION_ENDPOINTS = new Set([API_ENDPOINTS.GOOGLE_LOGIN, API_ENDPOINTS.GOOGLE_COMPLETE]);
+// Reload /me after the server changed the user (e.g. purchase data submitted).
+export const refreshSession = () => notifyAuthChange({ type: 'login' });
 
 // Logout: revoca la sesión en el servidor (cookie HttpOnly) y limpia lo que se pueda sin JS.
 // Se mantiene el nombre `clearToken` para no romper los llamadores existentes.
@@ -117,8 +121,9 @@ export const apiRequest = async (endpoint, options = {}) => {
       status: response.status,
       data,
     };
-    if (endpoint === API_ENDPOINTS.LOGIN && method === 'POST' && response.ok
-      && requestAuthRevision === authRevision) {
+    const opensSession = endpoint === API_ENDPOINTS.LOGIN
+      || (GOOGLE_SESSION_ENDPOINTS.has(endpoint) && data?.success === true);
+    if (opensSession && method === 'POST' && response.ok && requestAuthRevision === authRevision) {
       // A login started before logout must not reopen the shared session.
       // The next session consumer loads ME after the existing login navigation delay.
       notifyAuthChange({ type: 'login' });

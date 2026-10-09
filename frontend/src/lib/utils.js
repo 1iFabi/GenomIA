@@ -12,3 +12,7 @@ export function formatFrequency(value, emptyLabel = 'N/D') {
   const percent = parsed <= 1 ? parsed * 100 : parsed;
   return `${percent.toFixed(2)}%`;
 }
+
+// No matchMedia (tests, old browsers) or a reduce preference: show final states, unanimated.
+export const prefersStill = () => typeof window === 'undefined' || typeof window.matchMedia !== 'function'
+  || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
