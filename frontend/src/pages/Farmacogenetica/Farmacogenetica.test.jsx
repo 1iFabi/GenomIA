@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { cwd } from 'node:process';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Link, MemoryRouter, useLocation } from 'react-router-dom';
@@ -11,8 +8,9 @@ import { AuthProvider } from '../../contexts/AuthContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import Farmacogenetica from './Farmacogenetica';
 
-const pageStyles = readFileSync(resolve(cwd(), 'src/pages/Farmacogenetica/Farmacogenetica.css'), 'utf8');
-vi.mock('../../hooks/useLatestGenomicsResults', () => ({ useLatestGenomicsResults: vi.fn() }));
+vi.mock('../../hooks/useLatestGenomicsResults', async (importOriginal) => ({
+  ...await importOriginal(), useLatestGenomicsResults: vi.fn(),
+}));
 vi.mock('../../config/api', async (importOriginal) => ({
   ...await importOriginal(), apiRequest: vi.fn(), clearToken: vi.fn(),
 }));
@@ -33,20 +31,15 @@ vi.mock('../../components/GeneticTraitBar/GeneticTraitBar', () => ({
   default: () => <div data-legacy-trait="true">Legacy trait</div>,
 }));
 
-const provenance = {
-  synthetic: true, non_clinical: true, clinically_reviewed: false, display_only: true,
-  numeric_semantics: 'arbitrary_demo_only_not_evaluated',
-};
-const makeModule = () => ({
-  module: 'pharmacogenetics', result_type: 'synthetic_placeholder', value_code: 'SYNTHETIC_NOT_EVALUATED',
-  payload: {
-    ...provenance, module: 'pharmacogenetics', state: 'not_evaluated', label: 'Demo interaction A',
-    display: { kind: 'demo_interactions', items: [{ label: 'Demo interaction A', display_value: 8 }] },
-  },
+const disclaimer = 'Resultados de desarrollo. Solo el riesgo monogénico usa datos reales de ClinVar; '
+  + 'el resto es simulado y no tiene valor clínico.';
+const makeGene = () => ({
+  gene: 'CYP2C19', diplotype: '*1/*2', phenotype: 'Metabolizador intermedio',
+  drugs: ['Clopidogrel', 'Omeprazol'], simulated: true,
 });
 const makeState = () => ({
-  status: 'ready', loading: false, service: { service_request_id: 'latest' }, error: null,
-  data: { ...provenance, results: [makeModule()] }, retry: vi.fn(),
+  status: 'ready', loading: false, error: null, retry: vi.fn(),
+  data: { disclaimer, sample_code: 'SEED-1', modules: { pharmacogenetics: [makeGene()] } },
 });
 let state;
 let root;
@@ -81,7 +74,7 @@ const expectNeutralCopy = () => {
 };
 const expectNoDisplay = () => {
   expect(container.querySelector('dl')).toBeNull();
-  expect(container.textContent).not.toContain('Interacción A');
+  expect(container.textContent).not.toContain('CYP2C19');
 };
 const expectShell = () => {
   expect(container.querySelector('.section-header h1').textContent).toBe('Farmacogenética');
@@ -109,21 +102,16 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-describe('normalized pharmacogenetics results', () => {
-  it('shows the localized category and raw value without visible or accessible disclosure copy', async () => {
-    const rawData = structuredClone(state.data);
+describe('pharmacogenetics results', () => {
+  it('shows each gene with diplotype, phenotype, drugs and the backend disclaimer', async () => {
     await renderPage();
     expectShell();
-    expect(container.querySelector('dt').textContent).toBe('Interacción A');
-    expect(state.data).toEqual(rawData);
-    expect(container.querySelector('dd').textContent).toBe('8');
+    expect(container.querySelector('dt').textContent).toBe('CYP2C19 *1/*2');
+    expect(container.querySelector('dd').textContent).toBe('Metabolizador intermedio · Clopidogrel, Omeprazol');
+    expect(container.textContent).toContain(disclaimer);
     expect(getStatus().textContent).toBe('Datos disponibles.');
-    expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
     expect(getStatus().getAttribute('role')).toBe('status');
     expect(getRetry().getAttribute('aria-label')).toBe('Reintentar carga de resultados');
-    expect(container.textContent).not.toMatch(/%|riesgo|precaución|supervisión|dosis|respuesta típica|tratamiento|rsid|genotipo|cromosoma|frecuencia|recomendación/i);
-    expect(container.querySelector('[data-legacy-chart], [data-legacy-trait]')).toBeNull();
-    expect(getStatus().textContent).toContain('disponibles');
   });
 
   it('reuses the StrictMode guard profile and retains it after the result page remounts', async () => {
@@ -141,171 +129,24 @@ describe('normalized pharmacogenetics results', () => {
     expect(container.querySelector('nav').textContent).toContain('Demo account');
   });
 
-  it.each([0, -7.25, 137, 0.001, 1e100])('preserves raw finite value %s without units or conversion', async (value) => {
-    state.data.results[0].payload.display.items[0].display_value = value;
-    await renderPage();
-    expect(container.querySelector('dd').textContent).toBe(String(value));
-    expect(container.textContent).not.toMatch(/%|mg|score|puntaje|probabilidad|riesgo/i);
-  });
-
-  it('shows only the validated display, never legacy fields or other modules', async () => {
-    Object.assign(state.data.results[0].payload, {
-      drugs: [{ name: 'Legacy drug' }], rsid: 'rs123', genotipo: 'AA', percentage: 99,
-      freq_chile_percent: 87, cromosoma: 12, posicion: 345, magnitud: 'alto',
-      dose_adjustment: 'Legacy advice', expected_response: 'Legacy response',
-    });
-    Object.assign(state.data.results[0].payload.display.items[0], {
-      label: '  Demo label retained  ', unit: '%', interpretation: 'Legacy interpretation',
-    });
-    state.data.results[0].payload.display.items.push({ label: 'Demo interaction B', display_value: 6.75 });
-    state.data.results.push(...['global_ancestry', 'local_ancestry', 'polygenic_risk', 'monogenic_risk', 'traits']
-      .map((module) => ({ module, payload: { display: { items: [{ label: 'Other module', display_value: 99 }] } } })));
-    await renderPage();
-    expect([...container.querySelectorAll('dt')].map((item) => item.textContent)).toEqual(['  label retained  ', 'Interacción B']);
-    expect([...container.querySelectorAll('dd')].map((item) => item.textContent)).toEqual(['8', '6.75']);
-    expect(state.data.results[0].payload.display.items.map((item) => item.label)).toEqual(['  Demo label retained  ', 'Demo interaction B']);
-    expectNeutralCopy();
-    expect(container.textContent).not.toMatch(/Legacy|Other module|rs123|AA|99|87|345|%/);
-  });
-
-  it.each(['Etiqueta conservada', '  Etiqueta conservada  '])('preserves other usable display labels exactly: %s', async (label) => {
-    state.data.results[0].payload.display.items[0].label = label;
-    await renderPage();
-    expect(container.querySelector('dt').textContent).toBe(label);
-    expect(container.querySelector('dd').textContent).toBe('8');
-    expectNeutralCopy();
-  });
-
-  it('keeps root and payload disclaimers internal while preserving values and provenance validation', async () => {
-    state.data.disclaimer = 'Synthetic, non-clinical demonstration. Not evaluated.';
-    state.data.results[0].payload.disclaimer = 'Do not borrow a payload disclaimer.';
-    await renderPage();
-    expectNeutralCopy();
-    expect(container.textContent).not.toContain(state.data.disclaimer);
-    expect(container.textContent).not.toContain('Do not borrow');
-    expect(container.querySelector('.farmaco-demo-disclaimer')).toBeNull();
-    expect(container.querySelector('dd').textContent).toBe('8');
-    state.data.synthetic = false;
-    await renderPage();
-    expect(container.textContent).not.toContain(state.data.disclaimer);
-    expectNoDisplay();
-    expect(getStatus().getAttribute('role')).toBe('alert');
-  });
-
-  it.each([undefined, null, '', '  ', 8, {}])('does not invent a disclaimer when it is unusable: %j', async (disclaimer) => {
-    state.data.disclaimer = disclaimer;
-    state.data.results[0].payload.disclaimer = 'Unvalidated disclaimer';
-    await renderPage();
-    expect(container.querySelector('dd').textContent).toBe('8');
-    expect(container.querySelector('.farmaco-demo-disclaimer')).toBeNull();
-    expect(container.textContent).not.toContain('Unvalidated disclaimer');
-  });
-
-  it('leaves v1 without a display unavailable instead of deriving a value', async () => {
-    state.service.release_version = '1';
-    delete state.data.results[0].payload.display;
-    state.data.results[0].payload.rows = [{ label: 'Demo interaction A', value: null }];
+  it('reports a missing module when the service only has other results', async () => {
+    state.data.modules = { traits: [{ trait: 'cafeina', label: 'Cafeína', result: 'Rápido' }] };
     await renderPage();
     expectNoDisplay();
-    expect(getStatus().textContent).toContain('los datos no son válidos');
-    expectShell();
-  });
-
-  it('does not borrow displays from other modules when pharmacogenetics is missing', async () => {
-    state.data.results = [{ module: 'traits', payload: { display: { kind: 'demo_interactions', items: [{ label: 'Other module', display_value: 99 }] } } }];
-    await renderPage();
-    expectNoDisplay();
-    expect(getStatus().getAttribute('role')).toBe('status');
-    expect(getStatus().textContent).toContain('El módulo de farmacogenética no está disponible');
-    expect(container.textContent).not.toMatch(/Other module|99/);
-  });
-
-  const invalidCases = [
-    ['duplicate target', (data) => data.results.push(makeModule())],
-    ['duplicate other module', (data) => data.results.push({ module: 'traits' }, { module: 'traits' })],
-    ['unexpected module', (data) => data.results.push({ module: 'unexpected' })],
-    ['malformed result', (data) => data.results.push(null)],
-    ['missing module ID', (data) => data.results.push({})],
-    ['missing results', (data) => { delete data.results; }],
-    ['non-array results', (data) => { data.results = {}; }],
-    ['missing payload', (data) => { delete data.results[0].payload; }],
-    ['null payload', (data) => { data.results[0].payload = null; }],
-    ['array payload', (data) => { data.results[0].payload = []; }],
-    ['missing state', (data) => { delete data.results[0].payload.state; }],
-    ['evaluated state', (data) => { data.results[0].payload.state = 'evaluated'; }],
-    ['missing display', (data) => { delete data.results[0].payload.display; }],
-    ['null display', (data) => { data.results[0].payload.display = null; }],
-    ['array display', (data) => { data.results[0].payload.display = []; }],
-    ['unexpected display kind', (data) => { data.results[0].payload.display.kind = 'demo_traits'; }],
-    ['missing items', (data) => { delete data.results[0].payload.display.items; }],
-    ['non-array items', (data) => { data.results[0].payload.display.items = {}; }],
-    ['empty items', (data) => { data.results[0].payload.display.items = []; }],
-    ['null item', (data) => { data.results[0].payload.display.items = [null]; }],
-    ['array item', (data) => { data.results[0].payload.display.items = [[]]; }],
-    ['missing label', (data) => { delete data.results[0].payload.display.items[0].label; }],
-    ['blank label', (data) => { data.results[0].payload.display.items[0].label = ' '; }],
-    ['non-text label', (data) => { data.results[0].payload.display.items[0].label = 8; }],
-    ['missing value', (data) => { delete data.results[0].payload.display.items[0].display_value; }],
-    ...[NaN, Infinity, -Infinity, '8', null, true, {}].map((value) => [
-      `non-finite or non-numeric value ${String(value)}`,
-      (data) => { data.results[0].payload.display.items[0].display_value = value; },
-    ]),
-    ['invalid second item', (data) => data.results[0].payload.display.items.push({ label: 'Demo interaction B', display_value: NaN })],
-    ['duplicate item label', (data) => data.results[0].payload.display.items.push({ label: 'Demo interaction A', display_value: 9 })],
-  ];
-  it.each(invalidCases)('rejects %s without partial values or legacy fallback', async (_name, mutate) => {
-    mutate(state.data);
-    await renderPage();
-    expectNoDisplay();
-    expect(getStatus().getAttribute('role')).toBe('alert');
-    expect(getStatus().textContent).toContain('los datos no son válidos');
-    expect(getRetry()).not.toBeNull();
-    expectShell();
-    expect(apiRequest.mock.calls.map(([url]) => url)).toEqual([API_ENDPOINTS.ME]);
-  });
-
-  it.each(Object.keys(provenance))('requires root provenance %s', async (field) => {
-    delete state.data[field];
-    await renderPage();
-    expectNoDisplay();
-    expect(getStatus().getAttribute('role')).toBe('alert');
-    expectShell();
-  });
-  it.each([
-    ['synthetic', false], ['synthetic', 'true'], ['non_clinical', false], ['non_clinical', 1],
-    ['clinically_reviewed', true], ['clinically_reviewed', 'false'],
-    ['display_only', false], ['display_only', 'true'], ['numeric_semantics', 'risk'], ['numeric_semantics', null],
-  ])('rejects non-exact root provenance %s=%j', async (field, value) => {
-    state.data[field] = value;
-    await renderPage();
-    expectNoDisplay();
-    expect(getStatus().textContent).toContain('los datos no son válidos');
-  });
-  it.each([null, [], 'invalid'])('rejects a malformed root envelope %j', async (data) => {
-    state.data = data;
-    await renderPage();
-    expectNoDisplay();
-    expect(getStatus().textContent).toContain('los datos no son válidos');
+    expect(getStatus().textContent).toContain('no tiene resultados de farmacogenética');
   });
 });
 
 const stateCases = [
-  ['loading', { status: 'loading', loading: true, service: null }, 'Cargando datos', 'status'],
-  ['loading status', { status: 'loading', loading: false }, 'Cargando datos', 'status'],
-  ['no service', { status: 'empty', service: null }, 'No hay un servicio', 'status'],
-  ['empty results', { status: 'empty' }, 'no tiene resultados', 'status'],
-  ['permission', { status: 'permission', error: { status: 403 } }, 'No tienes permiso', 'alert'],
-  ['unauthenticated', { status: 'permission', error: { status: 401 } }, 'No tienes permiso', 'alert'],
-  ['connection error', { status: 'error', error: { kind: 'connection' } }, 'No fue posible cargar', 'alert'],
-  ['HTTP error', { status: 'error', error: { kind: 'http', status: 500 } }, 'No fue posible cargar', 'alert'],
-  ['invalid response', { status: 'error', error: { kind: 'invalid_data' } }, 'No fue posible cargar', 'alert'],
-  ['unknown status', { status: 'unexpected' }, 'No fue posible cargar', 'alert'],
+  ['loading', { status: 'loading', loading: true, data: null }, 'Cargando datos', 'status'],
+  ['empty', { status: 'empty', data: null }, 'Aún no tienes resultados', 'status'],
+  ['permission', { status: 'permission', data: null, error: { status: 403 } }, 'No tienes permiso', 'alert'],
+  ['unauthenticated', { status: 'permission', data: null, error: { status: 401 } }, 'No tienes permiso', 'alert'],
+  ['connection error', { status: 'error', data: null, error: { kind: 'connection' } }, 'No fue posible cargar', 'alert'],
+  ['HTTP error', { status: 'error', data: null, error: { kind: 'http', status: 500 } }, 'No fue posible cargar', 'alert'],
+  ['invalid response', { status: 'error', data: null, error: { kind: 'invalid_data' } }, 'No fue posible cargar', 'alert'],
 ];
 describe('accessible result states and preserved shell', () => {
-  it('adds only page-scoped visible focus and wrapping for native demo controls and values', () => {
-    expect(pageStyles).toMatch(/\.farmacogenetica-layout-new button:focus-visible\s*\{[^}]*outline:\s*3px solid #145f9f;[^}]*outline-offset:\s*3px;/);
-    expect(pageStyles).toMatch(/\.farmacogenetica-layout-new \.farmaco-demo-values dd\s*\{[^}]*margin:\s*0;[^}]*overflow-wrap:\s*anywhere;/);
-  });
 
   it.each(stateCases)('keeps neutral status copy and profile in %s while hiding stale display values', async (_name, override, message, role) => {
     Object.assign(state, override);
@@ -315,14 +156,19 @@ describe('accessible result states and preserved shell', () => {
     expect(getStatus().textContent).toContain(message);
     expect(getStatus().getAttribute('role')).toBe(role);
     expect(getStatus().getAttribute('aria-busy')).toBe(String(override.status === 'loading'));
-    expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
+    if (override.status === 'loading') {
+      expect(getStatus().querySelectorAll('.farmaco-loading__row')).toHaveLength(4);
+      expect(getStatus().querySelector('.dashboard-page-skeleton__content')?.getAttribute('aria-hidden')).toBe('true');
+    } else {
+      expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
+    }
     expect(Boolean(getRetry())).toBe(override.status !== 'loading');
     if (override.status !== 'loading') expect(getRetry().getAttribute('aria-label')).toBe('Reintentar carga de resultados');
     expect(container.querySelector('nav').textContent).toContain('Demo account');
     expect(apiRequest.mock.calls.map(([url]) => url)).toEqual([API_ENDPOINTS.ME]);
   });
 
-  it.each(['no service', 'empty results', 'permission', 'connection error'])('uses the named native hook retry in %s', async (name) => {
+  it.each(['empty', 'permission', 'connection error'])('uses the named native hook retry in %s', async (name) => {
     Object.assign(state, stateCases.find(([key]) => key === name)[1]);
     await renderPage();
     expect(getRetry().tagName).toBe('BUTTON');
@@ -344,16 +190,16 @@ describe('accessible result states and preserved shell', () => {
     expect(container.textContent).not.toContain('Previous envelope disclosure.');
     expectShell();
     state = makeState();
-    state.data.results[0].payload.display.items[0].display_value = 12;
+    state.data.modules.pharmacogenetics[0].phenotype = 'Metabolizador lento';
     await renderPage();
-    expect(container.querySelector('dd').textContent).toBe('12');
+    expect(container.querySelector('dd').textContent).toContain('Metabolizador lento');
     expect(apiRequest).toHaveBeenCalledTimes(1);
   });
 
-  it('distinguishes an empty raw results array from a missing module', async () => {
-    state.data.results = [];
+  it('treats an empty pharmacogenetics module as missing', async () => {
+    state.data.modules = { pharmacogenetics: [] };
     await renderPage();
-    expect(getStatus().textContent).toContain('no tiene resultados');
+    expect(getStatus().textContent).toContain('no tiene resultados de farmacogenética');
     expectNoDisplay();
     expectShell();
   });
@@ -369,14 +215,14 @@ describe('accessible result states and preserved shell', () => {
     if (mode === 'rejected') apiRequest.mockRejectedValueOnce(new Error('Profile unavailable'));
     else apiRequest.mockResolvedValueOnce({ ok: false, data: null });
     await renderPage();
-    expect(container.querySelector('dd').textContent).toBe('8');
+    expect(container.querySelector('dd').textContent).toContain('Metabolizador intermedio');
     expect(getStatus().textContent).toContain('disponibles');
   });
 
   it('shows normalized results while the independent ME profile is still pending', async () => {
     apiRequest.mockImplementationOnce(() => new Promise(() => {}));
     await renderPage();
-    expect(container.querySelector('dd').textContent).toBe('8');
+    expect(container.querySelector('dd').textContent).toContain('Metabolizador intermedio');
     expect(getStatus().textContent).toContain('disponibles');
     expectShell();
   });
@@ -386,7 +232,7 @@ describe('accessible result states and preserved shell', () => {
     await renderPage();
     expect([...container.querySelectorAll('nav a')].map((link) => link.getAttribute('href'))).toEqual([
       '/dashboard/ancestria', '/dashboard/rasgos', '/dashboard/farmacogenetica',
-      '/dashboard/enfermedades',
+      '/dashboard/enfermedades', '/dashboard/modulos',
     ]);
     await act(async () => container.querySelector('a[href="/dashboard/ancestria"]').click());
     expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/dashboard/ancestria');

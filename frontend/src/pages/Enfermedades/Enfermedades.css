@@ -956,3 +956,24 @@
   outline: 3px solid #0b7ad0;
   outline-offset: 4px;
 }
+
+.enfermedades-loading .dashboard-pro-3col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.enfermedades-loading .card-pro {
+  animation: none;
+  opacity: 1;
+}
+.enfermedades-loading .card-large-pro { min-width: 0; }
+.enfermedades-loading__row { gap: 1rem; }
+.enfermedades-loading__label { width: 52%; height: 0.85rem; }
+.enfermedades-loading__value { width: 34%; height: 0.85rem; }
+.enfermedades-loading__row:hover { background: #f9fafb; }
+@media (max-width: 1200px) {
+  .enfermedades-loading .dashboard-pro-3col { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .enfermedades-loading__row { flex-wrap: wrap; }
+  .enfermedades-loading__label { width: 60%; }
+  .enfermedades-loading__value { width: 42%; }
+}

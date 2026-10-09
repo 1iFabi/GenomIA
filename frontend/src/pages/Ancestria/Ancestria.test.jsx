@@ -1,10 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cwd } from 'node:process';
 import React, { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+  BookOpenText as GuideIcon,
   ChevronDown as ChevronDownIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
@@ -112,16 +113,6 @@ const ancestryStyles = readFileSync(
   'utf8'
 );
 
-const getFirstCssDeclaration = (source, selector, property) => {
-  const rule = source.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
-  return rule
-    .split(';')
-    .map((declaration) => declaration.trim())
-    .filter(Boolean)
-    .map((declaration) => declaration.match(/^([\w-]+)\s*:\s*(.+)$/))
-    .find((match) => match?.[1] === property)?.[2].trim();
-};
-
 const getLastCssDeclaration = (source, selector, property) => {
   const matchingRules = [...source.matchAll(new RegExp(`${selector}\\s*\\{([^}]*)\\}`, 'g'))];
   const declarations = matchingRules.flatMap(([, body]) => body
@@ -162,20 +153,20 @@ const contrastRatio = (foreground, background) => {
   return (lighter + 0.05) / (darker + 0.05);
 };
 
-const fixture = JSON.parse(readFileSync(
-  resolve(cwd(), '../backend/sequoh/genoma/fixtures/synthetic_genomics_v2.json'), 'utf8'
-));
-const { modules: fixtureModules, ...fixtureDisclosure } = fixture;
-const createService = (id = 'latest', purchasedAt = '2026-09-24T12:00:00Z', version = '2') => ({
-  service_request_id: id, purchased_at: purchasedAt, release_version: version,
-  synthetic: true, non_clinical: true, disclaimer: fixtureDisclosure.disclaimer,
-});
-const createResults = (service = createService()) => ({
-  ...service,
-  results: fixtureModules.map((module) => ({
-    module: module.module, result_type: 'synthetic_placeholder',
-    value_code: 'SYNTHETIC_NOT_EVALUATED', payload: structuredClone({ ...fixtureDisclosure, ...module }),
-  })),
+const disclaimer = 'Resultados de desarrollo. Solo el riesgo monogénico usa datos reales de ClinVar; '
+  + 'el resto es simulado y no tiene valor clínico.';
+const createResults = () => ({
+  service_request_id: 'latest', sample_code: 'SEED-1', disclaimer,
+  modules: {
+    global_ancestry: [
+      { population: 'IBS', label: 'Ibérico', group: 'EUR', group_label: 'Europeo', country_code: 'ES', country: 'España', proportion: 0.6 },
+      { population: 'MAP', label: 'Mapuche', group: 'NAT', group_label: 'Amerindio', country_code: 'CL', country: 'Chile', proportion: 0.4 },
+    ],
+    local_ancestry: [
+      { haplotype: 0, contig: '1', start: 1, end: 60_000_000, population: 'EUR', label: 'Europeo', confidence: 0.9 },
+      { haplotype: 1, contig: '1', start: 1, end: 40_000_000, population: 'NAT', label: 'Amerindio', confidence: 0.92 },
+    ],
+  },
 });
 const reply = (data, status = 200) => new Response(JSON.stringify(data), {
   status, headers: { 'Content-Type': 'application/json' },
@@ -344,16 +335,15 @@ const waitFor = async (predicate) => {
 };
 
 const mockApi = ({
-  services = [createService()], results = createResults(), listStatus = 200,
-  resultStatus = 200, profile = reply({ user: { id: 1 } }),
+  services, results = createResults(), listStatus, resultStatus = 200, profile = reply({ user: { id: 1 } }),
 } = {}) => {
   fetch.mockImplementation(async (endpoint) => {
     if (endpoint === API_ENDPOINTS.ME) return profile;
-    if (endpoint === API_ENDPOINTS.GENOMICS_SERVICES) {
-      return services instanceof Promise ? services : reply({ services }, listStatus);
-    }
-    if (String(endpoint).startsWith(API_ENDPOINTS.GENOMICS_SERVICES)) {
-      return results instanceof Promise ? results : reply(results, resultStatus);
+    if (endpoint === API_ENDPOINTS.GENOMICS_RESULTS) {
+      if (services instanceof Promise) return services;
+      if (results instanceof Promise) return results;
+      if (Array.isArray(services) && !services.length) return reply({ error: 'No hay resultados disponibles' }, 404);
+      return reply(results, listStatus ?? resultStatus);
     }
     return createWorldTopologyResponse();
   });
@@ -404,7 +394,7 @@ const renderPage = async ({ protectedRoute = false } = {}) => {
       </MemoryRouter>
     );
   });
-  await waitFor(() => fetch.mock.calls.some(([endpoint]) => endpoint === API_ENDPOINTS.GENOMICS_SERVICES));
+  await waitFor(() => fetch.mock.calls.some(([endpoint]) => endpoint === API_ENDPOINTS.GENOMICS_RESULTS));
 };
 
 beforeEach(() => {
@@ -473,56 +463,33 @@ describe('Ancestria insight rail', () => {
     expect(fetch.mock.calls.filter(([url]) => url === API_ENDPOINTS.ME)).toHaveLength(1);
   });
 
-  it('resolves the same ancestry fixture from the future genoma package', () => {
-    const fixturePath = resolve(cwd(), '../backend/sequoh/genoma/fixtures/synthetic_genomics_v2.json');
-    // Keep the current fixture above importable; fail explicitly before reading the future path.
-    expect(existsSync(fixturePath), 'expected the packaged ancestry fixture under genoma').toBe(true);
-    expect(JSON.parse(readFileSync(fixturePath, 'utf8'))).toEqual(fixture);
-  });
-
-  it('loads the latest purchase through normalized HTTP and localizes both displays in API order', async () => {
-    const latest = createService('newest/a b', '2026-09-24T12:00:00Z', '1');
-    const results = createResults(latest);
+  it('loads the client results in one request and shows both ancestry modules in API order', async () => {
+    const results = createResults();
     const rawResults = structuredClone(results);
-    mockApi({
-      services: [createService('older', '2026-09-23T12:00:00Z', '99'), latest],
-      results,
-    });
+    mockApi({ results });
     await renderPage();
     await openDrawer();
 
-    expect(getGlobalSection()?.querySelector('h3').textContent).toBe('Ancestría global');
-    expect([...getGlobalSection().querySelectorAll('li')].map((row) => row.textContent))
-      .toEqual(['Grupo A: 60%', 'Grupo B: 40%']);
-    expect(getLocalSection()?.querySelector('h3').textContent).toBe('Ancestría local');
-    expect(getLocalSection().textContent).toContain('Eje A');
-    expect(getLocalSection().textContent).toContain('Extensión: 100 unidades');
-    expect([...getLocalSection().querySelectorAll('li')].map((row) => row.textContent)).toEqual([
-      'Grupo A: inicio 0 · longitud 60 unidades',
-      'Grupo B: inicio 60 · longitud 40 unidades',
-    ]);
-    expect(getLocalSection().textContent).not.toContain('%');
+    expect(container.querySelector('#ancestria-global-title').textContent).toBe('Tus orígenes');
+    // Rows group by the reference country's geographic continent, largest first.
+    expect([...getGlobalSection().querySelectorAll('.cx-card')].map((card) => card.getAttribute('aria-label')))
+      .toEqual(['Europa: 60.0% de tu genoma, 1 país', 'Sudamérica: 40.0% de tu genoma, 1 país']);
+    // The panel carries only global ancestry: no local section and no development note.
+    expect(getLocalSection()).toBeNull();
+    expect(container.textContent).not.toContain(disclaimer);
     expectNeutralCopy();
     expect(results).toEqual(rawResults);
-    expect(getResultStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
-    expect(getResultStatus().querySelector('button').getAttribute('aria-label')).toBe('Reintentar carga de resultados');
-    const normalizedCalls = fetch.mock.calls.filter(([url]) => /\/(genoma|genomics)\//.test(String(url)));
-    expect(normalizedCalls).toEqual([
-      ['/api/genoma/v1/services/', { method: 'GET', credentials: 'include', headers: {} }],
-      [`/api/genoma/v1/services/${encodeURIComponent(latest.service_request_id)}/results/`,
-        { method: 'GET', credentials: 'include', headers: {} }],
+    expect(getResultStatus()).toBeNull();
+    expect(fetch.mock.calls.filter(([url]) => /\/genoma\//.test(String(url)))).toEqual([
+      ['/api/genoma/v1/results/', { method: 'GET', credentials: 'include', headers: {} }],
     ]);
-    expect(fetch.mock.calls.some(([url]) => /\/api\/genetics\//.test(String(url)))).toBe(false);
-    expect(container.textContent).not.toMatch(/Demo index|Demo trait|Demo interaction/);
   });
-  it('uses the effective charcoal map-card surface with a subtle light border', () => {
+  it('lets the map blend into the page without a card surface', () => {
     const selector = '\\.ancestria-page__chart-card';
 
-    expect(getLastCssDeclaration(ancestryStyles, selector, 'background')).toBe('#4F4F4F');
-    expect(getLastCssDeclaration(ancestryStyles, selector, 'border'))
-      .toBe('1px solid rgba(255, 255, 255, 0.14)');
-    expect(getLastCssDeclaration(ancestryStyles, selector, 'box-shadow'))
-      .toBe('0 0.5rem 1.5rem rgba(15, 35, 65, 0.08)');
+    expect(getLastCssDeclaration(ancestryStyles, selector, 'background')).toBe('transparent');
+    expect(getLastCssDeclaration(ancestryStyles, selector, 'border')).toBe('0');
+    expect(getLastCssDeclaration(ancestryStyles, selector, 'box-shadow')).toBe('none');
   });
 
   it('uses the current globe palette with a bright white graticule', async () => {
@@ -531,18 +498,18 @@ describe('Ancestria insight rail', () => {
     const sphere = container.querySelector('[data-globe-sphere="true"]');
     const graticule = container.querySelector('[data-globe-graticule="true"]');
 
-    expect(sphere?.getAttribute('fill')).toBe('#F0EBD8');
+    expect(sphere?.getAttribute('fill')).toBe('#C5DBF0');
     expect(graticule?.getAttribute('stroke')).toBe('#FFFFFF');
     expect(Number(graticule?.getAttribute('opacity'))).toBeGreaterThan(0.31);
-    expect(container.querySelector('[data-geography-id="152"]')?.getAttribute('fill'))
-      .toBe('#3E5C76');
-    expect(container.querySelector('[data-geography-id="246"]')?.getAttribute('fill'))
-      .toBe('#3E5C76');
-    expect(container.querySelector('[data-geography-id="380"]')?.getAttribute('fill'))
-      .toBe('#3E5C76');
+    // The overview tints whole continents with ancestry (Europe, South America) and never marks single countries.
+    for (const id of ['152', '246', '380', '724', '604']) {
+      expect(container.querySelector(`[data-geography-id="${id}"]`)?.getAttribute('fill')).toBe('#6083C5');
+    }
+    expect(container.querySelector('[data-geography-id="484"]')?.getAttribute('fill')).toBe('#E6E5E0');
+    expect(container.querySelectorAll('[data-globe-pin], [data-globe-label]')).toHaveLength(0);
   });
 
-  it('replaces the compass with the rotating coin at the top-right map mark', async () => {
+  it('replaces the compass with the rotating coin at the top-left map mark', async () => {
     await renderPage();
 
     const mapCard = container.querySelector('.ancestria-page__chart-card');
@@ -554,163 +521,52 @@ describe('Ancestria insight rail', () => {
     expect(coin?.classList.contains('coin--flat') || coin?.classList.contains('coin--3d')).toBe(true);
     expect(coin?.style.animationDuration).not.toBe('');
     expect(getLastCssDeclaration(ancestryStyles, '\\.ancestria-map-mark', 'position')).toBe('absolute');
-    const markRight = getLastCssDeclaration(ancestryStyles, '\\.ancestria-map-mark', 'right');
-    expect(['rem', 'px'].some((unit) => markRight?.endsWith(unit))).toBe(true);
+    // Top-left on desktop; mobile hands that corner to the burger and moves the mark right.
+    expect(ancestryStyles).toMatch(/\.ancestria-map-mark \{\s*top: 1rem;\s*right: auto;\s*left: 1rem;/);
+    expect(getLastCssDeclaration(ancestryStyles, '\\.ancestria-map-mark', 'right')).toBe('1rem');
   });
 
-  it('shows a white map logo while closed and a black logo alongside the open panel title', async () => {
+  it('keeps the dark map logo visible with the panel open', async () => {
     await renderPage();
 
     const mapCard = container.querySelector('.ancestria-page__chart-card');
-    const mapLogo = mapCard.querySelector('.ancestria-map-mark img');
-    expect.soft(mapLogo).not.toBeNull();
-    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-map-mark', 'filter'))
-      .toMatch(/brightness\(0\).*invert\(1\)/);
+    expect.soft(mapCard.querySelector('.ancestria-map-mark img')).not.toBeNull();
+    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-map-mark', 'filter')).toBe('brightness(0)');
     expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-map-mark', 'top')).toBe('1rem');
-    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-map-mark', 'right')).toBe('1rem');
-
-    const panel = container.querySelector('#ancestria-insight-panel');
-    const closedTitle = panel.querySelector('.ancestria-insight-rail__title');
-    expect.soft(closedTitle.querySelector('img')).toBeNull();
 
     await openDrawer();
-
-    const openTitle = panel.querySelector('.ancestria-insight-rail__title');
-    const panelLogo = openTitle.querySelector('img');
-    expect.soft(openTitle.textContent.trim()).toBe('Resultados');
-    expect.soft(panelLogo).not.toBeNull();
-    expect.soft(mapCard.querySelector('.ancestria-map-mark img')).toBeNull();
-    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-insight-rail__title img', 'filter') ?? '')
-      .toMatch(/brightness\(0\)(?!.*invert)/);
+    expect.soft(mapCard.querySelector('.ancestria-map-mark img')).not.toBeNull();
   });
 
-  it('keeps the fullscreen control framed while leaving the drawer hit target unframed and keyboard-visible', () => {
-    const controls = [
-      { className: 'ancestria-drawer-toggle', framed: false },
-      { className: 'ancestria-fullscreen-toggle', framed: true },
-    ];
-    for (const { className, framed } of controls) {
+  it('explains the globe fills with a legend that follows the level', async () => {
+    await renderPage();
+    const legend = () => [...container.querySelectorAll('.ancestria-map-legend li')].map((item) => item.textContent);
+    expect(legend()).toEqual(['Continente con tu ancestría', 'Sin ancestría registrada']);
+
+    await act(async () => container.querySelector('[data-geography-id="152"]')
+      .dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(legend()).toEqual(['Países con tu ancestría', 'Resto de Sudamérica', 'Otros continentes']);
+    expect(container.querySelector('.ancestria-map-legend').getAttribute('aria-label')).toBe('Leyenda del mapa');
+  });
+
+  it('draws ink-colored map controls with visible focus on the light map', () => {
+    const white = parseCssColor('#FFFFFF');
+    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-fullscreen-toggle', 'width')).toBe('48px');
+    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-fullscreen-toggle', 'height')).toBe('48px');
+    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-drawer-toggle', 'width')).toBe('100%');
+    for (const className of ['ancestria-drawer-toggle', 'ancestria-fullscreen-toggle']) {
       const selector = `\\.${className}`;
       const foreground = parseCssColor(getLastCssDeclaration(ancestryStyles, selector, 'color'));
-      const border = getLastCssDeclaration(ancestryStyles, selector, 'border');
-      const borderColor = parseCssColor(
-        border?.match(/(?:#[\da-f]{3,8}|rgba?\([^)]*\))/i)?.[0]
-      );
-      const keylineShadow = getLastCssDeclaration(ancestryStyles, selector, 'box-shadow');
-      const keylineColor = parseCssColor(
-        keylineShadow?.match(/(?:rgba?\([^)]*\)|#[\da-f]{3,8})/i)?.[0]
-      );
-
-      expect.soft(getLastCssDeclaration(ancestryStyles, selector, 'width'), `${className} width`)
-        .toBe('48px');
-      expect.soft(getLastCssDeclaration(ancestryStyles, selector, 'height'), `${className} height`)
-        .toBe('48px');
-      expect.soft(getLastCssDeclaration(ancestryStyles, selector, 'box-sizing')).toBe('border-box');
-      expect.soft(getLastCssDeclaration(ancestryStyles, selector, 'background'), `${className} background`)
-        .toBe('transparent');
-      expect.soft(getLastCssDeclaration(ancestryStyles, selector, 'background-color'))
-        .toBeUndefined();
-      expect.soft(foreground, `${className} icon color`).toEqual([255, 255, 255, 1]);
-      if (framed) {
-        expect.soft(getLastCssDeclaration(ancestryStyles, selector, 'border-radius')).toBe('50%');
-        expect.soft(border).toBe('1px solid #ffffff');
-        expect.soft(borderColor, `${className} border color`).toEqual([255, 255, 255, 1]);
-        expect.soft(keylineShadow, `${className} should retain its thin dark outer keyline`)
-          .toMatch(/^0 0 0 1px /);
-        expect.soft(keylineColor, `${className} keyline color`).not.toBeNull();
-        if (keylineColor && borderColor) {
-          expect.soft(contrastRatio(keylineColor, parseCssColor('#FFFFFF')),
-            `${className} dark keyline contrast on the light sidebar`).toBeGreaterThanOrEqual(3);
-          expect.soft(contrastRatio(borderColor, parseCssColor('#4F4F4F')),
-            `${className} white border contrast over the map`).toBeGreaterThanOrEqual(3);
-        }
-      } else {
-        expect.soft(getLastCssDeclaration(ancestryStyles, selector, 'border')).toBe('0');
-        expect.soft(getLastCssDeclaration(ancestryStyles, selector, 'border-radius')).toBe('0');
-        expect.soft(keylineShadow, `${className} must not draw a circular keyline`).toBe('none');
-      }
-      expect.soft(getLastCssDeclaration(ancestryStyles, `${selector} svg`, 'filter'),
-        `${className} icon should have a small dark drop-shadow`)
-        .toMatch(/drop-shadow\(0 1px 1px rgba\(15, 35, 65, 0\.9\)\)/);
-
-      for (const state of ['hover', 'active']) {
-        const stateSelector = `${selector}:${state}`;
-        expect.soft(getLastCssDeclaration(ancestryStyles, stateSelector, 'background'),
-          `${className} ${state} must stay unfilled`).toBeUndefined();
-        expect.soft(getLastCssDeclaration(ancestryStyles, stateSelector, 'background-color'),
-          `${className} ${state} must stay unfilled`).toBeUndefined();
-        expect.soft(getLastCssDeclaration(ancestryStyles, stateSelector, 'box-shadow'),
-          `${className} ${state} must not add a filled-state shadow`).toBeUndefined();
-      }
-
-      const focusRule = ancestryStyles.split(`.${className}:focus-visible`)[1]?.split('}')[0] || '';
-      expect.soft(focusRule, `${className} must retain a visible focus-visible state`).not.toBe('');
-      expect.soft(
-        ['outline:', 'box-shadow:', 'filter:'].some((property) => focusRule.includes(property))
-          && !focusRule.includes('outline: none')
-          && !focusRule.includes('outline: 0'),
-        `${className} focus-visible styling must remain visible`
-      ).toBe(true);
-      const focusOutline = parseCssColor(
-        focusRule.match(/outline:\s*[^;]+/)?.[0]?.match(/(?:#[\da-f]{3,8}|rgba?\([^)]*\))/i)?.[0]
-      );
-      const focusRing = parseCssColor(
-        focusRule.match(/box-shadow:\s*([^;]+)/)?.[1]
-          ?.match(/(?:^|,)\s*0\s+0\s+0\s+[\d.]+px\s+(rgba?\([^)]*\)|#[\da-f]{3,8})/i)?.[1]
-      );
-      expect.soft(focusOutline, `${className} focus needs a white outline over the map`)
-        .toEqual([255, 255, 255, 1]);
-      expect.soft(focusRing, `${className} focus needs a dark outer ring on the sidebar`).not.toBeNull();
-      if (focusOutline && focusRing) {
-        expect.soft(contrastRatio(focusOutline, parseCssColor('#4F4F4F')),
-          `${className} focus outline contrast on the map`).toBeGreaterThanOrEqual(3);
-        expect.soft(contrastRatio(focusRing, parseCssColor('#FFFFFF')),
-          `${className} focus ring contrast on the sidebar`).toBeGreaterThanOrEqual(3);
-      }
+      expect.soft(contrastRatio(foreground, white), `${className} icon contrast`).toBeGreaterThanOrEqual(4.5);
+      const focusRule = ancestryStyles.split(`.${className}:focus-visible`).at(-1)?.split('}')[0] || '';
+      const outline = parseCssColor(focusRule.match(/outline:\s*[^;]+/)?.[0]?.match(/#[\da-f]{3,8}/i)?.[0]);
+      expect.soft(outline, `${className} needs a visible focus outline`).not.toBeNull();
+      if (outline) expect.soft(contrastRatio(outline, white)).toBeGreaterThanOrEqual(3);
     }
-
-    const drawerSelector = '\\.ancestria-drawer-toggle';
-    const mobileOpenSelector = '\\.ancestria-page__chart-card--drawer-open \\.ancestria-drawer-toggle';
-    for (const property of ['width', 'height', 'border', 'border-bottom', 'border-radius']) {
-      expect.soft(getLastCssDeclaration(ancestryStyles, mobileOpenSelector, property),
-        `mobile open state must not override ${property}`).toBeUndefined();
-    }
-
-    expect.soft(getLastCssDeclaration(ancestryStyles, drawerSelector, 'background-color'),
-      'reduced-transparency mode must keep the drawer toggle transparent').toBeUndefined();
-    expect.soft(getFirstCssDeclaration(ancestryStyles, drawerSelector, 'top')).toBe('50%');
-    expect.soft(getFirstCssDeclaration(ancestryStyles, drawerSelector, 'right')).toBe('0.25rem');
-    expect.soft(getFirstCssDeclaration(ancestryStyles, mobileOpenSelector, 'right')).toBe('min(22rem, 86%)');
-
-    const fullscreenSelector = '\\.ancestria-fullscreen-toggle';
-    expect.soft(getLastCssDeclaration(ancestryStyles, fullscreenSelector, 'position')).toBe('absolute');
-    expect.soft(getLastCssDeclaration(ancestryStyles, fullscreenSelector, 'right')).toBe('1rem');
-    expect.soft(getLastCssDeclaration(ancestryStyles, fullscreenSelector, 'bottom')).toBe('1rem');
-
-    const drawerFocusRule = ancestryStyles.split('.ancestria-drawer-toggle:focus-visible')[1]?.split('}')[0] || '';
-    expect.soft(drawerFocusRule, 'drawer toggle must retain a visible focus-visible state').not.toBe('');
-    expect.soft(
-      ['outline:', 'box-shadow:', 'filter:'].some((property) => drawerFocusRule.includes(property))
-        && !drawerFocusRule.includes('outline: none')
-        && !drawerFocusRule.includes('outline: 0'),
-      'drawer toggle focus-visible styling must remain visible'
-    ).toBe(true);
-
-    const focusOutline = parseCssColor(
-      drawerFocusRule.match(/outline:\s*[^;]+/)?.[0]?.match(/(?:#[\da-f]{3,8}|rgba?\([^)]*\))/i)?.[0]
-    );
-    const outerRing = parseCssColor(
-      drawerFocusRule.match(/box-shadow:\s*([^;]+)/)?.[1]
-        ?.match(/(?:^|,)\s*0\s+0\s+0\s+[\d.]+px\s+(rgba?\([^)]*\)|#[\da-f]{3,8})/i)?.[1]
-    );
-    expect.soft(focusOutline, 'drawer focus needs a light outline against the dark map').not.toBeNull();
-    expect.soft(outerRing, 'drawer focus needs a dark outer ring against the light sidebar').not.toBeNull();
-    if (focusOutline && outerRing) {
-      expect.soft(contrastRatio(focusOutline, parseCssColor('#4F4F4F')),
-        'drawer focus outline contrast on the dark map').toBeGreaterThanOrEqual(3);
-      expect.soft(contrastRatio(outerRing, parseCssColor('#FFFFFF')),
-        'drawer focus outer-ring contrast on the light sidebar').toBeGreaterThanOrEqual(3);
-    }
+    const border = getLastCssDeclaration(ancestryStyles, '\\.ancestria-fullscreen-toggle', 'border');
+    expect.soft(contrastRatio(parseCssColor(border.match(/#[\da-f]{3,8}/i)[0]), white)).toBeGreaterThanOrEqual(3);
+    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-fullscreen-toggle', 'right')).toBe('1rem');
+    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-fullscreen-toggle', 'bottom')).toBe('1rem');
 
     const burgerControls = [
       { className: 'ancestria-dashboard__burger', surface: parseCssColor('#F3F7FF') },
@@ -751,7 +607,7 @@ describe('Ancestria insight rail', () => {
     const toggle = container.querySelector('[aria-controls="ancestria-insight-panel"]');
     expect(map).not.toBeNull();
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(toggle.getAttribute('aria-label')).toBe('Abrir panel de ancestría');
+    expect(toggle.textContent).toBe('Ver tus orígenes');
     expect(container.querySelector('#ancestria-insight-panel').getAttribute('aria-hidden')).toBe('true');
   });
 
@@ -802,175 +658,119 @@ describe('Ancestria insight rail', () => {
     }
   });
 
-  it('keeps all geography neutral without pins, labels, country-result controls, flags or heat scale', async () => {
+  it('colors and enables only the countries present in the client results', async () => {
     await renderPage();
     expect(container.querySelector('[role="region"]').getAttribute('aria-label'))
-      .toBe('Globo de referencia geográfica');
+      .toBe('Globo de ancestría por país');
     expect(container.querySelector('.ancestria-map-scale')).toBeNull();
-    expect(container.querySelectorAll('[data-globe-pin], [data-globe-label], path[role="button"]'))
-      .toHaveLength(0);
-    for (const country of container.querySelectorAll('[data-geography-id]')) {
-      expect(country.getAttribute('fill')).toBe('#3E5C76');
-      expect(country.hasAttribute('tabindex')).toBe(false);
-      expect(country.hasAttribute('aria-pressed')).toBe(false);
-      await act(async () => {
-        country.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-        country.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-        country.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      });
-    }
-    await openDrawer();
-    expect(container.querySelectorAll('[data-globe-pin], [data-globe-label]')).toHaveLength(0);
-    expect(container.querySelectorAll('.ancestria-insight-legend button, img[src*="flagcdn"]'))
-      .toHaveLength(0);
+    const chile = () => container.querySelector('[data-geography-id="152"]');
+    expect(chile().getAttribute('aria-label')).toBe('Sudamérica, ver tu ancestría en este continente');
+    expect(container.querySelector('[data-geography-id="484"]').hasAttribute('role')).toBe(false);
+
+    await act(async () => chile().dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(container.querySelector('#cx-continent-title').textContent).toBe('Sudamérica');
+    expect(chile().getAttribute('fill')).toBe('#203590');
+    expect(chile().getAttribute('aria-label')).toContain('40.0%');
+    const peru = container.querySelector('[data-geography-id="604"]');
+    expect(peru.getAttribute('fill')).toBe('#96B8DB');
+    expect(peru.hasAttribute('tabindex')).toBe(false);
+    expect(container.querySelector('[data-geography-id="724"]').getAttribute('aria-label'))
+      .toBe('Europa, ver tu ancestría en este continente');
+    expect([...container.querySelectorAll('[data-globe-pin]')].map((pin) => pin.getAttribute('data-globe-pin')))
+      .toEqual(['CL']);
+
+    await act(async () => chile().dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(chile().getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.country-info__name').textContent).toBe('Chile');
     expect(document.body.querySelector('.country-insight-popover')).toBeNull();
   });
 
-  it('keeps neutral status and reference-only geography visible outside the closed drawer', async () => {
+  it('steps back to the world view on a click outside the open continent or country', async () => {
+    window.innerWidth = 1280;
+    await renderPage();
+    const map = container.querySelector('[data-projection="geoOrthographic"]');
+    const click = (target) => act(async () => target.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })));
+    const country = (id) => container.querySelector(`[data-geography-id="${id}"]`);
+
+    await click(country('152'));
+    await click(country('604'));
+    expect(container.querySelector('#cx-continent-title').textContent).toBe('Sudamérica');
+    await click(map);
+    expect(getGlobalSection()).not.toBeNull();
+    expect(container.querySelector('.cx-crumbs')).toBeNull();
+
+    await click(country('152'));
+    await click(country('152'));
+    expect([...container.querySelectorAll('.cx-crumbs li')].map((item) => item.textContent))
+      .toEqual(['Mundo', 'Sudamérica', 'Chile']);
+    await click(country('484'));
+    expect(getGlobalSection()).not.toBeNull();
+    expect(container.querySelector('[data-geography-id="152"]').getAttribute('fill')).toBe('#6083C5');
+  });
+
+  it('removes the status overlay once results are ready', async () => {
     await renderPage();
     expectNeutralCopy();
-    expect(container.querySelector('.ancestria-results-disclosure')).toBeNull();
-    expect(getResultStatus().closest('[inert], [aria-hidden="true"]')).toBeNull();
-    expect(getResultStatus().getAttribute('role')).toBe('status');
-    expect(getResultStatus().getAttribute('aria-live')).toBe('polite');
-    expect(getResultStatus().textContent).toContain('La geografía es solo exploración; no interpreta estos resultados');
-    expect(getResultStatus().closest('#ancestria-insight-panel')).toBeNull();
+    expect(getResultStatus()).toBeNull();
+    expect(container.textContent).not.toContain('La geografía es solo exploración');
     expect(getLastCssDeclaration(ancestryStyles, '\\.ancestria-results-status', 'overflow-y')).toBe('auto');
   });
 
-  it('preserves raw component order, fractional values and abstract lengths without demographic conversion', async () => {
-    const results = createResults();
-    results.results[0].payload.display.components = [
-      { label: 'Demo group B', display_percentage: 39.875 },
-      { label: 'Demo group A', display_percentage: 60.125 },
-    ];
-    const local = results.results[1].payload.display;
-    local.axis.extent = 200;
-    local.segments = [
-      { label: 'Demo group B', offset: 0, length: 125 },
-      { label: 'Demo group A', offset: 125, length: 75 },
-    ];
-    mockApi({ results });
+  it('walks world, continent and country from the panel and back through the breadcrumb', async () => {
     await renderPage();
     await openDrawer();
-    expect([...getGlobalSection().querySelectorAll('li')].map((row) => row.textContent))
-      .toEqual(['Grupo B: 39.875%', 'Grupo A: 60.125%']);
-    expect(getLocalSection().textContent).toContain('Extensión: 200 unidades');
-    expect([...getLocalSection().querySelectorAll('li')].map((row) => row.textContent)).toEqual([
-      'Grupo B: inicio 0 · longitud 125 unidades',
-      'Grupo A: inicio 125 · longitud 75 unidades',
-    ]);
-    expect(getLocalSection().textContent).not.toContain('%');
-    expectNeutralCopy();
+    const southAmerica = [...getGlobalSection().querySelectorAll('.cx-card')]
+      .find((card) => card.textContent.includes('Sudamérica'));
+    await act(async () => southAmerica.click());
+    const countries = [...container.querySelectorAll('.cx-country')];
+    expect(countries.map((row) => row.getAttribute('aria-label')))
+      .toEqual(['Chile, población Mapuche: 40.0% de tu genoma']);
+    expect(container.querySelector('.cx-lede').textContent).toContain('40.0%');
+
+    await act(async () => countries[0].click());
+    expect(container.querySelector('[data-geography-id="152"]').getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.country-info__name').textContent).toBe('Chile');
+    expect([...container.querySelectorAll('.cx-crumbs li')].map((item) => item.textContent))
+      .toEqual(['Mundo', 'Sudamérica', 'Chile']);
+    expect(container.querySelector('.cx-crumbs [aria-current="page"]').textContent).toBe('Chile');
+
+    const crumb = (label) => [...container.querySelectorAll('.cx-crumbs button')]
+      .find((button) => button.textContent === label);
+    await act(async () => crumb('Sudamérica').click());
+    expect(container.querySelector('#cx-continent-title').textContent).toBe('Sudamérica');
+    await act(async () => crumb('Mundo').click());
+    expect(getGlobalSection().textContent).toContain('Europa60.0%');
+    expect(container.querySelector('#ancestria-insight-panel').classList.contains('ancestria-insight-rail--open')).toBe(true);
   });
 
-  it.each(['global_ancestry', 'local_ancestry', 'both', 'other-only'])(
-    'reports unavailable modules honestly: %s', async (missing) => {
-      const results = createResults();
-      results.results = results.results.filter((result) => (
-        missing === 'both' || missing === 'other-only'
-          ? !['global_ancestry', 'local_ancestry'].includes(result.module)
-          : result.module !== missing
-      ));
-      mockApi({ results });
-      await renderPage();
-      await openDrawer();
-      const globalMissing = missing !== 'local_ancestry';
-      const localMissing = missing !== 'global_ancestry';
-      expect(getGlobalSection().textContent.includes('No hay resultados disponibles para este módulo.'))
-        .toBe(globalMissing);
-      expect(getLocalSection().textContent.includes('No hay resultados disponibles para este módulo.'))
-        .toBe(localMissing);
-      expectNeutralCopy();
-      if (globalMissing && localMissing) expect(getResultStatus().textContent).toContain('No hay datos');
-      expect(container.textContent).not.toMatch(/Demo index|Demo trait|Demo interaction/);
-    }
-  );
-
-  it('does not fabricate display values for recognized older placeholders', async () => {
-    const results = createResults(createService('latest', undefined, '1'));
-    results.results = results.results.slice(0, 2).map((result) => {
-      const label = `Synthetic ${result.module.replace('_', ' ')} placeholder`;
-      return { ...result, payload: {
-        module: result.module, label, state: 'not_evaluated',
-        synthetic: true, non_clinical: true, clinically_reviewed: false,
-        disclaimer: fixtureDisclosure.disclaimer,
-        rows: [{ label, state: 'not_evaluated', value: null }],
-      } };
-    });
-    mockApi({ results });
+  it('opens real country detail from the map and loads the comparison only on demand', async () => {
+    window.innerWidth = 390;
     await renderPage();
-    await openDrawer();
-    expect(getGlobalSection().textContent).toContain('No hay resultados disponibles para este módulo.');
-    expect(getLocalSection().textContent).toContain('No hay resultados disponibles para este módulo.');
+    const panel = container.querySelector('#ancestria-insight-panel');
+    const clickChile = () => act(async () => container.querySelector('[data-geography-id="152"]')
+      .dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })));
+    await clickChile();
+    expect(panel.getAttribute('aria-hidden')).toBe('false');
+    await clickChile();
+    expect(panel.querySelector('.hook__title').textContent).toBe('Tu lado mapuche');
+    expect(panel.querySelector('.hook__region').textContent).toBe('del sur de Chile');
+    expect(panel.querySelector('.hook__equiv').textContent).toBe('≈ 1½ de tus 4 abuelos');
+    expect(panel.querySelectorAll('.hook-dot--lit, .hook-dot--half')).toHaveLength(2);
+    expect(panel.querySelector('.country-info__lead').textContent).toContain('40.0%');
+    expect(fetch.mock.calls.some(([url]) => url === API_ENDPOINTS.ANCESTRY_COHORT)).toBe(false);
+
+    fetch.mockImplementation(async (endpoint) => (endpoint === API_ENDPOINTS.ANCESTRY_COHORT
+      ? reply({ cohort_size: 3, min_cohort: 10, populations: {} }) : createWorldTopologyResponse()));
+    await act(async () => panel.querySelector('#country-tab-comparacion').click());
+    await waitFor(() => panel.querySelector('[role="tabpanel"]').textContent.includes('al menos 10'));
+    expect(fetch.mock.calls.filter(([url]) => url === API_ENDPOINTS.ANCESTRY_COHORT)).toHaveLength(1);
     expectNeutralCopy();
-    expect(container.textContent).not.toMatch(/60%|40%|Demo axis|Demo group/);
-    expect(getResultStatus().textContent).toContain('No hay datos');
+
+    await act(async () => panel.querySelector('.cx-crumbs button').click());
+    expect(getGlobalSection()).not.toBeNull();
   });
 
-  const malformedResults = [
-    ['duplicate global module', (data) => data.results.push(structuredClone(data.results[0]))],
-    ['duplicate local module', (data) => data.results.push(structuredClone(data.results[1]))],
-    ['missing envelope synthetic disclosure', (data) => delete data.synthetic],
-    ['clinical envelope', (data) => { data.non_clinical = false; }],
-    ['empty disclaimer', (data) => { data.disclaimer = ''; }],
-    ['wrong result kind', (data) => { data.results[0].result_type = 'evaluated'; }],
-    ['wrong value code', (data) => { data.results[0].value_code = 'EVALUATED'; }],
-    ['null payload', (data) => { data.results[0].payload = null; }],
-    ['payload module mismatch', (data) => { data.results[0].payload.module = 'traits'; }],
-    ['evaluated state', (data) => { data.results[0].payload.state = 'evaluated'; }],
-    ['missing payload disclosure', (data) => delete data.results[0].payload.synthetic],
-    ['clinically reviewed payload', (data) => { data.results[1].payload.clinically_reviewed = true; }],
-    ['not display-only', (data) => { data.results[1].payload.display_only = false; }],
-    ['numeric semantics mismatch', (data) => { data.results[0].payload.numeric_semantics = 'ancestry'; }],
-    ['null display', (data) => { data.results[0].payload.display = null; }],
-    ['wrong global display kind', (data) => { data.results[0].payload.display.kind = 'demo_index'; }],
-    ['non-array components', (data) => { data.results[0].payload.display.components = {}; }],
-    ['empty components', (data) => { data.results[0].payload.display.components = []; }],
-    ['null component', (data) => { data.results[0].payload.display.components[0] = null; }],
-    ['demographic label', (data) => { data.results[0].payload.display.components[0].label = 'Chile'; }],
-    ['localized input label', (data) => { data.results[0].payload.display.components[0].label = 'Grupo A'; }],
-    ['duplicate component label', (data) => {
-      data.results[0].payload.display.components[1].label = 'Demo group A';
-    }],
-    ['coerced percentage', (data) => { data.results[0].payload.display.components[0].display_percentage = '60'; }],
-    ['missing percentage', (data) => delete data.results[0].payload.display.components[0].display_percentage],
-    ['negative percentage', (data) => { data.results[0].payload.display.components[0].display_percentage = -1; }],
-    ['percentage above 100', (data) => { data.results[0].payload.display.components[0].display_percentage = 101; }],
-    ['inconsistent sum', (data) => { data.results[0].payload.display.components[0].display_percentage = 50; }],
-    ['wrong local display kind', (data) => { data.results[1].payload.display.kind = 'fictional_components'; }],
-    ['null axis', (data) => { data.results[1].payload.display.axis = null; }],
-    ['chromosome axis', (data) => { data.results[1].payload.display.axis.label = 'Chromosome 1'; }],
-    ['localized input axis', (data) => { data.results[1].payload.display.axis.label = 'Eje A'; }],
-    ['zero extent', (data) => { data.results[1].payload.display.axis.extent = 0; }],
-    ['coerced extent', (data) => { data.results[1].payload.display.axis.extent = '100'; }],
-    ['biological unit', (data) => { data.results[1].payload.display.axis.unit = 'base_pairs'; }],
-    ['empty segments', (data) => { data.results[1].payload.display.segments = []; }],
-    ['null segment', (data) => { data.results[1].payload.display.segments[0] = null; }],
-    ['negative offset', (data) => { data.results[1].payload.display.segments[0].offset = -1; }],
-    ['coerced length', (data) => { data.results[1].payload.display.segments[0].length = '60'; }],
-    ['zero length', (data) => { data.results[1].payload.display.segments[0].length = 0; }],
-    ['overlap', (data) => { data.results[1].payload.display.segments[1].offset = 59; }],
-    ['overflow', (data) => { data.results[1].payload.display.segments[1].length = 41; }],
-    ['gap', (data) => { data.results[1].payload.display.segments[1].offset = 61; }],
-    ['incomplete axis coverage', (data) => { data.results[1].payload.display.segments[1].length = 39; }],
-  ];
-  it.each(malformedResults)('fails closed before showing any ancestry numbers: %s', async (_label, mutate) => {
-    const results = createResults();
-    mutate(results);
-    mockApi({ results });
-    await renderPage();
-    await waitFor(() => getResultStatus()?.textContent.includes('No fue posible'));
-    await openDrawer();
-    expect(getResultStatus().getAttribute('role')).toBe('alert');
-    expectNeutralCopy();
-    expect(container.querySelectorAll('.ancestria-insight-legend li')).toHaveLength(0);
-    expect(container.textContent).not.toMatch(/Demo group|Demo axis|60%|40%/);
-    expect(getResultStatus().querySelector('button')?.textContent).toBe('Reintentar');
-    expect(fetch.mock.calls.some(([url]) => /\/genetics\/(ancestry|indigenous)\//.test(String(url)))).toBe(false);
-  });
-
-  it('uses wrapped semantic AnimateIcons and an Ancestría-only Sidebar override', async () => {
+  it('uses wrapped semantic AnimateIcons and the shared animated Sidebar icons', async () => {
     window.innerWidth = 390;
     await renderPage();
 
@@ -985,6 +785,7 @@ describe('Ancestria insight rail', () => {
       TraitsIcon,
       PharmacogeneticsIcon,
       DiseaseIcon,
+      GuideIcon,
     ];
     const categorySvgs = [...navigation.querySelectorAll('svg')];
     expect(categorySvgs).toHaveLength(expectedCategoryIcons.length);
@@ -1001,58 +802,55 @@ describe('Ancestria insight rail', () => {
     expectAnimateIconDecorativeIcon(menuToggle, 'x');
   });
 
-  it('opens the mobile sheet from a bottom-centered left-chevron handle and keeps it closable', async () => {
+  it('docks the mobile sheet to the screen bottom, lifts the globe into view on open, and closes on Escape', async () => {
     window.innerWidth = 390;
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
     await renderPage();
 
     const toggle = container.querySelector('[aria-controls="ancestria-insight-panel"]');
     const panel = container.querySelector('#ancestria-insight-panel');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(toggle.getAttribute('aria-label')).toBe('Abrir panel de ancestría');
-    expect(toggle.textContent.trim()).toBe('');
-    expectAnimateIconDecorativeIcon(toggle, 'chevrons-left');
+    expect(toggle.textContent).toBe('Ver tus orígenes');
+    expectAnimateIconDecorativeIcon(toggle, 'chevron-up');
     expect(panel.getAttribute('aria-hidden')).toBe('true');
 
     const toggleSelector = '\\.ancestria-drawer-toggle';
-    expect.soft(getLastCssDeclaration(ancestryStyles, toggleSelector, 'position')).toBe('absolute');
-    expect.soft(getLastCssDeclaration(ancestryStyles, toggleSelector, 'bottom')).toBe('1rem');
-    expect.soft(getLastCssDeclaration(ancestryStyles, toggleSelector, 'left')).toBe('50%');
-    expect.soft(getLastCssDeclaration(ancestryStyles, toggleSelector, 'top')).toBe('auto');
-    expect.soft(getLastCssDeclaration(ancestryStyles, toggleSelector, 'right')).toBe('auto');
-    expect.soft(getLastCssDeclaration(ancestryStyles, toggleSelector, 'transform')).toBe('translateX(-50%)');
-
-    const openToggleSelector = '\\.ancestria-page__chart-card--drawer-open \\.ancestria-drawer-toggle';
-    expect.soft(getLastCssDeclaration(ancestryStyles, openToggleSelector, 'bottom')).toBe('min(30rem, 90%)');
-    expect.soft(getLastCssDeclaration(ancestryStyles, openToggleSelector, 'left')).toBe('50%');
-    expect.soft(getLastCssDeclaration(ancestryStyles, openToggleSelector, 'top')).toBe('auto');
-    expect.soft(getLastCssDeclaration(ancestryStyles, openToggleSelector, 'right')).toBe('auto');
-    expect.soft(getLastCssDeclaration(ancestryStyles, openToggleSelector, 'transform')).toBe('translateX(-50%)');
+    expect.soft(getLastCssDeclaration(ancestryStyles, toggleSelector, 'position')).toBe('fixed');
+    expect.soft(getLastCssDeclaration(ancestryStyles, toggleSelector, 'bottom')).toBe('0');
+    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-page__chart-card \\.ancestria-insight-rail', 'position'))
+      .toBe('fixed');
+    expect.soft(getLastCssDeclaration(ancestryStyles, '\\.ancestria-page__chart-card--drawer-open \\.ancestria-drawer-toggle',
+      'transform')).toBe('translateY(calc(-1 * var(--sheet-h)))');
 
     await act(async () => toggle.click());
-
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(toggle.getAttribute('aria-label')).toBe('Cerrar panel de ancestría');
+    expect(toggle.textContent).toBe('Ocultar');
     expectAnimateIconDecorativeIcon(toggle, 'chevron-down');
     expect(panel.getAttribute('aria-hidden')).toBe('false');
     expect(panel.classList.contains('ancestria-insight-rail--open')).toBe(true);
+    expect(container.querySelector('.ancestria-dashboard--sheet-open')).not.toBeNull();
+    await waitFor(() => scrollIntoView.mock.calls.length > 0);
+    expect(scrollIntoView.mock.instances[0]).toBe(container.querySelector('.ancestria-page__chart-card'));
 
-    await act(async () => toggle.click());
+    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expectAnimateIconDecorativeIcon(toggle, 'chevrons-left');
+    expect(document.activeElement).toBe(toggle);
+    expectAnimateIconDecorativeIcon(toggle, 'chevron-up');
     expect(panel.getAttribute('aria-hidden')).toBe('true');
+    delete Element.prototype.scrollIntoView;
   });
 
-  it('retains the desktop side-drawer handle direction', async () => {
+  it('keeps the panel as an always-visible column on desktop', async () => {
     window.innerWidth = 1280;
     await renderPage();
 
-    const toggle = container.querySelector('[aria-controls="ancestria-insight-panel"]');
-    const closedIcon = expectAnimateIconDecorativeIcon(toggle, 'chevrons-left');
-
-    await act(async () => toggle.click());
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    const openIcon = expectAnimateIconDecorativeIcon(toggle, 'chevron-right');
-    expect(openIcon.outerHTML).not.toBe(closedIcon.outerHTML);
+    const panel = container.querySelector('#ancestria-insight-panel');
+    expect(container.querySelector('[aria-controls="ancestria-insight-panel"]')).toBeNull();
+    expect(panel.getAttribute('aria-hidden')).toBe('false');
+    expect(panel.hasAttribute('inert')).toBe(false);
+    expect(container.querySelector('[aria-label="Dashboard navigation"]')).not.toBeNull();
+    expect(getGlobalSection().textContent).toContain('Europa60.0%');
   });
 
   it('keeps hover free of tooltip metadata and never opens genetic country details', async () => {
@@ -1076,9 +874,7 @@ describe('Ancestria insight rail', () => {
     expect(panel.classList.contains('ancestria-insight-rail--open')).toBe(true);
     expect(panel.hasAttribute('inert')).toBe(false);
     expect(getGlobalSection().closest('.ancestria-insight-legend')).not.toBeNull();
-    expect(getLocalSection().closest('.ancestria-insight-legend')).not.toBeNull();
-    expect(getGlobalSection().textContent).toContain('Grupo A: 60%');
-    expect(getLocalSection().textContent).toContain('longitud 60 unidades');
+    expect(getGlobalSection().textContent).toContain('Europa60.0%');
     expectNeutralCopy();
   });
 
@@ -1093,6 +889,10 @@ describe('Ancestria insight rail', () => {
     expect(getResultStatus().getAttribute('aria-busy')).toBe('true');
     expect(getResultStatus().textContent).toContain('Cargando datos…');
     expect(getResultStatus().querySelector('button')).toBeNull();
+    expect(getResultStatus().querySelectorAll('.ancestria-loading-summary__row')).toHaveLength(3);
+    // While loading, the legend's place holds its skeleton and the panel mirrors the continent cards.
+    expect(container.querySelector('.ancestria-map-legend')).toBeNull();
+    expect(container.querySelectorAll('.cx-card--skeleton')).toHaveLength(4);
     expectNeutralCopy();
     expect(getResultStatus().closest('[inert], [aria-hidden="true"]')).toBeNull();
     expect(container.querySelector('.ancestria-page__chart-card')).not.toBeNull();
@@ -1107,9 +907,9 @@ describe('Ancestria insight rail', () => {
     mockApi({ profile });
     await renderPage();
     await openDrawer();
-    expect(getGlobalSection().textContent).toContain('Grupo A: 60%');
+    expect(getGlobalSection().textContent).toContain('Europa60.0%');
     expectNeutralCopy();
-    expect(getResultStatus().textContent).not.toMatch(/Cargando|No fue posible/);
+    expect(getResultStatus()).toBeNull();
   });
 
   it.each(['ready', 'loading', 'permission', 'error', 'empty'])(
@@ -1122,7 +922,7 @@ describe('Ancestria insight rail', () => {
       expect([...container.querySelectorAll('nav a')].map((link) => link.getAttribute('href')))
         .toEqual([
           '/dashboard/ancestria', '/dashboard/rasgos',
-          '/dashboard/farmacogenetica', '/dashboard/enfermedades',
+          '/dashboard/farmacogenetica', '/dashboard/enfermedades', '/dashboard/modulos',
         ]);
     }
   );
@@ -1136,19 +936,16 @@ describe('Ancestria insight rail', () => {
   });
 
   it.each(['services', 'results'])('keeps the neutral map for an empty %s response', async (resource) => {
-    mockApi(resource === 'services' ? { services: [] } : { results: { ...createResults(), results: [] } });
+    mockApi(resource === 'services' ? { services: [] } : { results: { ...createResults(), modules: {} } });
     await renderPage();
     expect(getResultStatus().textContent).toContain('No hay datos');
     expectNeutralCopy();
     expect(getResultStatus().querySelector('button')).not.toBeNull();
     expect(container.querySelector('.ancestria-page__chart-card')).not.toBeNull();
     expect(container.querySelectorAll('.ancestria-insight-legend li')).toHaveLength(0);
-    if (resource === 'services') {
-      expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/results/'))).toBe(false);
-    }
   });
 
-  it.each(['services', 'results'].flatMap((resource) => [401, 403, 404, 500].map((status) => [resource, status])))(
+  it.each(['services', 'results'].flatMap((resource) => [401, 403, 500].map((status) => [resource, status])))(
     'exposes a visible retry for %s HTTP %s with the drawer closed', async (resource, status) => {
       mockApi(resource === 'services' ? { listStatus: status } : { resultStatus: status });
       await renderPage();
@@ -1165,19 +962,20 @@ describe('Ancestria insight rail', () => {
       await act(async () => retry.focus());
       expect(document.activeElement).toBe(retry);
       expect(getLastCssDeclaration(ancestryStyles, '\\.ancestria-results-status button:focus-visible', 'outline'))
-        .toBe('2px solid #ffffff');
+        .toBe('2px solid #230462');
       mockApi();
       // jsdom does not synthesize native button activation from keyboard events.
       // A detail-zero click exercises the browser's native keyboard activation path.
       await act(async () => retry.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 })));
       await waitFor(() => getGlobalSection()?.querySelector('li'));
-      expect(getGlobalSection().textContent).toContain('Grupo A: 60%');
+      expect(getGlobalSection().textContent).toContain('Europa60.0%');
       expectNeutralCopy();
       expect(message.textContent).not.toMatch(/No tienes permiso|No fue posible/);
     }
   );
 
-  it('clears stale displays immediately during keyboard retry and leaves them cleared on failure', async () => {
+  it('retries a failed load from the keyboard without moving the globe', async () => {
+    mockApi({ listStatus: 500 });
     await renderPage();
     await openDrawer();
     const map = container.querySelector('[data-projection="geoOrthographic"]');
@@ -1192,7 +990,7 @@ describe('Ancestria insight rail', () => {
     });
     expect(getResultStatus().textContent).toContain('Cargando');
     expect(container.querySelectorAll('.ancestria-insight-legend li')).toHaveLength(0);
-    expect(container.textContent).not.toContain('Grupo A');
+    expect(container.textContent).not.toContain('Europa60.0%');
     expectNeutralCopy();
     expect(map.getAttribute('data-rotation')).toBe(rotation);
     await act(async () => list.resolve(reply({ error: 'unavailable' }, 403)));
@@ -1296,12 +1094,10 @@ describe('Ancestria insight rail', () => {
         await act(async () => getFullscreenToggle().click());
         expect(getFullscreenToggle().getAttribute('aria-pressed')).toBe('true');
         expect(panel.classList.contains('ancestria-insight-rail--fullscreen')).toBe(true);
-        expect(getGlobalSection().textContent).toContain('Grupo A: 60%');
-        expect(getLocalSection().textContent).toContain('longitud 60 unidades');
-        expectNeutralCopy();
+        expect(getGlobalSection().textContent).toContain('Europa60.0%');
+            expectNeutralCopy();
         expect(panel.querySelectorAll('[role="progressbar"], .ancestria-insight-rail__count, .ancestria-insight-legend__flag'))
           .toHaveLength(0);
-        expect(mapCard.querySelectorAll('[data-globe-pin], [data-globe-label]')).toHaveLength(0);
         expect(getLastCssDeclaration(ancestryStyles, '\\.ancestria-insight-rail--fullscreen', 'background'))
           .toBe('#f8fbff');
         expect(getLastCssDeclaration(ancestryStyles, '\\.ancestria-insight-rail--fullscreen', 'backdrop-filter'))
@@ -1352,7 +1148,7 @@ describe('Ancestria insight rail', () => {
       }
     );
 
-    it.each(['loading', 'permission', 'error', 'empty', 'ready'])(
+    it.each(['loading', 'permission', 'error', 'empty'])(
       'keeps neutral copy and %s state reachable inside native fullscreen with the drawer closed',
       async (state) => {
         installMockFullscreenApi();

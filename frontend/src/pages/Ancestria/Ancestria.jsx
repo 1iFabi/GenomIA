@@ -2,72 +2,29 @@ import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown as ChevronDownIcon,
-  ChevronRight as ChevronRightIcon,
   ChevronUp as ChevronUpIcon,
-  CircleUserRound as ProfileIcon,
-  FlaskConical as PharmacogeneticsIcon,
-  House as HomeIcon,
-  KeyRound as KeyIcon,
-  LayoutGrid as CategoriesIcon,
-  LogOut as LogoutIcon,
-  Map as AncestryIcon,
   Menu as MenuIcon,
-  MessageCircle as ChatIcon,
-  ChevronsLeft as ChevronsLeftIcon,
-  Settings as SettingsIcon,
-  Stethoscope as DiseasesIcon,
-  Upload as UploadIcon,
-  UserRound as TraitsIcon,
-  UserRoundX as RemoveAccountIcon,
   X as CloseIcon,
 } from '@animateicons/react/lucide';
+import { animatedSidebarIcons } from '../../components/Sidebar/animatedSidebarIcons';
 import { Expand as FullscreenIcon, Shrink as ExitFullscreenIcon } from 'lucide-react';
-import { clearToken } from '../../config/api';
+import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
+import { RESULT_NAV_ITEMS } from '../../config/resultNav';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import SectionHeader from '../../components/SectionHeader/SectionHeader';
-import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
+import { moduleRows, useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
 import { useSession } from '../../hooks/useSession';
 import SpinningCoin from '../../components/SpinningCoin/SpinningCoin';
 import TacticalGlobe3D from '../../components/TacticalGlobe3D/TacticalGlobe3D';
+import ContinentExplorer from '../../components/ContinentExplorer/ContinentExplorer';
+import { CONTINENT_LABELS, buildContinentShapes, groupByContinent } from '../../components/ContinentExplorer/continents';
 import './Ancestria.css';
+import { SkeletonBlock } from '../../components/DashboardSkeleton/DashboardSkeleton';
 
 // URL del mapa mundial (TopoJSON)
 const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
-// Geography remains a reference surface, never a projection of demo results.
-const EMPTY_COUNTRY_RESULTS = new Map();
 
-const createBriefHoverIcon = (Icon) => {
-  const BriefHoverIcon = (props) => <Icon {...props} duration={0.6} />;
-  BriefHoverIcon.displayName = `${Icon.displayName || 'AnimatedIcon'}BriefHover`;
-  return BriefHoverIcon;
-};
-
-const ancestriaSidebarIconOverrides = {
-  profile: createBriefHoverIcon(ProfileIcon),
-  profileExpand: createBriefHoverIcon(ChevronDownIcon),
-  profileCollapse: createBriefHoverIcon(ChevronUpIcon),
-  key: createBriefHoverIcon(KeyIcon),
-  removeAccount: createBriefHoverIcon(RemoveAccountIcon),
-  categories: createBriefHoverIcon(CategoriesIcon),
-  categoriesExpand: createBriefHoverIcon(ChevronDownIcon),
-  categoriesCollapse: createBriefHoverIcon(ChevronUpIcon),
-  categoryItems: [
-    AncestryIcon,
-    TraitsIcon,
-    PharmacogeneticsIcon,
-    DiseasesIcon,
-  ].map(createBriefHoverIcon),
-  aiExpand: createBriefHoverIcon(ChevronDownIcon),
-  aiCollapse: createBriefHoverIcon(ChevronUpIcon),
-  chat: createBriefHoverIcon(ChatIcon),
-  admin: createBriefHoverIcon(SettingsIcon),
-  adminExpand: createBriefHoverIcon(ChevronDownIcon),
-  adminCollapse: createBriefHoverIcon(ChevronUpIcon),
-  upload: createBriefHoverIcon(UploadIcon),
-  home: createBriefHoverIcon(HomeIcon),
-  logout: createBriefHoverIcon(LogoutIcon),
-};
 
 // Mapeo de códigos ISO-A3 numéricos (usados en TopoJSON) a continentes y nombres
 const countryInfo = {
@@ -363,6 +320,9 @@ const countryInfoByName = Object.values(countryInfo).reduce((acc, info) => {
     return acc;
 }, {});
 
+const continentByCode = Object.fromEntries(Object.values(countryInfo).map((info) => [info.code, info.continent]));
+const continentOfCode = (code) => continentByCode[code] ?? null;
+
 const getGeoCountryInfo = (geo) => {
     if (!geo) return null;
 
@@ -383,87 +343,11 @@ const getGeoCountryInfo = (geo) => {
     return countryInfoByName[lookup] || null;
 };
 
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-const isText = (value) => typeof value === 'string' && value.trim().length > 0;
-const isDemoGroup = (value) => typeof value === 'string' && /^Demo group [A-Z]+$/.test(value);
-const isNumberInRange = (value, minimum, maximum) => (
-  typeof value === 'number' && Number.isFinite(value) && value >= minimum && value <= maximum
-);
-const isClose = (left, right) => Math.abs(left - right) <= 1e-8;
-const hasDemoDisclosure = (value) => isObject(value)
-  && value.synthetic === true && value.non_clinical === true && isText(value.disclaimer);
-
-const validateGlobalDisplay = (display) => {
-  if (!isObject(display) || display.kind !== 'fictional_components'
-    || !Array.isArray(display.components) || !display.components.length) return false;
-  const labels = new Set();
-  let total = 0;
-  for (const component of display.components) {
-    if (!isObject(component) || !isDemoGroup(component.label) || labels.has(component.label)
-      || !isNumberInRange(component.display_percentage, 0, 100)) return false;
-    labels.add(component.label);
-    total += component.display_percentage;
-  }
-  return isClose(total, 100);
-};
-
-const validateLocalDisplay = (display) => {
-  if (!isObject(display) || display.kind !== 'abstract_segments' || !isObject(display.axis)
-    || typeof display.axis.label !== 'string' || !/^Demo axis [A-Z]+$/.test(display.axis.label)
-    || !isNumberInRange(display.axis.extent, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER)
-    || display.axis.unit !== 'abstract_demo_units'
-    || !Array.isArray(display.segments) || !display.segments.length) return false;
-  let end = 0;
-  for (const segment of display.segments) {
-    if (!isObject(segment) || !isDemoGroup(segment.label)
-      || !isNumberInRange(segment.offset, 0, display.axis.extent)
-      || !isNumberInRange(segment.length, Number.MIN_VALUE, display.axis.extent)
-      || !isClose(segment.offset, end)) return false;
-    end = segment.offset + segment.length;
-    if (!Number.isFinite(end) || end > display.axis.extent) return false;
-  }
-  return isClose(end, display.axis.extent);
-};
-
-// Validate all target modules before exposing either display. Never adopt another module,
-// repair malformed values, or supply current fixture values for an older placeholder.
-const readAncestryDisplays = (data) => {
-  const displays = { global_ancestry: null, local_ancestry: null, invalid: false };
-  if (!data) return displays;
-  const invalid = () => ({ global_ancestry: null, local_ancestry: null, invalid: true });
-  if (!hasDemoDisclosure(data) || !Array.isArray(data.results)) return invalid();
-  const seen = new Set();
-  for (const result of data.results) {
-    if (!isObject(result) || typeof result.module !== 'string') return invalid();
-    if (!['global_ancestry', 'local_ancestry'].includes(result.module)) continue;
-    if (seen.has(result.module)) return invalid();
-    seen.add(result.module);
-    const payload = result.payload;
-    if (result.result_type !== 'synthetic_placeholder' || result.value_code !== 'SYNTHETIC_NOT_EVALUATED'
-      || !hasDemoDisclosure(payload) || payload.module !== result.module
-      || payload.state !== 'not_evaluated' || payload.clinically_reviewed !== false) return invalid();
-    if (!Object.hasOwn(payload, 'display')) {
-      const label = `Synthetic ${result.module.replace('_', ' ')} placeholder`;
-      if (payload.label !== label || !Array.isArray(payload.rows) || payload.rows.length !== 1
-        || !isObject(payload.rows[0]) || payload.rows[0].label !== label
-        || payload.rows[0].state !== 'not_evaluated' || payload.rows[0].value !== null) return invalid();
-      continue;
-    }
-    if (!isDemoGroup(payload.label) || payload.display_only !== true
-      || payload.numeric_semantics !== 'arbitrary_demo_only_not_evaluated') return invalid();
-    const isValid = result.module === 'global_ancestry'
-      ? validateGlobalDisplay(payload.display) : validateLocalDisplay(payload.display);
-    if (!isValid) return invalid();
-    displays[result.module] = payload.display;
-  }
-  return displays;
-};
-
-// Localize display text only; validation and React keys keep the raw labels.
-const formatAncestryLabel = (label) => label
-  .replace(/^Demo group ([A-Z]+)$/, 'Grupo $1')
-  .replace(/^Demo axis ([A-Z]+)$/, 'Eje $1');
-
+// Paleta harmónica: púrpura → azules progresivos (coolors.co)
+const ANCESTRY_COLORS = { NAT: '#203590', EUR: '#230462', EAS: '#6083c5', AFR: '#96b8db' };
+const ancestryColor = (code) => ANCESTRY_COLORS[code] || '#748CAB';
+// Mirrors the globe's continent-view fills so the legend always matches what is painted.
+const MAP_COLORS = { withAncestry: '#6083C5', ancestry: '#203590', continent: '#96B8DB', none: '#E6E5E0' };
 const ancestryStateMessages = {
   loading: 'Cargando datos…',
   empty: 'No hay datos de ancestría disponibles.',
@@ -477,15 +361,83 @@ const Ancestria = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const results = useLatestGenomicsResults();
-  const displays = useMemo(() => readAncestryDisplays(results.data), [results.data]);
-  const resultStatus = displays.invalid ? 'error'
-    : results.status === 'ready' && !displays.global_ancestry && !displays.local_ancestry
-      ? 'empty' : results.status;
+  const globalAncestry = moduleRows(results, 'global_ancestry');
+  const localAncestry = moduleRows(results, 'local_ancestry');
+  const resultStatus = results.status === 'ready' && !globalAncestry.length && !localAncestry.length
+    ? 'empty' : results.status;
   const [isInsightPanelOpen, setIsInsightPanelOpen] = useState(false);
   const [fullscreenMode, setFullscreenMode] = useState(null);
   const [isFullscreenMotionReady, setIsFullscreenMotionReady] = useState(false);
   const [fullscreenAnnouncement, setFullscreenAnnouncement] = useState('');
   const [hoveredCountryCode, setHoveredCountryCode] = useState(null);
+  const [selectedCountryCode, setSelectedCountryCode] = useState(null);
+  const [focusRequest, setFocusRequest] = useState(null);
+  const [activeContinent, setActiveContinent] = useState(null);
+  const [hoveredContinent, setHoveredContinent] = useState(null);
+  const [geographies, setGeographies] = useState([]);
+  const countryDataByIso = useMemo(() => new Map(globalAncestry.filter((row) => row.country_code).map((row) => [
+    row.country_code, {
+      name: row.country,
+      population: row.label,
+      group: row.group_label,
+      color: ancestryColor(row.group),
+      percentage: row.proportion * 100,
+    },
+  ])), [globalAncestry]);
+  const ancestryGroups = useMemo(() => {
+    const groups = new Map();
+    for (const row of globalAncestry) {
+      const code = row.group || row.population;
+      const group = groups.get(code) || { code, label: row.group_label || row.label, color: ancestryColor(code), proportion: 0 };
+      group.proportion += row.proportion;
+      groups.set(code, group);
+    }
+    return [...groups.values()];
+  }, [globalAncestry]);
+  const continents = useMemo(() => groupByContinent(globalAncestry, continentOfCode), [globalAncestry]);
+  const continentShapes = useMemo(
+    () => buildContinentShapes(geographies, getGeoCountryInfo, continents),
+    [geographies, continents],
+  );
+  const selectedRow = globalAncestry.find((row) => row.country_code === selectedCountryCode) || null;
+  const selectedRank = selectedRow
+    ? [...globalAncestry].sort((a, b) => b.proportion - a.proportion).indexOf(selectedRow) + 1 : null;
+  const [cohort, setCohort] = useState(null);
+  // Fetched only when the comparison tab is opened, so the default view makes one results request.
+  const loadCohort = useCallback(() => {
+    if (cohort && cohort.status !== 'error') return;
+    setCohort({ status: 'loading' });
+    apiRequest(API_ENDPOINTS.ANCESTRY_COHORT, { method: 'GET' }).then(({ ok, data }) => {
+      setCohort(ok && data ? { status: 'ready', data } : { status: 'error' });
+    });
+  }, [cohort]);
+
+  // World > continent > country: each step turns the globe toward what was chosen.
+  const openContinent = useCallback((key) => {
+    setActiveContinent(key);
+    setSelectedCountryCode(null);
+    setHoveredContinent(null);
+    setIsInsightPanelOpen(true);
+    setFocusRequest({ continent: key, requestId: Date.now() });
+  }, []);
+  const openCountry = useCallback((row) => {
+    setActiveContinent(continentOfCode(row.country_code));
+    setSelectedCountryCode(row.country_code);
+    setIsInsightPanelOpen(true);
+    setFocusRequest({ countryCode: row.country_code, requestId: Date.now() });
+  }, []);
+  const goToWorld = useCallback(() => {
+    setActiveContinent(null);
+    setSelectedCountryCode(null);
+  }, []);
+  const continentView = useMemo(() => ({
+    active: activeContinent,
+    withAncestry: new Set(continents.map((continent) => continent.key)),
+    labels: CONTINENT_LABELS,
+    hovered: hoveredContinent,
+    onSelect: openContinent,
+    onHover: setHoveredContinent,
+  }), [activeContinent, continents, hoveredContinent, openContinent]);
   const mapContainerRef = useRef(null);
   const fullscreenToggleRef = useRef(null);
   const drawerToggleRef = useRef(null);
@@ -561,12 +513,39 @@ const Ancestria = () => {
     navigate('/');
   };
 
-  const isFullscreenRail = Boolean(isInsightPanelOpen && fullscreenMode);
+  // Desktop keeps the panel as a fixed column; mobile keeps it as a sheet behind the toggle.
+  const isPanelShown = !isMobile || isInsightPanelOpen;
+  const isFullscreenRail = Boolean(isPanelShown && fullscreenMode);
 
+  // Opening the mobile sheet scrolls the globe to the top of the screen, so both stay in view together.
+  useEffect(() => {
+    if (!isMobile || !isInsightPanelOpen || fullscreenMode) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      mapContainerRef.current?.scrollIntoView?.({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+    });
+    const closeOnEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      setIsInsightPanelOpen(false);
+      drawerToggleRef.current?.focus();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isMobile, isInsightPanelOpen, fullscreenMode]);
+
+  // A click outside the open continent (ocean, space, or a country elsewhere without ancestry) steps back to the
+  // world view; with nothing open, it only dismisses the mobile sheet.
   const handleMapBackgroundClick = useCallback(() => {
     setHoveredCountryCode(null);
-    setIsInsightPanelOpen(false);
-  }, []);
+    if (activeContinent) goToWorld();
+    else setIsInsightPanelOpen(false);
+  }, [activeContinent, goToWorld]);
+  const handleNoDataCountryClick = useCallback((info) => {
+    if (activeContinent && info?.continent !== activeContinent) goToWorld();
+  }, [activeContinent, goToWorld]);
 
   const handleFullscreenToggle = useCallback(async (event) => {
     event.stopPropagation();
@@ -628,15 +607,9 @@ const Ancestria = () => {
     return () => button.removeEventListener('click', stopFullscreenClickPropagation);
   }, [handleFullscreenToggle]);
 
-  const sidebarItems = useMemo(() => [
-    { label: 'Ancestría', href: '/dashboard/ancestria' },
-    { label: 'Rasgos', href: '/dashboard/rasgos' },
-    { label: 'Farmacogenética', href: '/dashboard/farmacogenetica' },
-    { label: 'Enfermedades', href: '/dashboard/enfermedades' },
-  ], []);
 
   return (
-    <div className="ancestria-dashboard">
+    <div className={`ancestria-dashboard${isMobile && isInsightPanelOpen ? ' ancestria-dashboard--sheet-open' : ''}`}>
       {isMobile && (
         <button
           className="ancestria-dashboard__burger"
@@ -653,12 +626,12 @@ const Ancestria = () => {
 
       <aside className="ancestria-dashboard__sidebar">
         <Sidebar
-          items={sidebarItems}
+          items={RESULT_NAV_ITEMS}
           onLogout={handleLogout}
           user={user}
           isMobileMenuOpen={isMobileMenuOpen}
           setIsMobileMenuOpen={setIsMobileMenuOpen}
-          iconOverrides={ancestriaSidebarIconOverrides}
+          iconOverrides={animatedSidebarIcons}
         />
       </aside>
 
@@ -681,38 +654,80 @@ const Ancestria = () => {
             <div
               ref={mapContainerRef}
               className={`ancestria-page__chart-card${isInsightPanelOpen ? ' ancestria-page__chart-card--drawer-open' : ''}${fullscreenMode ? ` ancestria-page__chart-card--fullscreen-${fullscreenMode} ancestria-page__chart-card--fullscreen-motion-${isFullscreenMotionReady ? 'settled' : 'entering'}` : ''}`}
-              style={fullscreenMode ? undefined : { height: isMobile ? '400px' : '600px' }}
             >
-              {!isInsightPanelOpen && (
-                <div className="ancestria-map-mark" aria-hidden="true">
-                  <SpinningCoin src="/cNormal.png" alt="" size="100%" speed="12s" />
-                </div>
-              )}
+              <div className="ancestria-map-stage">
+              <div className="ancestria-map-mark" aria-hidden="true">
+                <SpinningCoin src="/cNormal.png" alt="" size="100%" speed="12s" />
+              </div>
 
               <TacticalGlobe3D
                 geographyUrl={GEO_URL}
-                accessibleLabel="Globo de referencia geográfica"
-                countryDataByIso={EMPTY_COUNTRY_RESULTS}
+                accessibleLabel="Globo de ancestría por país"
+                countryDataByIso={countryDataByIso}
                 getGeoCountryInfo={getGeoCountryInfo}
-                selectedCountryCode={null}
+                selectedCountryCode={selectedCountryCode}
                 hoveredCountryCode={hoveredCountryCode}
                 onHoverCountry={setHoveredCountryCode}
-                focusRequest={null}
+                onSelectCountry={(_data, info) => {
+                  const row = globalAncestry.find((item) => item.country_code === info.code);
+                  if (row) openCountry(row);
+                }}
+                focusRequest={focusRequest}
                 onBackgroundClick={handleMapBackgroundClick}
+                onNoDataCountryClick={handleNoDataCountryClick}
+                continentView={continentView}
+                onGeographiesLoaded={setGeographies}
               />
-              <div
-                className="ancestria-results-status"
-                role={['permission', 'error'].includes(resultStatus) ? 'alert' : 'status'}
-                aria-label="Estado de los resultados"
-                aria-live={['permission', 'error'].includes(resultStatus) ? 'assertive' : 'polite'}
-                aria-busy={results.loading}
-                onClick={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                <p>La geografía es solo exploración; no interpreta estos resultados.</p>
-                {ancestryStateMessages[resultStatus] && <p>{ancestryStateMessages[resultStatus]}</p>}
-                {!results.loading && <button type="button" aria-label="Reintentar carga de resultados" onClick={results.retry}>Reintentar</button>}
-              </div>
+              {resultStatus === 'ready' && continents.length > 0 && (
+                <ul className="ancestria-map-legend" aria-label="Leyenda del mapa">
+                  {(activeContinent
+                    ? [
+                      [MAP_COLORS.ancestry, 'Países con tu ancestría'],
+                      [MAP_COLORS.continent, `Resto de ${CONTINENT_LABELS[activeContinent] || activeContinent}`],
+                      [MAP_COLORS.none, 'Otros continentes'],
+                    ]
+                    : [
+                      [MAP_COLORS.withAncestry, 'Continente con tu ancestría'],
+                      [MAP_COLORS.none, 'Sin ancestría registrada'],
+                    ]
+                  ).map(([color, label]) => (
+                    <li key={label}>
+                      <span className="ancestria-map-legend__swatch" style={{ background: color }} />
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {resultStatus !== 'ready' && (
+                <div
+                  className={`ancestria-results-status${resultStatus === 'loading' ? ' ancestria-results-status--loading' : ''}`}
+                  role={['permission', 'error'].includes(resultStatus) ? 'alert' : 'status'}
+                  aria-label="Estado de los resultados"
+                  aria-live={['permission', 'error'].includes(resultStatus) ? 'assertive' : 'polite'}
+                  aria-busy={results.loading}
+                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  {ancestryStateMessages[resultStatus] && (
+                    <p className={resultStatus === 'loading' ? 'dashboard-skeleton__announcement' : undefined}>
+                      {ancestryStateMessages[resultStatus]}
+                    </p>
+                  )}
+                  {resultStatus === 'loading' && (
+                    <div className="ancestria-loading-summary" aria-hidden="true">
+                      <SkeletonBlock className="ancestria-loading-summary__heading" />
+                      {[0, 1, 2].map((index) => (
+                        <div className="ancestria-loading-summary__row" key={index}>
+                          <SkeletonBlock className="ancestria-loading-summary__marker" />
+                          <SkeletonBlock className="ancestria-loading-summary__label" />
+                          <SkeletonBlock className="ancestria-loading-summary__share" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!results.loading && <button type="button" aria-label="Reintentar carga de resultados" onClick={results.retry}>Reintentar</button>}
+                </div>
+              )}
               <button
                 ref={fullscreenToggleRef}
                 className="ancestria-fullscreen-toggle"
@@ -732,71 +747,52 @@ const Ancestria = () => {
               >
                 {fullscreenAnnouncement}
               </span>
-              <button
-                ref={drawerToggleRef}
-                className="ancestria-drawer-toggle"
-                type="button"
-                aria-controls="ancestria-insight-panel"
-                aria-expanded={isInsightPanelOpen}
-                aria-label={`${isInsightPanelOpen ? 'Cerrar' : 'Abrir'} panel de ancestría`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsInsightPanelOpen((open) => !open);
-                }}
-              >
-                {isMobile
-                  ? (isInsightPanelOpen
+              </div>
+              {isMobile && (
+                <button
+                  ref={drawerToggleRef}
+                  className="ancestria-drawer-toggle"
+                  type="button"
+                  aria-controls="ancestria-insight-panel"
+                  aria-expanded={isInsightPanelOpen}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsInsightPanelOpen((open) => !open);
+                  }}
+                >
+                  {isInsightPanelOpen
                     ? <ChevronDownIcon duration={0.6} aria-hidden="true" />
-                    : <ChevronsLeftIcon duration={0.6} aria-hidden="true" />)
-                  : (isInsightPanelOpen
-                    ? <ChevronRightIcon duration={0.6} aria-hidden="true" />
-                    : <ChevronsLeftIcon duration={0.6} aria-hidden="true" />)}
-              </button>
+                    : <ChevronUpIcon duration={0.6} aria-hidden="true" />}
+                  <span>{isInsightPanelOpen ? 'Ocultar' : 'Ver tus orígenes'}</span>
+                </button>
+              )}
 
               <aside
                 id="ancestria-insight-panel"
-                className={`ancestria-insight-rail${isInsightPanelOpen ? ' ancestria-insight-rail--open' : ''}${isFullscreenRail ? ' ancestria-insight-rail--fullscreen' : ''}`}
+                className={`ancestria-insight-rail${isPanelShown ? ' ancestria-insight-rail--open' : ''}${isFullscreenRail ? ' ancestria-insight-rail--fullscreen' : ''}`}
                 aria-label="Panel de ancestría"
-                aria-hidden={!isInsightPanelOpen}
+                aria-hidden={!isPanelShown}
                 aria-busy={results.loading}
-                inert={isInsightPanelOpen ? undefined : ''}
+                inert={isPanelShown ? undefined : ''}
                 onClick={(event) => event.stopPropagation()}
               >
-                <h2 className="ancestria-insight-rail__title">
-                  {isInsightPanelOpen && <img src="/cNormal.png" alt="" aria-hidden="true" />}
-                  <span>Resultados</span>
-                </h2>
                 <div className={`ancestria-insight-legend${isFullscreenRail ? ' ancestria-insight-legend--fullscreen' : ''}`}>
-                  <section aria-labelledby="ancestria-global-title">
-                    <h3 id="ancestria-global-title">Ancestría global</h3>
-                    {displays.global_ancestry ? (
-                      <ol>
-                        {displays.global_ancestry.components.map((component) => (
-                          <li key={component.label}>{formatAncestryLabel(component.label)}: {component.display_percentage}%</li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <p className="ancestria-insight-rail__message">No hay resultados disponibles para este módulo.</p>
-                    )}
-                  </section>
-                  <section aria-labelledby="ancestria-local-title">
-                    <h3 id="ancestria-local-title">Ancestría local</h3>
-                    {displays.local_ancestry ? (
-                      <>
-                        <p>{formatAncestryLabel(displays.local_ancestry.axis.label)}</p>
-                        <p>Extensión: {displays.local_ancestry.axis.extent} unidades</p>
-                        <ol>
-                          {displays.local_ancestry.segments.map((segment, index) => (
-                            <li key={index}>
-                              {formatAncestryLabel(segment.label)}: inicio {segment.offset} · longitud {segment.length} unidades
-                            </li>
-                          ))}
-                        </ol>
-                      </>
-                    ) : (
-                      <p className="ancestria-insight-rail__message">No hay resultados disponibles para este módulo.</p>
-                    )}
-                  </section>
+                <ContinentExplorer
+                  status={resultStatus}
+                  continents={continents}
+                  shapes={continentShapes}
+                  groups={ancestryGroups}
+                  activeContinent={activeContinent}
+                  selectedRow={selectedRow}
+                  selectedRank={selectedRank}
+                  onOpenContinent={openContinent}
+                  onOpenCountry={openCountry}
+                  onGoToWorld={goToWorld}
+                  onHoverContinent={setHoveredContinent}
+                  onHoverCountry={setHoveredCountryCode}
+                  cohort={cohort}
+                  onRequestCohort={loadCohort}
+                />
                 </div>
               </aside>
             </div>

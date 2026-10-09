@@ -1,15 +1,18 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { clearToken } from '../../config/api';
-import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
+import { RESULT_NAV_ITEMS } from '../../config/resultNav';
+import { moduleRows, useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
 import { useSession } from '../../hooks/useSession';
 import Sidebar from '../../components/Sidebar/Sidebar';
+import { animatedSidebarIcons } from '../../components/Sidebar/animatedSidebarIcons';
+import { DashboardPageSkeleton, SkeletonBlock } from '../../components/DashboardSkeleton/DashboardSkeleton';
 import '../../styles/cards.css';
 import './Enfermedades.css';
 
 const ENFERMEDADES_SUBTITLE =
-  'Consulta los valores de los módulos poligénico y monogénico.';
+  'Tu riesgo poligénico y las variantes patogénicas encontradas en ClinVar.';
 
 function EnfermedadesPageHeader() {
   return (
@@ -24,94 +27,24 @@ function EnfermedadesPageHeader() {
   );
 }
 
-const riskModules = [
-  { module: 'polygenic_risk', kind: 'demo_index', title: 'Módulo poligénico' },
-  { module: 'monogenic_risk', kind: 'demo_entries', title: 'Módulo monogénico' },
-];
-const knownModules = new Set([
-  'global_ancestry', 'local_ancestry', 'polygenic_risk', 'monogenic_risk', 'traits', 'pharmacogenetics',
-]);
-const displayProvenance = {
-  clinically_reviewed: false, display_only: true, numeric_semantics: 'arbitrary_demo_only_not_evaluated',
-};
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-const isText = (value) => typeof value === 'string' && value.trim().length > 0;
-const isDemoLabel = (value) => typeof value === 'string' && /^Demo index [A-Z]+$/.test(value);
-const hasDemoDisclosure = (value) => isObject(value)
-  && value.synthetic === true && value.non_clinical === true && isText(value.disclaimer);
-
-// Only raw, explicitly non-evaluated demo displays are renderable. A malformed
-// bundle invalidates both targets; a missing target stays unavailable without fallback.
-const readRiskDisplays = (data) => {
-  const displays = { polygenic_risk: null, monogenic_risk: null, invalid: false };
-  const invalid = () => ({ ...displays, polygenic_risk: null, monogenic_risk: null, invalid: true });
-  if (!hasDemoDisclosure(data) || !Array.isArray(data.results)
-    || !Object.entries(displayProvenance).every(([key, value]) => (
-      data[key] === value
-    ))) return invalid();
-  const seen = new Set();
-  for (const result of data.results) {
-    if (!isObject(result) || !knownModules.has(result.module) || seen.has(result.module)) return invalid();
-    seen.add(result.module);
-    const definition = riskModules.find(({ module }) => module === result.module);
-    if (!definition) continue;
-    const payload = result.payload;
-    if (result.result_type !== 'synthetic_placeholder' || result.value_code !== 'SYNTHETIC_NOT_EVALUATED'
-      || !hasDemoDisclosure(payload) || payload.module !== result.module || payload.state !== 'not_evaluated'
-      || !isDemoLabel(payload.label)
-      || !Object.entries(displayProvenance).every(([key, value]) => payload[key] === value)
-      || !isObject(payload.display) || payload.display.kind !== definition.kind
-      || !Array.isArray(payload.display.items) || !payload.display.items.length) return invalid();
-    const labels = new Set();
-    for (const item of payload.display.items) {
-      if (!isObject(item) || !isDemoLabel(item.label) || labels.has(item.label)
-        || typeof item.display_value !== 'number' || !Number.isFinite(item.display_value)) return invalid();
-      labels.add(item.label);
-    }
-    displays[result.module] = payload.display;
-  }
-  return displays;
-};
-
-// Localize display text only; validation and React keys keep the raw labels.
-const formatRiskLabel = (label) => label.replace(/^Demo index ([A-Z]+)$/, 'Índice $1');
-
 const resultMessages = {
   loading: 'Cargando datos…',
-  noService: 'No hay un servicio disponible para mostrar resultados.',
-  empty: 'El servicio seleccionado no tiene resultados.',
-  missing: 'Faltan módulos en los resultados disponibles.',
-  invalid: 'Los módulos no están disponibles: los datos no son válidos.',
+  empty: 'Aún no tienes resultados disponibles.',
+  missing: 'Tu último servicio no tiene resultados de riesgo.',
   permission: 'No tienes permiso para consultar estos resultados.',
   error: 'No fue posible cargar los datos. Puedes reintentar.',
   ready: 'Datos disponibles.',
 };
 
-const getRiskResultStatus = (results, displays) => {
-  if (results.loading) return 'loading';
-  if (['ready', 'empty'].includes(results.status) && !results.service) return 'noService';
-  if (displays?.invalid) return 'invalid';
-  if (displays && !results.data.results.length) return 'empty';
-  if (displays && riskModules.some(({ module }) => !displays[module])) return 'missing';
-  return Object.hasOwn(resultMessages, results.status) ? results.status : 'error';
-};
+const formatSignificance = (value) => value?.replaceAll('_', ' ').replace('/', ' / ') ?? '';
 
-function DemoModuleCard({ definition, display }) {
+function RiskCard({ id, title, empty, children }) {
   return (
-    <section className="card-pro card-large-pro" aria-labelledby={`${definition.module}-title`}>
+    <section className="card-pro card-large-pro" aria-labelledby={`${id}-title`}>
       <div className="card-pro__header">
-        <h2 className="priority-section__title" id={`${definition.module}-title`}>{definition.title}</h2>
+        <h2 className="priority-section__title" id={`${id}-title`}>{title}</h2>
       </div>
-      {display ? (
-        <dl className="legend-pro">
-          {display.items.map((item) => (
-            <div className="legend-pro__item" key={item.label}>
-              <dt className="legend-pro__label">{formatRiskLabel(item.label)}</dt>
-              <dd className="legend-pro__value">{item.display_value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : <p>Módulo no disponible.</p>}
+      {children || <p>{empty}</p>}
     </section>
   );
 }
@@ -122,9 +55,11 @@ const Enfermedades = () => {
   const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
   const results = useLatestGenomicsResults();
-  const displays = results.status === 'ready' && results.service ? readRiskDisplays(results.data) : null;
-  const resultStatus = getRiskResultStatus(results, displays);
-  const failed = ['permission', 'error', 'invalid'].includes(resultStatus);
+  const polygenic = moduleRows(results, 'polygenic_risk');
+  const monogenic = moduleRows(results, 'monogenic_risk');
+  const resultStatus = results.status === 'ready' && !polygenic.length && !monogenic.length
+    ? 'missing' : results.status;
+  const failed = ['permission', 'error'].includes(resultStatus);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -142,15 +77,6 @@ const Enfermedades = () => {
     navigate('/');
   };
 
-  const sidebarItems = useMemo(
-    () => [
-      { label: 'Ancestría', href: '/dashboard/ancestria' },
-      { label: 'Rasgos', href: '/dashboard/rasgos' },
-      { label: 'Farmacogenética', href: '/dashboard/farmacogenetica' },
-      { label: 'Enfermedades', href: '/dashboard/enfermedades' }
-    ],
-    []
-  );
 
   return (
     <div className="enfermedades-layout">
@@ -172,7 +98,8 @@ const Enfermedades = () => {
 
       <aside className="enfermedades-layout__sidebar">
         <Sidebar
-          items={sidebarItems}
+          iconOverrides={animatedSidebarIcons}
+          items={RESULT_NAV_ITEMS}
           onLogout={handleLogout}
           user={user}
           isMobileMenuOpen={isMobileMenuOpen}
@@ -184,24 +111,69 @@ const Enfermedades = () => {
         <div className="enfermedades-page">
           <EnfermedadesPageHeader />
           <div className="enfermedades-page__content">
-            <div className={failed ? 'enfermedades-page__error' : 'enfermedades-results-status'}>
-              <p
-                role={failed ? 'alert' : 'status'}
-                aria-label="Estado de los resultados"
-                aria-busy={resultStatus === 'loading'}
-              >
-                {resultMessages[resultStatus]}
-              </p>
-              {resultStatus !== 'loading' && (
+            {resultStatus === 'loading' ? (
+              <DashboardPageSkeleton className="enfermedades-loading" label={resultMessages.loading}>
+                <div className="dashboard-pro-3col">
+                  {['Riesgo poligénico', 'Variantes patogénicas (ClinVar)'].map((title) => (
+                    <section className="card-pro card-large-pro" key={title}>
+                      <div className="card-pro__header">
+                        <h2 className="priority-section__title">{title}</h2>
+                      </div>
+                      <div className="legend-pro">
+                        {[0, 1, 2].map((index) => (
+                          <div className="legend-pro__item enfermedades-loading__row" key={index}>
+                            <SkeletonBlock className="enfermedades-loading__label" />
+                            <SkeletonBlock className="enfermedades-loading__value" />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </DashboardPageSkeleton>
+            ) : (
+              <div className={failed ? 'enfermedades-page__error' : 'enfermedades-results-status'}>
+                <p role={failed ? 'alert' : 'status'} aria-label="Estado de los resultados" aria-busy={false}>
+                  {resultMessages[resultStatus]}
+                </p>
                 <button type="button" aria-label="Reintentar carga de resultados" onClick={results.retry}>
                   Reintentar
                 </button>
-              )}
-            </div>
-            {displays && !displays.invalid && ['ready', 'missing'].includes(resultStatus) && (
+              </div>
+            )}
+            {results.data?.disclaimer && <p className="enfermedades-disclaimer">{results.data.disclaimer}</p>}
+            {resultStatus === 'ready' && (
               <div className="dashboard-pro-3col">
-                <DemoModuleCard definition={riskModules[0]} display={displays.polygenic_risk} />
-                <DemoModuleCard definition={riskModules[1]} display={displays.monogenic_risk} />
+                <RiskCard id="polygenic_risk" title="Riesgo poligénico" empty="Sin resultados poligénicos.">
+                  {polygenic.length > 0 && (
+                    <dl className="legend-pro">
+                      {polygenic.map((risk) => (
+                        <div className="legend-pro__item" key={risk.condition}>
+                          <dt className="legend-pro__label">{risk.label}</dt>
+                          <dd className="legend-pro__value">
+                            {risk.category} · percentil {Math.round(risk.percentile)}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </RiskCard>
+                <RiskCard id="monogenic_risk" title="Variantes patogénicas (ClinVar)" empty="No se encontraron variantes patogénicas.">
+                  {monogenic.length > 0 && (
+                    <dl className="legend-pro">
+                      {monogenic.map((variant) => (
+                        <div className="legend-pro__item" key={variant.variant_id}>
+                          <dt className="legend-pro__label">
+                            {variant.gene || 'Gen no informado'} · {formatSignificance(variant.clinical_significance)}
+                          </dt>
+                          <dd className="legend-pro__value">
+                            {variant.conditions?.length ? variant.conditions.join(', ') : 'Condición no informada'} · {variant.zygosity}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </RiskCard>
               </div>
             )}
           </div>
