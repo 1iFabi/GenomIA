@@ -188,10 +188,11 @@ class ParticipantTests(TestCase):
     def test_participant_has_no_direct_identifier_fields(self):
         field_names = {field.name for field in Participant._meta.local_fields}
 
+        # Sex at birth and birth *year* only (no full date) are coded attributes, not direct identifiers.
         self.assertEqual(field_names, {
             'participant_id', 'user', 'participant_code', 'enrolled_at',
             'enrollment_status', 'consent_status', 'consent_version',
-            'consented_at', 'metadata',
+            'consented_at', 'metadata', 'sex_at_birth', 'birth_year',
         })
 
 

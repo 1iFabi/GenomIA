@@ -18,6 +18,12 @@ class Participant(models.Model):
         GRANTED = 'granted', 'Granted'
         WITHDRAWN = 'withdrawn', 'Withdrawn'
 
+    class SexAtBirth(models.TextChoices):
+        FEMALE = 'female', 'Female'
+        MALE = 'male', 'Male'
+        INTERSEX = 'intersex', 'Intersex'
+        OTHER = 'other', 'Other'
+
     participant_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     participant_code = models.CharField(max_length=64, unique=True)
     user = models.OneToOneField(
@@ -38,6 +44,9 @@ class Participant(models.Model):
     )
     consent_version = models.CharField(max_length=32, null=True, blank=True)
     consented_at = models.DateTimeField(null=True, blank=True)
+    # Collected with the purchase data, never at registration. Year only to reduce re-identification risk.
+    sex_at_birth = models.CharField(max_length=32, choices=SexAtBirth.choices, null=True, blank=True)
+    birth_year = models.PositiveSmallIntegerField(null=True, blank=True)
     metadata = models.JSONField(
         default=dict,
         blank=True,
@@ -65,6 +74,14 @@ class Participant(models.Model):
                     )
                 ),
                 name='participant_granted_consent_complete',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(sex_at_birth__isnull=True) | models.Q(sex_at_birth__in=['female', 'male', 'intersex', 'other']),
+                name='participant_sex_at_birth_valid',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(birth_year__isnull=True) | models.Q(birth_year__gte=1900),
+                name='participant_birth_year_valid',
             ),
         ]
 
