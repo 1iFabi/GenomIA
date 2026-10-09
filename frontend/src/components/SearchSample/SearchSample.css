@@ -76,15 +76,31 @@
   box-shadow: none;
 }
 
-.spin {
-  animation: spin 1s linear infinite;
+.search-sample-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
+@media (max-width: 640px) {
+  .search-sample-form {
+    flex-direction: column;
+    align-items: stretch;
   }
-  to {
-    transform: rotate(360deg);
+
+  .search-sample-input-wrapper,
+  .search-sample-button {
+    width: 100%;
+  }
+
+  .search-sample-input-wrapper,
+  .search-sample-input {
+    min-width: 0;
   }
 }

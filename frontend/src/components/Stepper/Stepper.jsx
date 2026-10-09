@@ -1,4 +1,4 @@
-import React, { useState, Children, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, Children, useRef, useLayoutEffect } from 'react';
 import { motion as Motion, AnimatePresence, useReducedMotion } from 'motion/react';
 
 import './Stepper.css';
@@ -197,13 +197,27 @@ export default function Stepper({
 
 function StepContentWrapper({ isCompleted, currentStep, direction, children, className, reducedMotion }) {
   const [parentHeight, setParentHeight] = useState(0);
+  // Until the first measurement is applied the height has no transition: the form is at
+  // its final size on the first paint, so the footer and social block never spring in
+  // from a collapsed card. Later step changes still ease the height.
+  const [measured, setMeasured] = useState(false);
+  const height = isCompleted ? 0 : parentHeight;
+
+  useEffect(() => {
+    if (parentHeight > 0) setMeasured(true);
+  }, [parentHeight]);
+
+  const easeHeight = measured && !reducedMotion;
 
   return (
-    <Motion.div
+    <div
       className={className}
-      style={{ position: 'relative', overflow: 'visible' }}
-      animate={{ height: isCompleted ? 0 : parentHeight }}
-      transition={reducedMotion ? { duration: 0 } : { type: 'spring', duration: 0.4 }}
+      style={{
+        position: 'relative',
+        overflow: 'visible',
+        height,
+        transition: easeHeight ? 'height 0.4s cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
+      }}
     >
       <AnimatePresence initial={false} mode="sync" custom={direction}>
         {!isCompleted && (
@@ -217,7 +231,7 @@ function StepContentWrapper({ isCompleted, currentStep, direction, children, cla
           </SlideTransition>
         )}
       </AnimatePresence>
-    </Motion.div>
+    </div>
   );
 }
 
@@ -243,7 +257,8 @@ function SlideTransition({ children, direction, onHeightReady, reducedMotion }) 
       ref={containerRef}
       custom={direction}
       variants={reducedMotion ? reducedStepVariants : stepVariants}
-      initial="enter"
+      // No slide on the first step: it is already in place when the page arrives.
+      initial={direction === 0 ? false : 'enter'}
       animate="center"
       exit="exit"
       transition={reducedMotion ? { duration: 0 } : { duration: 0.4 }}

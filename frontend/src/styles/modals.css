@@ -524,3 +524,11 @@
     font-size: 20px;
   }
 }
+
+/* Confirmación con Google para cuentas sin contraseña */
+.delete-account-google {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}

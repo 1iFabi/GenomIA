@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Loader2 } from 'lucide-react';
+import { Search } from 'lucide-react';
 import './SearchSample.css';
 
 const SearchSample = ({ onSearch, loading }) => {
@@ -24,9 +24,10 @@ const SearchSample = ({ onSearch, loading }) => {
           />
         </div>
         <button type="submit" className="search-sample-button" disabled={loading}>
-          {loading ? <Loader2 className="spin" size={20} /> : 'Buscar'}
+          Buscar
         </button>
       </form>
+      {loading && <span className="search-sample-status" role="status">Buscando muestra…</span>}
     </div>
   );
 };
