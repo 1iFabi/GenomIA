@@ -25,10 +25,6 @@ def is_admin_or_analyst(user):
     return is_admin(user) or is_analyst(user)
 
 
-def is_admin_or_reception(user):
-    return is_admin(user) or is_reception(user)
-
-
 def _grant_role(user, code):
     with transaction.atomic():
         mapping = AppUser.objects.select_for_update().get(django_user=user)
