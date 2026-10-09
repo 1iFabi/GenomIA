@@ -18,8 +18,6 @@ vi.mock('./PostloginAnalyst', () => ({ default: ({ user }) => <div data-testid="
 vi.mock('./PostloginReception', () => ({ default: ({ user }) => <div data-testid="reception-home">{user.id}</div> }));
 vi.mock('./AdminVariantsDatabase', () => ({ default: () => <div data-testid="admin-variants" /> }));
 vi.mock('./AdminAnalystAccess', () => ({ default: () => <div data-testid="admin-analysts" /> }));
-vi.mock('../Biomarcadores/Biomarcadores', () => ({ default: () => <div data-testid="biomarcadores" /> }));
-vi.mock('../Biometrics/Biometrics', () => ({ default: () => <div data-testid="biometricas" /> }));
 vi.mock('../Enfermedades/Enfermedades', () => ({ default: () => <div data-testid="enfermedades" /> }));
 vi.mock('../Farmacogenetica/Farmacogenetica', () => ({ default: () => <div data-testid="farmacogenetica" /> }));
 vi.mock('../../components/Nala/NalaWidget', () => ({ default: () => null }));
@@ -114,6 +112,21 @@ describe('retired SNP catalog dashboard consumers', () => {
         .toEqual(['7', '3', '4']);
       expect(apiRequest).toHaveBeenCalledExactlyOnceWith('/api/auth/admin/stats/', { method: 'GET' });
     });
+    it('shows metric placeholders before the first response instead of presenting zero as data', async () => {
+      let resolveStats;
+      apiRequest.mockReturnValue(new Promise((resolve) => { resolveStats = resolve; }));
+      const { default: Home } = await vi.importActual(`./Postlogin${role}.jsx`);
+      const view = await renderView(<Home user={{ id: 1, username: 'Reviewer' }} />);
+      const section = view.querySelector('[aria-label="Estadísticas"]');
+      expect(section.querySelectorAll('.dashboard-skeleton__block')).toHaveLength(3);
+      expect(section.textContent).not.toContain('0');
+
+      await act(async () => resolveStats(response));
+      expect([...section.querySelectorAll('[class$="__stat-value"]')].map((node) => node.textContent))
+        .toEqual(['7', '3', '4']);
+      expect(section.querySelector('.dashboard-skeleton__block')).toBeNull();
+    });
+
   });
 
   it.each([

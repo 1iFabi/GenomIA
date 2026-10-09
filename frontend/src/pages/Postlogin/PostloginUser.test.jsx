@@ -18,8 +18,6 @@ vi.mock('../Ancestria/Ancestria', () => ({ default: () => <div data-testid="ance
 vi.mock('../Rasgos/Rasgos', () => ({ default: () => <div data-testid="rasgos" /> }));
 vi.mock('../Enfermedades/Enfermedades', () => ({ default: () => <div data-testid="enfermedades" /> }));
 vi.mock('../Farmacogenetica/Farmacogenetica', () => ({ default: () => <div data-testid="farmacogenetica" /> }));
-vi.mock('../Biomarcadores/Biomarcadores', () => ({ default: () => <div data-testid="biomarcadores" /> }));
-vi.mock('../Biometrics/Biometrics', () => ({ default: () => <div data-testid="biometricas" /> }));
 
 let container;
 let root;
