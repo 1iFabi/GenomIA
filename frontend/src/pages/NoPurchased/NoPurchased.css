@@ -264,6 +264,135 @@
   font-weight: 700;
 }
 
+/* ===== Formulario de datos de compra ===== */
+.purchase-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  animation: fadeInUp 0.35s ease-out both;
+}
+
+.purchase-intro {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--gp-muted);
+}
+
+.purchase-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1rem;
+}
+
+.purchase-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.purchase-field label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gp-muted);
+}
+
+.purchase-field input,
+.purchase-field select,
+.purchase-phone {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #d6dee9;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--gp-ink);
+  font: inherit;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.purchase-phone {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.8rem;
+}
+
+.purchase-phone span {
+  flex: none;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--gp-muted);
+}
+
+.purchase-phone input {
+  border: none;
+  padding: 0;
+  min-height: 42px;
+  box-shadow: none;
+}
+
+.purchase-field input:focus-visible,
+.purchase-field select:focus-visible,
+.purchase-phone:focus-within {
+  outline: none;
+  border-color: var(--gp-blue);
+  box-shadow: 0 0 0 3px rgba(11, 122, 208, 0.15);
+}
+
+.purchase-phone input:focus-visible {
+  box-shadow: none;
+}
+
+.purchase-field--error input,
+.purchase-field--error select,
+.purchase-field--error .purchase-phone {
+  border-color: #dc2626;
+}
+
+.purchase-field__error,
+.purchase-server-error {
+  font-size: 0.8rem;
+  color: #b91c1c;
+  margin: 0;
+}
+
+.purchase-submit {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0.65rem 1.4rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--gp-navy);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.12s ease-out;
+}
+
+/* Feedback al presionar: responde al pointer-down, no al soltar. */
+.purchase-submit:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.purchase-submit:hover:not(:disabled) {
+  background: var(--gp-navy-deep);
+}
+
+.purchase-submit:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.purchase-submit:focus-visible {
+  outline: 2px solid var(--gp-blue);
+  outline-offset: 3px;
+}
+
 /* ===== Cerrar sesión (sobre panel azul) ===== */
 .logout-button {
   display: inline-flex;
@@ -328,16 +457,130 @@
   .split-content {
     padding: 2rem 1.5rem;
   }
+
+  .purchase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .purchase-submit {
+    align-self: stretch;
+  }
 }
 
 /* ===== Movimiento reducido ===== */
 @media (prefers-reduced-motion: reduce) {
-  .split {
+  .split,
+  .purchase-form {
     animation: none;
   }
 
   .contact-chip,
-  .logout-button {
+  .logout-button,
+  .purchase-submit {
+    transition: none;
+  }
+}
+
+/* ===== Cambio de panel: pasos → formulario de compra ===== */
+.split-content--purchase {
+  gap: 1.25rem;
+  animation: purchase-panel-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.split-content--return {
+  animation: purchase-panel-return 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.split-content--purchase .purchase-form {
+  animation: none;
+}
+
+.purchase-head {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+}
+
+.content-title[tabindex="-1"]:focus {
+  outline: none;
+}
+
+.purchase-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 32px;
+  padding: 0.2rem 0.1rem;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--gp-blue);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease-out;
+}
+
+.purchase-back svg {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.purchase-back:hover {
+  color: var(--gp-navy-deep);
+}
+
+.purchase-back:hover svg {
+  transform: translateX(-3px);
+}
+
+.purchase-back:focus-visible {
+  outline: 2px solid var(--gp-blue);
+  outline-offset: 3px;
+}
+
+.purchase-field input::placeholder {
+  color: #8592a3;
+}
+
+/* Botón que abre el formulario: centrado bajo los pasos. */
+.purchase-start {
+  align-self: center;
+}
+
+@keyframes purchase-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes purchase-panel-return {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .split-content--purchase,
+  .split-content--return {
+    animation: none;
+  }
+
+  .purchase-back svg {
     transition: none;
   }
 }
