@@ -3,22 +3,28 @@ import './TacticalGlobe3D.css';
 
 const GLOBE_WIDTH = 600;
 const GLOBE_HEIGHT = 600;
-const OCEAN_COLOR = '#F0EBD8';
-const DEFAULT_COUNTRY_STROKE = '#748CAB';
-const POSITIVE_COUNTRY_FILL = '#1D2D44';
-const NEUTRAL_COUNTRY_FILL = '#3E5C76';
-const LOCATOR_PIN_COLOR = '#0b77cc';
-const LABEL_FONT_SIZE = 10;
+// Palette: e6e5e0 · 230462 · 203590 · 6083c5 · 96b8db · c5dbf0 (coolors.co).
+const OCEAN_COLOR = '#C5DBF0';
+const DEFAULT_COUNTRY_STROKE = '#96B8DB';
+const SELECTED_COUNTRY_STROKE = '#230462';
+const HOVERED_COUNTRY_STROKE = '#6083C5';
+const POSITIVE_COUNTRY_FILL = '#203590';
+const NEUTRAL_COUNTRY_FILL = '#E6E5E0';
+const LOCATOR_PIN_COLOR = '#230462';
+const CONTINENT_FILL = '#6083C5';
+const ACTIVE_CONTINENT_FILL = '#96B8DB';
+const SHADE_COLOR = '#203590';
+const LABEL_FONT_SIZE = 11;
 const LABEL_STROKE_ALLOWANCE = 1.5;
 const LABEL_COLLISION_GAP = 2;
 const ENTRY_REVEAL_MS = 620;
-const IDLE_ROTATION_FRAME_INTERVAL_MS = 1000 / 30;
+// Below one 60 Hz frame on purpose: rAF timestamps jitter around 16.67 ms, and a threshold equal to the frame
+// time skipped every other frame unevenly, which read as a stutter.
+const IDLE_ROTATION_FRAME_INTERVAL_MS = 1000 / 120;
 const IDLE_ROTATION_DEGREES_PER_SECOND = 3.5;
 const MAX_ROTATION_ELAPSED_MS = 100;
 const INITIAL_ROTATION = [0, 0, 12];
 const INITIAL_GLOBE_SCALE = 1.08;
-const STAR_COUNT = 70;
-const STAR_SEED = 1584243068;
 const TOPOJSON_COUNTRIES_OBJECT = 'countries';
 const MAX_TOPOLOGY_RESPONSE_BYTES = 8 * 1024 * 1024;
 const MAX_TOPOLOGY_ARCS = 100_000;
@@ -30,6 +36,7 @@ const MAX_TOPOLOGY_SAMPLED_POINTS = 1_000_000;
 const MAX_GREAT_CIRCLE_SEGMENT_SAMPLES = 60;
 const MAX_TOPOLOGY_GEOMETRY_DEPTH = 16;
 const COUNTRY_FOCUS_TRANSITION_MS = 520;
+const DIMMED_OPACITY = 0.2;
 
 const readReducedMotionPreference = () => (
   typeof window !== 'undefined'
@@ -363,28 +370,6 @@ const getGlobeRadius = ({ width, height }, showAtmosphere) => {
     Math.min(width - 24, height - 24) / 2 - 8,
     Math.min(width, height) / 2 - allowance
   ));
-};
-
-const createStableStars = (width, height, radius) => {
-  let seed = STAR_SEED;
-  const random = () => {
-    let value = seed += 0x6D2B79F5;
-    value = Math.imul(value ^ (value >>> 15), value | 1);
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 0x100000000;
-  };
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const stars = [];
-  let attempts = 0;
-  while (stars.length < STAR_COUNT && attempts < STAR_COUNT * 1000) {
-    attempts += 1;
-    const x = random() * width;
-    const y = random() * height;
-    if (Math.hypot(x - centerX, y - centerY) <= radius + 12) continue;
-    stars.push({ x, y, size: 0.4 + random() * 0.9, opacity: 0.18 + random() * 0.6 });
-  }
-  return stars;
 };
 
 const createOrthographicProjector = (rotation, width, height, radius) => {
@@ -732,7 +717,11 @@ const TacticalGlobe3D = ({
   onNoDataCountryClick,
   onBackgroundClick,
   showAtmosphere = false,
+  highlightGroup = null,
   accessibleLabel = 'Globo de ancestría por país',
+  // { active, withAncestry: Set, labels, hovered, onSelect }: continents first, countries only inside the active one.
+  continentView,
+  onGeographiesLoaded,
 }) => {
   const [rotation, setRotation] = useState(INITIAL_ROTATION);
   const [viewport, setViewport] = useState({ width: GLOBE_WIDTH, height: GLOBE_HEIGHT });
@@ -763,6 +752,11 @@ const TacticalGlobe3D = ({
   const suppressBackgroundClickRef = useRef(false);
   rotationRef.current = rotation;
   getGeoCountryInfoRef.current = getGeoCountryInfo;
+  const countryDataByIsoRef = useRef(countryDataByIso);
+  countryDataByIsoRef.current = countryDataByIso;
+  const continentViewRef = useRef(continentView);
+  continentViewRef.current = continentView;
+  const hoveredContinentRef = useRef(null);
   prefersReducedMotionRef.current = prefersReducedMotion;
   const isSelectedCountryPositive = hasPositiveAncestry(
     countryDataByIso?.get(selectedCountryCode)
@@ -771,6 +765,7 @@ const TacticalGlobe3D = ({
     || !isDocumentVisible
     || !isGlobeIntersecting
     || isSelectedCountryPositive
+    || Boolean(continentView?.active)
     || isKeyboardFocusWithinGlobe
     || isDragging
     || isFocusTransitioning;
@@ -837,10 +832,6 @@ const TacticalGlobe3D = ({
     viewport.height,
     radius
   ), [rotation, viewport, radius]);
-  const stars = useMemo(() => createStableStars(viewport.width, viewport.height, radius), [
-    viewport,
-    radius,
-  ]);
   const sampledGraticule = useMemo(createSampledGraticule, []);
   const graticulePath = useMemo(() => createGraticulePath(sampledGraticule, project), [
     sampledGraticule,
@@ -857,19 +848,46 @@ const TacticalGlobe3D = ({
   })), [geographiesWithCentroids, project]);
 
   useEffect(() => {
+    if (geographies.length) onGeographiesLoaded?.(geographies);
+  }, [geographies, onGeographiesLoaded]);
+
+  useEffect(() => {
+    hoveredContinentRef.current = null;
+  }, [continentView?.active]);
+
+  useEffect(() => {
     const countryCode = focusRequest?.countryCode;
+    const continent = focusRequest?.continent;
     const requestId = focusRequest?.requestId;
-    if (typeof countryCode !== 'string' || !countryCode || requestId === undefined || requestId === null) {
+    const target = countryCode || continent;
+    if (typeof target !== 'string' || !target || requestId === undefined || requestId === null) {
       setIsFocusTransitioning(false);
       return undefined;
     }
 
-    const requestKey = `${String(requestId)}:${countryCode}`;
+    const requestKey = `${String(requestId)}:${target}`;
     if (lastFocusRequestKeyRef.current === requestKey) return undefined;
 
-    const geography = geographiesWithCentroids.find((candidate) => (
-      candidate.centroid && getGeoCountryInfoRef.current?.(candidate)?.code === countryCode
-    ));
+    let geography = null;
+    if (countryCode) {
+      geography = geographiesWithCentroids.find((candidate) => (
+        candidate.centroid && getGeoCountryInfoRef.current?.(candidate)?.code === countryCode
+      ));
+    } else {
+      // A continent turns toward the middle of your ancestry countries there, or of the whole continent.
+      const members = geographiesWithCentroids.filter((candidate) => (
+        candidate.centroid && getGeoCountryInfoRef.current?.(candidate)?.continent === continent
+      ));
+      const withData = members.filter((candidate) => hasPositiveAncestry(
+        countryDataByIsoRef.current?.get(getGeoCountryInfoRef.current?.(candidate)?.code)
+      ));
+      const pool = withData.length ? withData : members;
+      if (pool.length) {
+        geography = {
+          centroid: [0, 1].map((axis) => pool.reduce((sum, item) => sum + item.centroid[axis], 0) / pool.length),
+        };
+      }
+    }
     if (!geography) {
       setIsFocusTransitioning(false);
       return undefined;
@@ -946,6 +964,7 @@ const TacticalGlobe3D = ({
     };
   }, [
     focusRequest?.countryCode,
+    focusRequest?.continent,
     focusRequest?.requestId,
     geographiesWithCentroids,
     stopIdleRotation,
@@ -1088,7 +1107,18 @@ const TacticalGlobe3D = ({
     };
   }, [rotation]);
 
+  // One hover per continent for the whole globe: crossing a border inside the same continent changes nothing,
+  // where per-path enter/leave flashed the continent off and on at every border.
+  const trackContinentHover = useCallback((continent) => {
+    if (continent === hoveredContinentRef.current) return;
+    hoveredContinentRef.current = continent;
+    continentViewRef.current?.onHover?.(continent);
+  }, []);
+
   const handlePointerMove = useCallback((event) => {
+    if (continentViewRef.current && !dragRef.current?.moved) {
+      trackContinentHover(event.target.closest?.('[data-continent]')?.getAttribute('data-continent') ?? null);
+    }
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
 
@@ -1113,7 +1143,7 @@ const TacticalGlobe3D = ({
         if (pendingRotation) setRotation(pendingRotation);
       });
     }
-  }, []);
+  }, [trackContinentHover]);
 
   const handlePointerUp = useCallback((event) => {
     const drag = dragRef.current;
@@ -1174,11 +1204,49 @@ const TacticalGlobe3D = ({
     if (!countryInfo) return null;
 
     const countryData = countryDataByIso?.get(countryInfo.code) || null;
-    const isSelectable = hasPositiveAncestry(countryData);
+    const isPositive = hasPositiveAncestry(countryData);
+    const cv = continentView;
+    const continent = countryInfo.continent;
+    const inActive = Boolean(cv?.active) && cv.active === continent;
+    // Outside the open continent, a whole ancestry continent is one target that opens it.
+    const opensContinent = Boolean(cv) && !inActive && cv.withAncestry.has(continent);
+    const isSelectable = cv ? (inActive && isPositive) || opensContinent : isPositive;
+    if (opensContinent) {
+      const label = cv.labels?.[continent] || continent;
+      const fill = cv.active ? NEUTRAL_COUNTRY_FILL
+        : cv.hovered === continent ? POSITIVE_COUNTRY_FILL : CONTINENT_FILL;
+      const openContinent = (event) => {
+        event.stopPropagation();
+        cv.onSelect?.(continent);
+      };
+      return (
+        <path
+          key={geography.id ?? geography.properties?.name}
+          d={geography.path}
+          data-geography-id={geography.id}
+          data-continent={continent}
+          className="ancestria-map-country"
+          fill={fill}
+          stroke={DEFAULT_COUNTRY_STROKE}
+          strokeWidth={0.75}
+          fillRule="evenodd"
+          role="button"
+          tabIndex={0}
+          aria-label={`${label}, ver tu ancestría en este continente`}
+          onClick={openContinent}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            openContinent(event);
+          }}
+          style={{ cursor: 'pointer', transition: 'fill 200ms ease' }}
+        />
+      );
+    }
     const isSelected = isSelectable && countryInfo.code === selectedCountryCode;
     const isHovered = countryInfo.code === hoveredCountryCode
       || countryInfo.code === focusedCountryCode;
-    const stroke = isSelected ? '#01579B' : isHovered ? '#5B636A' : DEFAULT_COUNTRY_STROKE;
+    const stroke = isSelected ? SELECTED_COUNTRY_STROKE : isHovered ? HOVERED_COUNTRY_STROKE : DEFAULT_COUNTRY_STROKE;
     const strokeWidth = isSelected ? 1.8 : isHovered ? 1.4 : 0.75;
     const countryName = countryData?.name || countryInfo.name || geography.properties?.name || 'País';
     const percentageLabel = formatPercentage(countryData?.percentage);
@@ -1196,9 +1264,7 @@ const TacticalGlobe3D = ({
         d={geography.path}
         data-geography-id={geography.id}
         className="ancestria-map-country"
-        fill={hasPositiveAncestry(countryData)
-          ? POSITIVE_COUNTRY_FILL
-          : NEUTRAL_COUNTRY_FILL}
+        fill={isSelectable ? POSITIVE_COUNTRY_FILL : inActive ? ACTIVE_CONTINENT_FILL : NEUTRAL_COUNTRY_FILL}
         stroke={stroke}
         strokeWidth={strokeWidth}
         fillRule="evenodd"
@@ -1223,6 +1289,8 @@ const TacticalGlobe3D = ({
     );
   };
 
+  const isDimmed = (data) => Boolean(highlightGroup && hasPositiveAncestry(data) && data.group !== highlightGroup);
+
   const renderAnnotations = () => {
     const placedLabelBounds = [];
     const { width, height } = project;
@@ -1240,15 +1308,21 @@ const TacticalGlobe3D = ({
           const countryData = countryDataByIso?.get(countryInfo.code);
           const countryHasPositiveAncestry = hasPositiveAncestry(countryData);
           if (!countryHasPositiveAncestry) return null;
+          // In continent view only the open continent names its countries; the overview stays unmarked.
+          if (continentView && continentView.active !== countryInfo.continent) return null;
 
           const point = project(geography.centroid);
           if (!point.visible || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
           const { x, y } = point;
           const preferredSide = x > width * 0.8 ? -1 : 1;
-          const countryName = countryData?.name
+          const baseName = countryData?.name
             || countryInfo.name
             || geography.properties?.name
             || 'País';
+          // The selected country names its share right on the map.
+          const countryName = countryInfo.code === selectedCountryCode
+            ? `${baseName} · ${formatPercentage(countryData.percentage)}`
+            : baseName;
           let labelPlacement = null;
 
           if (countryHasPositiveAncestry) {
@@ -1293,21 +1367,26 @@ const TacticalGlobe3D = ({
           return (
             <g key={`annotation-${geography.id ?? countryInfo.code}`} transform={`translate(${x}, ${y})`}>
               {countryHasPositiveAncestry && (
-                <g className="tactical-globe__pin" data-globe-pin={countryInfo.code}>
+                <g
+                  className="tactical-globe__pin"
+                  data-globe-pin={countryInfo.code}
+                  opacity={isDimmed(countryData) ? DIMMED_OPACITY : 1}
+                >
                   <circle
                     className="tactical-globe__pin-pulse"
                     r="7"
-                    fill="#0b77cc"
+                    fill={LOCATOR_PIN_COLOR}
                   />
-                  <circle r="10.5" fill="rgba(229,62,62,0.14)" />
+                  <circle r="10.5" fill="rgba(35,4,98,0.14)" />
                   <circle r="5" fill={LOCATOR_PIN_COLOR} />
                   <circle cx="-1.75" cy="-1.75" r="1.75" fill="rgba(255,255,255,0.55)" />
                 </g>
               )}
               {countryHasPositiveAncestry && (
                 <text
-                  className="tactical-globe__label"
+                  className={`tactical-globe__label${countryInfo.code === selectedCountryCode ? ' tactical-globe__label--selected' : ''}`}
                   data-globe-label={countryInfo.code}
+                  opacity={isDimmed(countryData) ? DIMMED_OPACITY : 1}
                   x={labelPlacement.x}
                   y={labelPlacement.y}
                   textAnchor={labelPlacement.textAnchor}
@@ -1349,6 +1428,7 @@ const TacticalGlobe3D = ({
         data-rotation={JSON.stringify(rotation)}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerLeave={() => trackContinentHover(null)}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onLostPointerCapture={handlePointerCancel}
@@ -1362,37 +1442,24 @@ const TacticalGlobe3D = ({
           <linearGradient id="tactical-globe-linear-shading" x1="12%" y1="10%" x2="88%" y2="90%">
             <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.22" />
             <stop offset="48%" stopColor="#FFFFFF" stopOpacity="0" />
-            <stop offset="100%" stopColor="#1A1A20" stopOpacity="0.46" />
+            <stop offset="100%" stopColor={SHADE_COLOR} stopOpacity="0.22" />
           </linearGradient>
           <radialGradient id="tactical-globe-edge-shading" cx="42%" cy="38%" r="68%">
-            <stop offset="58%" stopColor="#1A1A20" stopOpacity="0" />
-            <stop offset="100%" stopColor="#1A1A20" stopOpacity="0.48" />
+            <stop offset="58%" stopColor={SHADE_COLOR} stopOpacity="0" />
+            <stop offset="100%" stopColor={SHADE_COLOR} stopOpacity="0.26" />
           </radialGradient>
         </defs>
         <g
           className="tactical-globe__world"
           style={{ animation: prefersReducedMotion ? 'none' : undefined }}
         >
-          <g data-globe-stars="true" aria-hidden="true">
-            {stars.map((star, index) => (
-              <circle
-                key={`star-${index}`}
-                data-globe-star="true"
-                cx={star.x}
-                cy={star.y}
-                r={star.size}
-                fill="#FFFFFF"
-                opacity={star.opacity}
-              />
-            ))}
-          </g>
           <circle
             data-globe-sphere="true"
             cx={project.centerX}
             cy={project.centerY}
             r={radius}
             fill={OCEAN_COLOR}
-            stroke="#4D555D"
+            stroke={DEFAULT_COUNTRY_STROKE}
             strokeWidth="1.1"
             aria-hidden="true"
           />
@@ -1434,7 +1501,7 @@ const TacticalGlobe3D = ({
               cy={project.centerY}
               r={radius + 5}
               fill="none"
-              stroke="#B6D8E4"
+              stroke={DEFAULT_COUNTRY_STROKE}
               strokeOpacity="0.32"
               strokeWidth="5"
               pointerEvents="none"

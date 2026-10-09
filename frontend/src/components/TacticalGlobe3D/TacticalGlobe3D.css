@@ -37,8 +37,8 @@
 
 .tactical-globe .ancestria-map-country:focus-visible {
   outline: none;
-  filter: drop-shadow(0 0 1px #4e3333) drop-shadow(0 0 3px #01579b);
-  stroke: #01579b !important;
+  filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 3px #230462);
+  stroke: #230462 !important;
   stroke-width: 2.5px !important;
 }
 
@@ -53,15 +53,15 @@
 }
 
 .tactical-globe__label {
-  fill: #E7ECE9;
-  stroke: #444444;
+  fill: #230462;
+  stroke: #FFFFFF;
   stroke-linejoin: round;
   stroke-width: 3px;
   paint-order: stroke;
-  font-family: "SF Mono", "Roboto Mono", Menlo, monospace;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
 }
 
 @keyframes tactical-globe-pin-pulse {
@@ -100,4 +100,12 @@
   .tactical-globe .ancestria-map-country {
     transition: none !important;
   }
+}
+
+.tactical-globe__label--selected {
+  fill: #230462;
+  stroke: #FFFFFF;
+  stroke-width: 4px;
+  font-size: 13px;
+  font-weight: 700;
 }

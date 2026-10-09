@@ -1,0 +1,189 @@
+.hook {
+  --anc-color: #203590;
+  --hook-ink: #230462;
+  --hook-muted: #4a5480;
+  --hook-line: #c5dbf0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'text visual'
+    'meta meta';
+  align-items: center;
+  gap: 0.6rem 1.25rem;
+  color: #1f2347;
+  text-align: left;
+}
+
+.hook__text {
+  grid-area: text;
+  min-width: 0;
+}
+
+.hook__visual {
+  grid-area: visual;
+  display: flex;
+  justify-content: center;
+}
+
+.hook__title {
+  margin: 0;
+  color: var(--hook-ink);
+  font-size: 1.35rem;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.hook__region {
+  margin: 0.2rem 0 0;
+  color: var(--hook-muted);
+  font-size: 0.88rem;
+}
+
+.hook__figure {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0.75rem 0 0;
+}
+
+.hook__value {
+  color: var(--hook-ink);
+  font-size: 2.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.hook__equiv {
+  color: #203590;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.hook__meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--hook-line);
+  color: var(--hook-muted);
+  font-size: 0.8rem;
+}
+
+.hook__meta .country-info__name {
+  color: #1f2347;
+  font-weight: 650;
+}
+
+.hook__flag {
+  width: 20px;
+  height: 14px;
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(35, 4, 98, 0.12);
+}
+
+.hook__note {
+  margin: 0;
+  color: var(--hook-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.hook--full {
+  grid-template-areas:
+    'text visual'
+    'meta meta'
+    'note note';
+}
+
+.hook--full .hook__title {
+  font-size: 1.7rem;
+}
+
+.hook--full .hook__value {
+  font-size: 3rem;
+}
+
+.hook--full .hook__note {
+  grid-area: note;
+}
+
+/* Ancestor tree: every ancestor of that generation, with the ones this share equals lit and traced back to you. */
+.hook-tree {
+  display: block;
+  overflow: visible;
+}
+
+.hook-tree__edges {
+  fill: none;
+  stroke: var(--hook-line);
+  stroke-width: 1;
+}
+
+.hook-tree__lineage {
+  fill: none;
+  stroke: var(--anc-color);
+  stroke-dasharray: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.hook-dot {
+  fill: #ffffff;
+  stroke: var(--hook-line);
+  stroke-width: 1.2;
+}
+
+/* The darker rim keeps light group colors (Africano) above 3:1 against white. */
+.hook-dot--lit {
+  fill: var(--anc-color);
+  stroke: color-mix(in srgb, var(--anc-color) 55%, #230462);
+}
+
+.hook-dot--half {
+  fill: color-mix(in srgb, var(--anc-color) 45%, #ffffff);
+  stroke: color-mix(in srgb, var(--anc-color) 55%, #230462);
+  stroke-dasharray: 2 2;
+}
+
+.hook-crowd {
+  fill: #dfe6f0;
+}
+
+.hook-halo {
+  fill: color-mix(in srgb, var(--anc-color) 60%, #230462);
+  opacity: 0.2;
+}
+
+/* One lit ancestor among hundreds must read at a glance, whatever the group's color. */
+.hook-halo + .hook-dot--lit {
+  fill: color-mix(in srgb, var(--anc-color) 60%, #230462);
+}
+
+.hook-tree__root {
+  fill: var(--hook-ink);
+}
+
+.hook-tree__you {
+  fill: var(--hook-ink);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .hook--full {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'text'
+      'visual'
+      'meta'
+      'note';
+  }
+}

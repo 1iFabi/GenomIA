@@ -1,0 +1,403 @@
+.cx {
+  --cx-ink: #230462;
+  --cx-text: #1f2347;
+  --cx-muted: #4a5480;
+  --cx-line: #c5dbf0;
+  --cx-accent: #203590;
+  display: grid;
+  gap: 1rem;
+  color: var(--cx-text);
+}
+
+.cx-title {
+  margin: 0;
+  color: var(--cx-ink);
+  font-size: 1.65rem;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.cx-lede {
+  max-width: 46ch;
+  margin: 0.35rem 0 0;
+  color: var(--cx-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.cx-lede strong {
+  color: var(--cx-ink);
+  font-size: 1.1em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cx-empty {
+  margin: 0;
+  color: var(--cx-muted);
+}
+
+/* Breadcrumb */
+.cx-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.cx-crumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--cx-muted);
+}
+
+.cx-crumbs button {
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cx-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 160ms ease-out;
+}
+
+.cx-crumbs button:hover {
+  background: #e6e5e0;
+}
+
+.cx-crumbs [aria-current='page'] {
+  padding: 0 0.5rem;
+  color: var(--cx-ink);
+  font-weight: 700;
+}
+
+/* World: one card per continent, its real shape drawn from the globe's own map. */
+.cx-continents {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cx-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'shape shape'
+    'name value'
+    'count value';
+  align-items: end;
+  gap: 0.1rem 0.75rem;
+  width: 100%;
+  padding: 0.75rem 0.9rem 0.85rem;
+  border: 1px solid var(--cx-line);
+  border-radius: 14px;
+  background: #ffffff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 200ms ease-out, box-shadow 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cx-card:hover,
+.cx-card:focus-visible {
+  border-color: #96b8db;
+  box-shadow: 0 0.75rem 1.5rem rgba(35, 4, 98, 0.1);
+  transform: translateY(-2px);
+}
+
+.cx-card:focus-visible {
+  outline: 2px solid var(--cx-ink);
+  outline-offset: 3px;
+}
+
+.cx-card__shape {
+  grid-area: shape;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  margin-bottom: 0.5rem;
+}
+
+.cx-card__name {
+  grid-area: name;
+  color: var(--cx-ink);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.cx-card__count {
+  grid-area: count;
+  color: var(--cx-muted);
+  font-size: 0.8rem;
+}
+
+.cx-card__value {
+  grid-area: value;
+  align-self: center;
+  color: var(--cx-ink);
+  font-size: 1.45rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.cx-shape {
+  display: block;
+  overflow: hidden;
+}
+
+.cx-shape svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cx-shape--pending {
+  border-radius: 8px;
+  background: #f2f1ec;
+}
+
+.cx-shape__context {
+  fill: #eceae4;
+}
+
+.cx-shape__land {
+  fill: #96b8db;
+  transition: fill 200ms ease-out;
+}
+
+.cx-shape__ancestry {
+  fill: var(--cx-accent);
+}
+
+.cx-card:hover .cx-shape__land {
+  fill: #6083c5;
+}
+
+/* Continent */
+.cx-head {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.cx-head__shape {
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.cx-countries {
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--cx-line);
+}
+
+.cx-countries li {
+  border-bottom: 1px solid var(--cx-line);
+}
+
+.cx-country {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  min-height: 3.75rem;
+  padding: 0.65rem 0.25rem 0.85rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease-out;
+}
+
+.cx-country:hover {
+  background: #f6f5f1;
+}
+
+.cx-country:focus-visible {
+  outline: 2px solid var(--cx-ink);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.cx-country__flag {
+  width: 28px;
+  height: 20px;
+  border-radius: 3px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(35, 4, 98, 0.12);
+}
+
+.cx-country__name {
+  display: grid;
+  min-width: 0;
+  color: var(--cx-ink);
+  font-weight: 700;
+}
+
+.cx-country__name span {
+  color: var(--cx-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.cx-country__value {
+  color: var(--cx-ink);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+.cx-country__go {
+  color: var(--cx-muted);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cx-country:hover .cx-country__go {
+  transform: translateX(3px);
+}
+
+/* Share of the continent this country carries. */
+.cx-country__bar {
+  position: absolute;
+  bottom: 0.35rem;
+  left: calc(28px + 1.1rem);
+  width: calc((100% - 28px - 1.35rem) * 0.6);
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--cx-accent) var(--share), #e6e5e0 var(--share));
+}
+
+/* World view fits its column: the cards share whatever height is left and their maps shrink, never scroll. */
+.cx--fit {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.cx--fit > section {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.cx--fit .cx-continents {
+  grid-auto-rows: minmax(0, 1fr);
+  min-height: 0;
+}
+
+.cx--fit .cx-continents > li {
+  display: grid;
+  min-height: 0;
+}
+
+.cx--fit .cx-card {
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-height: 0;
+}
+
+.cx--fit .cx-card__shape {
+  height: 100%;
+  min-height: 2.5rem;
+  aspect-ratio: auto;
+}
+
+/* Loading mirrors the world view: title, line, and four continent cards. */
+.cx--loading {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.cx--loading .dashboard-skeleton__block {
+  background: #e9eef5;
+}
+
+.cx-skeleton__title {
+  width: 45%;
+  height: 1.6rem;
+}
+
+.cx-skeleton__lede {
+  width: 70%;
+  height: 0.8rem;
+}
+
+.cx-card--skeleton {
+  cursor: default;
+}
+
+.cx-skeleton__shape {
+  border-radius: 8px;
+}
+
+.cx-skeleton__name {
+  grid-area: name;
+  width: 60%;
+  height: 0.9rem;
+}
+
+.cx-skeleton__value {
+  grid-area: value;
+  width: 3.2rem;
+  height: 1.3rem;
+}
+
+@media (max-width: 600px) {
+  .cx-continents {
+    gap: 0.5rem;
+  }
+
+  .cx-card {
+    grid-template-areas:
+      'shape shape'
+      'name name'
+      'value count';
+    align-items: baseline;
+    padding: 0.6rem 0.65rem 0.7rem;
+  }
+
+  .cx-card__value {
+    font-size: 1.2rem;
+  }
+
+  .cx-card__count {
+    justify-self: end;
+  }
+
+  .cx-head {
+    grid-template-columns: 5rem minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cx-card,
+  .cx-country__go,
+  .cx-shape__land {
+    transition: none;
+  }
+
+  .cx-card:hover,
+  .cx-card:focus-visible,
+  .cx-country:hover .cx-country__go {
+    transform: none;
+  }
+}

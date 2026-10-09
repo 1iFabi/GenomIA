@@ -286,7 +286,7 @@ describe('TacticalGlobe3D', () => {
       .toBe('Globo de referencia geográfica');
     expect(globe.querySelectorAll('[data-globe-pin], [data-globe-label], path[role="button"]'))
       .toHaveLength(0);
-    expect(globe.querySelector('[data-globe-sphere]')?.getAttribute('fill')).toBe('#F0EBD8');
+    expect(globe.querySelector('[data-globe-sphere]')?.getAttribute('fill')).toBe('#C5DBF0');
   });
   it('reuses source great-circle samples across globe rotations', async () => {
     globeTestFixtures.topology = createRingTopology([[
@@ -416,7 +416,7 @@ describe('TacticalGlobe3D', () => {
     expect(globe.querySelector('svg').getAttribute('data-rotation')).toBe('[0,0,12]');
     const ocean = globe.querySelector('[data-globe-sphere="true"]');
     expect(ocean?.tagName.toLowerCase()).toBe('circle');
-    expect(ocean.getAttribute('fill')).toBe('#F0EBD8');
+    expect(ocean.getAttribute('fill')).toBe('#C5DBF0');
     expect(globe.querySelector('[data-globe-graticule="true"]')).not.toBeNull();
     expect(countryPaths.length).toBeGreaterThan(0);
     expect(countryPaths.every((path) => path.getAttribute('d')?.startsWith('M'))).toBe(true);
@@ -424,17 +424,17 @@ describe('TacticalGlobe3D', () => {
       path.getAttribute('data-geography-id'),
       path.getAttribute('fill'),
     ])).toEqual([
-      ['152', '#1D2D44'],
-      ['246', '#3E5C76'],
-      ['840', '#3E5C76'],
-      ['484', '#3E5C76'],
-      ['724', '#1D2D44'],
-      ['032', '#1D2D44'],
-      ['604', '#1D2D44'],
-      ['380', '#1D2D44'],
+      ['152', '#203590'],
+      ['246', '#E6E5E0'],
+      ['840', '#E6E5E0'],
+      ['484', '#E6E5E0'],
+      ['724', '#203590'],
+      ['032', '#203590'],
+      ['604', '#203590'],
+      ['380', '#203590'],
     ]);
     expect(countryPaths.map((path) => path.getAttribute('stroke')))
-      .toEqual(Array(countryPaths.length).fill('#748CAB'));
+      .toEqual(Array(countryPaths.length).fill('#96B8DB'));
   });
 
   it('decodes synthetic TopoJSON arcs into SVG country paths without forbidden renderers', async () => {
@@ -459,14 +459,9 @@ describe('TacticalGlobe3D', () => {
     expect(svg.getAttribute('viewBox')).toBe('0 0 600 600');
     expect(radius).toBeGreaterThan(270);
     expect(radius + Number(sphere.getAttribute('stroke-width')) / 2).toBeLessThanOrEqual(300);
-    expect(stars).toHaveLength(70);
-    expect(stars.every((star) => {
-      const distance = Math.hypot(
-        Number(star.getAttribute('cx')) - centerX,
-        Number(star.getAttribute('cy')) - centerY
-      );
-      return distance > radius + 12;
-    })).toBe(true);
+    // The globe sits on the light page, so there is no starfield.
+    expect(stars).toHaveLength(0);
+    expect([centerX, centerY]).toEqual([300, 300]);
     expect(globe.querySelector('#tactical-globe-linear-shading')).not.toBeNull();
     expect(globe.querySelector('#tactical-globe-edge-shading')).not.toBeNull();
     expect(globe.querySelector('[data-globe-atmosphere="true"]')).toBeNull();
@@ -690,9 +685,9 @@ describe('TacticalGlobe3D', () => {
       layer.getAttribute('r'),
       layer.getAttribute('fill'),
     ])).toEqual([
-      ['7', '#0b77cc'],
-      ['10.5', 'rgba(229,62,62,0.14)'],
-      ['5', '#0b77cc'],
+      ['7', '#230462'],
+      ['10.5', 'rgba(35,4,98,0.14)'],
+      ['5', '#230462'],
       ['1.75', 'rgba(255,255,255,0.55)'],
     ]);
     expect(highlight.getAttribute('cx')).toBe('-1.75');
@@ -706,21 +701,18 @@ describe('TacticalGlobe3D', () => {
     expect(globeStyles).toMatch(/50%\s*\{[^}]*transform:\s*scale\(1\.6\)[^}]*opacity:\s*0\.05[^}]*\}/s);
   });
 
-  it('styles name labels with the selected high-contrast dark-globe treatment', async () => {
+  it('styles name labels as dark ink with a white halo on the light globe', async () => {
     const { container: globe } = await renderGlobe();
     const label = globe.querySelector('[data-globe-label="CL"]');
-    const labelStrokeColor = parseCssColor('#444444');
-    const oceanColor = parseCssColor('#F0EBD8');
+    const labelStrokeColor = parseCssColor('#230462');
+    const oceanColor = parseCssColor('#C5DBF0');
 
     expect(label).not.toBeNull();
-    expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*fill:\s*#E7ECE9[^}]*\}/s);
-    expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*stroke:\s*#444444[^}]*\}/s);
+    expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*fill:\s*#230462[^}]*\}/s);
+    expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*stroke:\s*#FFFFFF[^}]*\}/s);
     expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*stroke-width:\s*3px[^}]*\}/s);
     expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*paint-order:\s*stroke[^}]*\}/s);
-    expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*font-family:\s*['"]?SF Mono[^}]*\}/s);
-    expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*font-size:\s*10px[^}]*\}/s);
-    expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*font-weight:\s*600[^}]*\}/s);
-    expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*letter-spacing:\s*0\.04em[^}]*\}/s);
+    expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*font-size:\s*11px[^}]*\}/s);
     expect(label.getAttribute('x')).toBe('11');
     expect(label.getAttribute('y')).toBe('3');
     expect(globeStyles).not.toMatch(/\.ancestria-map-country:hover\s*\{/);
@@ -741,7 +733,7 @@ describe('TacticalGlobe3D', () => {
     });
 
     expect(onHoverCountry).not.toHaveBeenCalled();
-    expect(chile.getAttribute('stroke')).toBe('#748CAB');
+    expect(chile.getAttribute('stroke')).toBe('#96B8DB');
     await act(async () => chile.focus());
     expect(onHoverCountry).toHaveBeenCalledWith('CL');
     expect(chile.getAttribute('role')).toBe('button');
