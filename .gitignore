@@ -39,14 +39,14 @@ backend/report-generator/out-smoke/
 .playwright-mcp/
 skills-lock.json
 
+# Hairline figure bench (the skill's build output: page, look sheet, motion strip)
+.hairline/
+
 # Excluded from the new repository upload
 /Tests/
 /openspec/
 /docs/
 /frontend/styleguide.html
-/frontend/vercel.json
-/backend/vercel.json
-/render.yaml
 
 # Claude Code project instructions: kept locally, not shared through the repo
 /CLAUDE.md
