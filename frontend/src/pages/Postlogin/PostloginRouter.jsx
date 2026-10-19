@@ -8,7 +8,7 @@ import PostloginReception from './PostloginReception';
 import AdminAnalystAccess from './AdminAnalystAccess';
 import Enfermedades from '../Enfermedades/Enfermedades';
 import Farmacogenetica from '../Farmacogenetica/Farmacogenetica';
-import NalaWidget from '../../components/Nala/NalaWidget';
+import GenominWidget from '../../components/Genomin/GenominWidget';
 
 const PostloginRouter = ({ user }) => {
   const role = DashboardSkeleton.getRoleVariant(user);
@@ -45,7 +45,7 @@ const PostloginRouter = ({ user }) => {
   return (
     <>
       <PostloginUser user={user} />
-      <NalaWidget />
+      <GenominWidget />
     </>
   );
 };

@@ -2,7 +2,6 @@ import React, { Suspense, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSession } from '../hooks/useSession';
 import DashboardSkeleton from './DashboardSkeleton/DashboardSkeleton';
-import RasgosLoading from '../pages/Rasgos/RasgosLoading';
 
 export default function ProtectedRoute({ children, requireService = true, requireAdmin = false }) {
   const navigate = useNavigate();
@@ -10,7 +9,6 @@ export default function ProtectedRoute({ children, requireService = true, requir
   const { user, loading } = useSession(location.pathname);
   const isDashboardRoute =
     location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/');
-  const isRasgosRoute = location.pathname.replace(/\/+$/, '') === '/dashboard/rasgos';
 
   const serviceStatus = user?.service_status;
   // Staff never buy a service; only clients are gated by purchase state.
@@ -39,9 +37,7 @@ export default function ProtectedRoute({ children, requireService = true, requir
 
   if (loading) {
     if (!isDashboardRoute) return null;
-    return isRasgosRoute
-      ? <RasgosLoading />
-      : <DashboardSkeleton variant="neutral" pathname={location.pathname} />;
+    return <DashboardSkeleton variant="neutral" pathname={location.pathname} />;
   }
   // Recompute authorization on every render; never retain a previous guard's "ok".
   if (redirectTo) return null;
@@ -51,9 +47,7 @@ export default function ProtectedRoute({ children, requireService = true, requir
     : children;
 
   return isDashboardRoute ? (
-    <Suspense fallback={isRasgosRoute
-      ? <RasgosLoading />
-      : <DashboardSkeleton variant={DashboardSkeleton.getRoleVariant(user)} pathname={location.pathname} />}>
+    <Suspense fallback={<DashboardSkeleton variant={DashboardSkeleton.getRoleVariant(user)} pathname={location.pathname} />}>
       {protectedChildren}
     </Suspense>
   ) : protectedChildren;

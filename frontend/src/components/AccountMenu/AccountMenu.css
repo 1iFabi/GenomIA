@@ -1,0 +1,159 @@
+/* The round buttons of the client pages: ink disc, pastel glyph (same as the dashboard's). */
+.acct {
+  position: relative;
+  z-index: 20;
+}
+
+.acct__toggle {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink, #0f2341);
+  color: var(--tint, #f3f7ff);
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.6s ease, color 0.6s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.acct__toggle:hover {
+  transform: scale(1.06);
+}
+
+.acct__toggle:active {
+  transform: scale(0.94);
+}
+
+.acct__toggle:focus-visible,
+.acct__item:focus-visible {
+  outline: 3px solid var(--ink, #0f2341);
+  outline-offset: 3px;
+}
+
+/* Glass that grows out of the button (top right), tinted by the page. */
+.acct__pop {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  width: 15.5rem;
+  padding: 0.5rem;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--tint, #f3f7ff) 80%, white);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.7) inset, 0 20px 50px color-mix(in srgb, var(--ink, #0f2341) 20%, transparent);
+  color: var(--ink, #0f2341);
+  transform-origin: calc(100% - 24px) -0.6rem;
+  animation: acct-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes acct-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+.acct__who {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem 0.7rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink, #0f2341) 12%, transparent);
+  line-height: 1.2;
+}
+
+.acct__who b {
+  font-size: 1.05rem;
+}
+
+.acct__who span {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.acct ul {
+  display: grid;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acct__item {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.975rem;
+  font-weight: 550;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.acct__item svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+}
+
+.acct__item:hover {
+  background: color-mix(in srgb, var(--ink, #0f2341) 8%, transparent);
+}
+
+.acct__item--danger {
+  color: #b3261e;
+  font-weight: 650;
+}
+
+.acct__item--danger:hover {
+  background: rgb(179 38 30 / 0.09);
+}
+
+.acct__sep {
+  height: 1px;
+  margin: 0.35rem 0.75rem;
+  background: color-mix(in srgb, var(--ink, #0f2341) 12%, transparent);
+}
+
+@media (max-width: 1024px) {
+  .acct__toggle {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acct__pop {
+    animation-name: acct-fade;
+  }
+
+  .acct__toggle {
+    transform: none !important;
+  }
+}
+
+@keyframes acct-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .acct__pop {
+    background: var(--tint, #f3f7ff);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

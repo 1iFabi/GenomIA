@@ -85,10 +85,11 @@ describe('ProtectedRoute', () => {
 
     const expectSingleRasgosSkeleton = () => {
       expect(view.querySelector('.dashboard-skeleton')).toBeNull();
+      expect(view.querySelector('.cskel-page')).toBeNull();
       expect(view.querySelectorAll('.rasgos-loading')).toHaveLength(1);
       expect(view.querySelectorAll('.rasgos-loading__donut')).toHaveLength(1);
-      expect(view.querySelectorAll('.rasgos-loading__legend-item')).toHaveLength(5);
-      expect(view.querySelector('[role="progressbar"], button, a')).toBeNull();
+      expect(view.querySelectorAll('.rasgos-loading .rasgos-overview__legend-item')).toHaveLength(5);
+      expect(view.querySelector('[role="progressbar"]')).toBeNull();
     };
     expectSingleRasgosSkeleton();
 
@@ -98,7 +99,6 @@ describe('ProtectedRoute', () => {
     }));
 
     expectSingleRasgosSkeleton();
-    expect(view.querySelector('.rasgos-header__title')?.textContent).toContain('Rasgos');
   });
 
   it.each(['/dashboard', '/dashboard/'])('keeps loading feedback while resolving the role at %s', async (pathname) => {

@@ -213,8 +213,8 @@ const Navbar = ({ theme: forcedTheme }) => {
 
         {/* derecha: links desktop */}
         <div className="nav-right nav-desktop">
-          <a href="/#preguntas">Preguntas</a>
           <a href="/#equipo">Equipo</a>
+          <a href="/#preguntas">Preguntas</a>
           <a href="/#contacto">Contacto</a>
           {loading ? (
             <span className="nav-account-loading" aria-hidden="true" />
@@ -310,11 +310,11 @@ const Navbar = ({ theme: forcedTheme }) => {
 
             <div className="drawer-sep" />
 
-            <a href="/#preguntas" onClick={closeAnd()}>
-              Preguntas
-            </a>
             <a href="/#equipo" onClick={closeAnd()}>
               Equipo
+            </a>
+            <a href="/#preguntas" onClick={closeAnd()}>
+              Preguntas
             </a>
             <a href="/#contacto" onClick={closeAnd()}>
               Contacto

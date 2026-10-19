@@ -8,7 +8,7 @@ import { useAdminStats } from '../../hooks/useAdminStats';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 
 vi.mock('../../config/api', () => ({
-  API_ENDPOINTS: { ME: '/me', DASHBOARD: '/api/auth/dashboard/', LOGOUT: '/logout', GET_USERS: '/users' },
+  API_ENDPOINTS: { ME: '/me', ADMIN_STATS: '/api/admin/stats/', LOGOUT: '/logout', GET_USERS: '/users' },
   apiRequest: vi.fn(),
   clearToken: vi.fn(),
 }));
@@ -20,7 +20,7 @@ vi.mock('./AdminVariantsDatabase', () => ({ default: () => <div data-testid="adm
 vi.mock('./AdminAnalystAccess', () => ({ default: () => <div data-testid="admin-analysts" /> }));
 vi.mock('../Enfermedades/Enfermedades', () => ({ default: () => <div data-testid="enfermedades" /> }));
 vi.mock('../Farmacogenetica/Farmacogenetica', () => ({ default: () => <div data-testid="farmacogenetica" /> }));
-vi.mock('../../components/Nala/NalaWidget', () => ({ default: () => null }));
+vi.mock('../../components/Genomin/GenominWidget', () => ({ default: () => null }));
 
 let container;
 let root;
@@ -110,7 +110,7 @@ describe('retired SNP catalog dashboard consumers', () => {
         .toEqual(['Usuarios Totales', 'Reportes Pendientes', 'Análisis Completados']);
       expect([...section.querySelectorAll('[class$="__stat-value"]')].map((node) => node.textContent))
         .toEqual(['7', '3', '4']);
-      expect(apiRequest).toHaveBeenCalledExactlyOnceWith('/api/auth/admin/stats/', { method: 'GET' });
+      expect(apiRequest).toHaveBeenCalledExactlyOnceWith('/api/admin/stats/', { method: 'GET' });
     });
     it('shows metric placeholders before the first response instead of presenting zero as data', async () => {
       let resolveStats;
@@ -169,7 +169,7 @@ describe('retired SNP catalog dashboard consumers', () => {
     expect(current().stats).not.toHaveProperty('variantsInDB');
     expect(current().stats).toMatchObject({ totalUsers: 8, pendingReports: 2, completedAnalysis: 6 });
     expect(apiRequest).toHaveBeenCalledTimes(2);
-    expect(apiRequest).toHaveBeenLastCalledWith('/api/auth/admin/stats/', { method: 'GET' });
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/admin/stats/', { method: 'GET' });
     await act(async () => root.unmount());
     root = null;
     await vi.advanceTimersByTimeAsync(60000);

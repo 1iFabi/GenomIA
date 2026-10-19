@@ -40,12 +40,6 @@ const mockPlates = (root, { artVisible = true, formLeft = 0 } = {}) => {
   return { form, art };
 };
 
-const cssColor = (hex) => {
-  const probe = document.createElement('div');
-  probe.style.backgroundColor = hex;
-  return probe.style.backgroundColor;
-};
-
 beforeEach(() => {
   resetAuthPanelSwap();
 });
@@ -75,26 +69,20 @@ describe('auth panel handoff', () => {
     expect(readAuthPanelSwap('/login')).toBeNull();
   });
 
-  it('changes the route on the press, wearing the destination surface', () => {
-    const root = buildPlates();
-    const { form } = mockPlates(root);
+  it('changes the route on the press and arms its handoff', () => {
     const navigate = vi.fn();
-    const surface = cssColor('#f8fafc');
 
-    openAuthPanel({ root, targetPath: '/register', navigate });
+    openAuthPanel({ targetPath: '/register', navigate });
 
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('/register');
-    // Set while the plates still cover the viewport: the switch itself is never visible.
-    expect(root.style.backgroundColor).toBe(surface);
-    expect(form.style.backgroundColor).toBe(surface);
     expect(readAuthPanelSwap('/register')).not.toBeNull();
   });
 
-  it('enters without a root, as the gateway does', () => {
+  it('carries a keyboard press into the handoff', () => {
     const navigate = vi.fn();
 
-    openAuthPanel({ root: null, targetPath: '/login', keyboard: true, navigate });
+    openAuthPanel({ targetPath: '/login', keyboard: true, navigate });
 
     expect(navigate).toHaveBeenCalledWith('/login');
     expect(readAuthPanelSwap('/login')).toMatchObject({ keyboard: true });

@@ -24,9 +24,6 @@ const ENTRANCE_SCALE = 0.985;
 const HAZE_DELAY_S = 0.15;       // on the swap, the text starts to condense as the art clears it
 const SLIDE_EASE = 'power3.out';
 const CONTENT_EASE = 'expo.out';
-// The surface each destination rests on. The page that leaves adopts it on the press, while its
-// own plates still cover the viewport, so the handoff cannot step the page tone.
-const SURFACE_BY_PATH = { '/register': '#f8fafc', '/login': '#ffffff' };
 const SWAP_ROOT_CLASS = 'auth--swapping';
 const FORM_PLATE_SELECTOR = '.auth-left';
 const ART_PLATE_SELECTOR = '.auth-right';
@@ -117,23 +114,13 @@ const hazeIn = (timeline, content, at = 0) => timeline.fromTo(content, {
   ease: CONTENT_EASE,
 }, at);
 
-/** The leaving page wears the destination's surface; the arrival already has it. */
-const adoptDestinationSurface = (root, targetPath) => {
-  if (!root) return;
-  const surface = SURFACE_BY_PATH[normalizePath(targetPath)] ?? SURFACE_BY_PATH['/login'];
-  root.style.backgroundColor = surface;
-  const form = root.querySelector(FORM_PLATE_SELECTOR);
-  if (form) form.style.backgroundColor = surface;
-};
-
 /**
  * Enter the other auth page. Nothing is animated here: the route changes on the press, so the page
  * that leaves is never on screen while the next one loads, and the arriving page plays the move.
  * The destination is imported statically, which is what keeps this instant: a lazy route would
  * suspend into the fallback and show a loader instead.
  */
-export const openAuthPanel = ({ root, targetPath, keyboard = false, navigate }) => {
-  adoptDestinationSurface(root, targetPath);
+export const openAuthPanel = ({ targetPath, keyboard = false, navigate }) => {
   armAuthPanelSwap({ pathname: targetPath, keyboard });
   navigate(targetPath);
 };

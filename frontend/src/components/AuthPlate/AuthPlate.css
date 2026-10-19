@@ -2,10 +2,7 @@
   position: relative;
   height: 100%;
   overflow: hidden;
-  border-radius: 16px;
-  background: #d8ddef; /* mismo tono que el fondo del video: sin flash al cargar */
-  outline: 1px solid rgba(28, 59, 194, 0.10);
-  outline-offset: -1px;
+  background: var(--auth-surface); /* mismo tono que el borde del video: la placa no se distingue de la página */
 }
 
 /* La niebla porcelana sube desde abajo: el texto lee sobre el video sin oscurecerlo. */
@@ -21,6 +18,13 @@
   height: 100%;
   object-fit: cover;
   object-position: 50% 45%;
+  /* Los bordes del video se desvanecen hacia la página: las partículas no se cortan en un recuadro. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent),
+    linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent),
+    linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+  mask-composite: intersect;
 }
 
 .auth-plate__caption {
@@ -29,9 +33,9 @@
   padding: 120px clamp(28px, 3.2vw, 48px) clamp(28px, 3.2vw, 44px);
   background: linear-gradient(
     to top,
-    rgba(216, 221, 239, 0.96) 0%,
-    rgba(216, 221, 239, 0.86) 42%,
-    rgba(216, 221, 239, 0) 100%
+    rgba(var(--auth-surface-rgb), 0.96) 0%,
+    rgba(var(--auth-surface-rgb), 0.86) 42%,
+    rgba(var(--auth-surface-rgb), 0) 100%
   );
   pointer-events: none;
 }

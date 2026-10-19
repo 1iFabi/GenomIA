@@ -5,7 +5,7 @@
   gap: 0.5rem;
   margin: 0.25rem 0 1rem;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: #4b5563;
   cursor: pointer;
 }
 .remember-row input {
@@ -25,7 +25,7 @@
 /* La raíz pinta la superficie de la página: lo que la placa del arte deja libre al cruzar nunca
    queda con el negro del body. */
 .auth.login-page {
-  background: #ffffff;
+  background: var(--auth-surface);
 }
 
 /* ===== LADO IZQUIERDO (corregido según mock) ===== */
@@ -33,7 +33,7 @@
   position: relative;
   width: 50vw;
   min-height: 100vh;
-  background: #ffffff;
+  background: var(--auth-surface);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -91,7 +91,7 @@
 }
 
 .auth .subtitle {
-  color: #64748b;
+  color: #475569;
   font-size: 15px;
   font-weight: 400;
   margin: 0 0 8px 0;
@@ -363,7 +363,7 @@
   text-align: center;
   margin: 16px 0 0 0;
   font-size: 14px;
-  color: #6b7280;
+  color: #4b5563;
 }
 
 .login-link {
@@ -383,23 +383,20 @@
   text-align: center;
   margin-top: 12px;
   font-size: 13px;
-  color: #9ca3af;
+  color: #4b5563;
   font-weight: 400;
 }
 
 .login-link.subtle:hover {
-  color: #6b7280;
+  color: #374151;
 }
 
 /* ===== Lado derecho ===== */
-/* El arte es una placa enmarcada dentro de su mitad, no una pared a sangre:
-   el inset va en padding para que el swap siga midiendo y moviendo la mitad completa. */
 .auth-right {
   width: 50%;
   height: 100%;
-  padding: 16px;
   box-sizing: border-box;
-  background: #ffffff;
+  background: #f4f4f4;
 }
 
 .auth-right img,
@@ -429,8 +426,9 @@
 
 /* Para pantallas medianas y pequeñas */
 @media (max-width: 1024px) {
-  body { overflow: auto; }
-  .auth { 
+  /* no body overflow here: this file is global, and an overflow on body made it a scroll container
+     of its own on every page, swallowing touch scrolling across the whole site */
+  .auth {
     flex-direction: column; 
     height: auto;
     min-height: 100vh;

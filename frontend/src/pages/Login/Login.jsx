@@ -226,7 +226,6 @@ export default function Login() {
   const handleRegisterClick = (e) => {
     e.preventDefault();
     openAuthPanel({
-      root: authRef.current,
       targetPath: '/register',
       // A keyboard activation keeps its place: focus lands on the first field.
       keyboard: e.detail === 0,

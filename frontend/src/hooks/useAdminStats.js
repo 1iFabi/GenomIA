@@ -6,10 +6,7 @@ export const useAdminStats = () => {
     totalUsers: 0,
     pendingReports: 0,
     completedAnalysis: 0,
-    userGrowth: '+12%',
-    reportGrowth: '+8%',
     lastUpdate: 'Hoy',
-    analysisGrowth: '+18%'
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,9 +16,7 @@ export const useAdminStats = () => {
       try {
         setLoading(true);
         
-        // Obtener estadísticas del endpoint específico de admin
-        const baseUrl = API_ENDPOINTS.DASHBOARD.replace('/dashboard/', '/admin/stats/');
-        const response = await apiRequest(baseUrl, { method: 'GET' });
+        const response = await apiRequest(API_ENDPOINTS.ADMIN_STATS, { method: 'GET' });
         
         if (response.ok && response.data) {
           const data = response.data;
@@ -31,10 +26,7 @@ export const useAdminStats = () => {
             totalUsers: data.total_users || 0,
             pendingReports: data.pending_reports || 0,
             completedAnalysis: data.analysis_count || 0,
-            userGrowth: data.user_growth || '+0%',
-            reportGrowth: data.report_growth || '+0%',
             lastUpdate: data.last_update || 'Hoy',
-            analysisGrowth: data.analysis_growth || '+0%'
           });
           setError(null);
         } else {

@@ -109,17 +109,18 @@
   transition: transform 0.2s ease;
 }
 
-/* Escala visual del logo en pantallas angostas (41px y 55px de arte, como antes),
-   aplicada a la escena para que el arte siga centrado en su caja. */
+/* Escala visual del logo en pantallas angostas, aplicada a la escena para que el arte
+   siga centrado en su caja. */
 @media (max-width: 720px) {
   .nav-logo .coin-scene {
     transform: scale(0.854);
   }
 }
 
+/* En teléfonos el logo va más chico (~35px en portada, ~43px en el resto) para no dominar la barra */
 @media (max-width: 640px) {
   .nav-logo .coin-scene {
-    transform: scale(1.153);
+    transform: scale(0.72);
   }
 }
 

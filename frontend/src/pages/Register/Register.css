@@ -8,14 +8,14 @@
   min-height: 100vh;
   display: flex;
   align-items: stretch;
-  background: #f8fafc;
+  background: var(--auth-surface);
   overflow: visible;
   font-family: 'DM Sans', 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
-.auth.register-layout { background: #f8fafc; }
-.auth.register-layout .auth-left { background: #f8fafc; }
-.auth.register-layout .auth-right { background: #f8fafc; }
+.auth.register-layout { background: var(--auth-surface); }
+.auth.register-layout .auth-left { background: var(--auth-surface); }
+.auth.register-layout .auth-right { background: var(--auth-surface); }
 
 .auth.mirror { flex-direction: row-reverse; }
 
@@ -26,13 +26,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8fafc;
+  background: var(--auth-surface);
   overflow-y: auto;
   overflow-x: visible;
   padding: 2rem 0;
 }
 .register-left::-webkit-scrollbar { width: 6px; }
-.register-left::-webkit-scrollbar-track { background: #f1f5f9; }
+.register-left::-webkit-scrollbar-track { background: transparent; }
 .register-left::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 .register-left::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
@@ -75,7 +75,7 @@
 .register-subtitle {
   margin: 0 0 0 0;
   font-size: clamp(0.8rem, 2.4vw, 0.88rem);
-  color: #64748b;
+  color: #475569;
   text-align: center;
   line-height: 1.3;
 }
@@ -414,7 +414,7 @@
 .field-hint {
   margin-top: 6px;
   font-size: 0.8rem;
-  color: #64748b;
+  color: #475569;
 }
 
 /* ============ CHECKBOX ============ */
@@ -485,7 +485,7 @@
 .login-help {
   text-align: center;
   margin-top: 0.5rem;
-  color: #64748b;
+  color: #475569;
   font-size: 0.8rem;
 }
 
@@ -850,7 +850,7 @@
   margin-top: 4px;
   padding-left: 2px;
   font-size: 0.65rem;
-  color: #64748b;
+  color: #475569;
   font-style: normal;
   animation: fadeInHint 0.15s ease;
   pointer-events: none;

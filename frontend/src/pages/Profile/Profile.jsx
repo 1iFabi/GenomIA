@@ -27,7 +27,7 @@ const Profile = () => {
     user?.username ||
     'Usuario';
   const email = user?.email || '';
-  const initial = (email || displayName || 'U')[0]?.toUpperCase() || 'U';
+  const initial = (displayName || email || 'U')[0]?.toUpperCase() || 'U';
 
   const logout = async () => {
     await clearToken();
@@ -41,10 +41,10 @@ const Profile = () => {
           type="button"
           className="profile-back"
           onClick={() => navigate('/dashboard')}
-          aria-label="Volver al dashboard"
+          aria-label="Volver a tu ADN"
         >
           <ArrowLeft size={18} aria-hidden="true" />
-          <span>Volver al dashboard</span>
+          <span>Volver a tu ADN</span>
         </button>
       </header>
 

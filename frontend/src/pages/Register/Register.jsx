@@ -197,7 +197,6 @@ const Register = () => {
   const handleLoginClick = (e) => {
     e.preventDefault();
     openAuthPanel({
-      root: authRef.current,
       targetPath: '/login',
       keyboard: e.detail === 0,
       navigate,
