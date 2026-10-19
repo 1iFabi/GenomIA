@@ -14,16 +14,18 @@ vi.mock('../../hooks/useLatestGenomicsResults', async (importOriginal) => ({
 vi.mock('../../config/api', async (importOriginal) => ({
   ...await importOriginal(), apiRequest: vi.fn(), clearToken: vi.fn(),
 }));
-vi.mock('../../components/Sidebar/Sidebar', () => ({
-  default: ({ items, onLogout, user, isMobileMenuOpen, setIsMobileMenuOpen }) => (
-    <nav aria-label="Dashboard navigation" data-open={isMobileMenuOpen}>
-      <span>{user?.name}</span>
-      {items.map((item) => <Link key={item.href} to={item.href}>{item.label}</Link>)}
-      <button type="button" onClick={onLogout}>Cerrar sesión</button>
-      <button type="button" onClick={() => setIsMobileMenuOpen(false)}>Cerrar navegación</button>
-    </nav>
-  ),
-}));
+vi.mock('../../components/ResultsBar/ResultsBar', async () => {
+  const { RESULT_MODULES, GUIDE_HREF } = await import('../../config/resultNav');
+  return {
+    default: ({ user, onLogout }) => (
+      <nav aria-label="Dashboard navigation">
+        <span>{user?.name}</span>
+        {[...RESULT_MODULES, { href: GUIDE_HREF, name: 'Guía de módulos' }].map((m) => <Link key={m.href} to={m.href}>{m.name}</Link>)}
+        <button type="button" onClick={onLogout}>Cerrar sesión</button>
+      </nav>
+    ),
+  };
+});
 
 const disclaimer = 'Resultados de desarrollo. Solo el riesgo monogénico usa datos reales de ClinVar; '
   + 'el resto es simulado y no tiene valor clínico.';
@@ -58,7 +60,9 @@ const getStatus = () => container.querySelector('main [role="status"], main [rol
 const getRetry = () => [...container.querySelectorAll('main button')]
   .find((button) => button.textContent === 'Reintentar');
 const expectNeutralCopy = () => {
-  const copy = container.querySelector('main');
+  // the page's own words: the bar on top carries the client's name, not result copy
+  const copy = container.querySelector('main').cloneNode(true);
+  copy.querySelector('nav[aria-label="Dashboard navigation"]')?.remove();
   const accessibleCopy = [...copy.querySelectorAll('[aria-label], [aria-description], [aria-valuetext], [title], [alt]')]
     .flatMap((node) => ['aria-label', 'aria-description', 'aria-valuetext', 'title', 'alt']
       .map((attribute) => node.getAttribute(attribute) || '')).join(' ');
@@ -71,9 +75,9 @@ const expectNoDisplay = () => {
   expect(container.textContent).not.toContain('CYP2C19');
 };
 const expectShell = () => {
-  expect(container.querySelector('.section-header h1').textContent).toBe('Farmacogenética');
+  expect(container.querySelector('main h1')).not.toBeNull();
   expect(container.querySelector('main.farmaco-main-content')).not.toBeNull();
-  expect(container.querySelector('aside.farmaco-sidebar-area nav')).not.toBeNull();
+  expect(container.querySelector('nav[aria-label="Dashboard navigation"]')).not.toBeNull();
   expectNeutralCopy();
 };
 
@@ -97,15 +101,56 @@ afterEach(async () => {
 });
 
 describe('pharmacogenetics results', () => {
-  it('shows each gene with diplotype, phenotype, drugs and the backend disclaimer', async () => {
+  it('shows each medication with a plain sentence and its speed rule, and the backend disclaimer', async () => {
     await renderPage();
     expectShell();
-    expect(container.querySelector('dt').textContent).toBe('CYP2C19 *1/*2');
-    expect(container.querySelector('dd').textContent).toBe('Metabolizador intermedio · Clopidogrel, Omeprazol');
+    expect(container.querySelector('main h1').textContent).toBe('Tus remedios');
+    const cards = [...container.querySelectorAll('.pgx-card')];
+    expect(cards.map((c) => c.querySelector('.pgx-card__name').textContent)).toEqual(['Clopidogrel', 'Omeprazol']);
+    expect(cards[0].querySelector('.pgx-card__say').textContent).toContain('activa el clopidogrel más despacio');
+    expect(cards[0].querySelector('[role="img"]').getAttribute('aria-label')).toContain('CYP2C19: Metabolizador intermedio');
+    expect(container.querySelector('#pgx-talk').textContent).toBe('Para conversar con tu médico');
     expect(container.textContent).toContain(disclaimer);
+    expect(container.textContent).toContain('No cambies ni dejes un medicamento sin hablar con tu médico.');
     expect(getStatus().textContent).toBe('Datos disponibles.');
     expect(getStatus().getAttribute('role')).toBe('status');
-    expect(getRetry().getAttribute('aria-label')).toBe('Reintentar carga de resultados');
+    expect(getRetry()).toBeUndefined();
+  });
+
+  it('opens a medication into the page with the technical detail, and comes back', async () => {
+    await renderPage();
+    await act(async () => container.querySelector('.pgx-card[data-med="Clopidogrel"]').click());
+    expect(container.querySelector('.pgx-card')).toBeNull();
+    expect(container.querySelector('#pgx-detail-title').textContent).toBe('Clopidogrel');
+    expect(container.querySelector('dt').textContent).toBe('CYP2C19 *1/*2');
+    expect(container.querySelector('dd').textContent).toBe('Metabolizador intermedio');
+    expect(document.activeElement.textContent).toBe('Medicamentos');
+    await act(async () => document.activeElement.click());
+    expect(container.querySelector('.pgx-card[data-med="Clopidogrel"]')).not.toBeNull();
+  });
+
+  it('keeps the medications you pick in your velador and dims the rest without moving them', async () => {
+    await renderPage();
+    const input = container.querySelector('input[role="combobox"]');
+    await act(async () => { input.focus(); });
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    await act(async () => { set.call(input, 'acidez'); input.dispatchEvent(new Event('input', { bubbles: true })); });
+    expect([...container.querySelectorAll('[role="option"]')].map((o) => o.firstChild.textContent)).toEqual(['Omeprazol']);
+    await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    expect(container.querySelector('.pgx-velador').textContent).toContain('Omeprazol');
+    expect(container.querySelector('.pgx-card.is-mine').dataset.med).toBe('Omeprazol');
+    expect(container.querySelector('.pgx-group').classList.contains('is-dim')).toBe(true);
+    expect([...container.querySelectorAll('.pgx-card')].map((c) => c.dataset.med)).toEqual(['Clopidogrel', 'Omeprazol']);
+    await act(async () => container.querySelector('[aria-label="Quitar Omeprazol"]').click());
+    expect(container.querySelector('.pgx-velador')).toBeNull();
+  });
+
+  it('shows each gene with its medications in the gene lens', async () => {
+    await renderPage();
+    await act(async () => [...container.querySelectorAll('.pgx-lens button')].find((b) => b.textContent === 'Por gen').click());
+    const gene = container.querySelector('.pgx-card--gene');
+    expect(gene.querySelector('.pgx-card__name').textContent).toBe('CYP2C19');
+    expect([...gene.querySelectorAll('.pgx-chips button')].map((b) => b.textContent)).toEqual(['Clopidogrel', 'Omeprazol']);
   });
 
   it('reuses the StrictMode guard profile and retains it after the result page remounts', async () => {
@@ -151,8 +196,11 @@ describe('accessible result states and preserved shell', () => {
     expect(getStatus().getAttribute('role')).toBe(role);
     expect(getStatus().getAttribute('aria-busy')).toBe(String(override.status === 'loading'));
     if (override.status === 'loading') {
-      expect(getStatus().querySelectorAll('.farmaco-loading__row')).toHaveLength(4);
-      expect(getStatus().querySelector('.dashboard-page-skeleton__content')?.getAttribute('aria-hidden')).toBe('true');
+      // the page's own shape: the real title, the search and lens words, six medication cards waiting
+      expect(container.querySelector('main h1').textContent).toBe('Tus remedios');
+      expect(getStatus().querySelectorAll('.pgx-cards .pgx-card--ghost')).toHaveLength(6);
+      expect(getStatus().querySelector('.pgx-search').textContent).toBe('Busca un medicamento');
+      expect(getStatus().querySelector('[aria-hidden="true"]').contains(getStatus().querySelector('.pgx-cards'))).toBe(true);
     } else {
       expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
     }
@@ -177,8 +225,8 @@ describe('accessible result states and preserved shell', () => {
   it('hides a previous display and disclaimer during retry before showing fresh hook data', async () => {
     state.data.disclaimer = 'Previous envelope disclosure.';
     await renderPage();
-    state.retry.mockImplementation(() => { state = { ...state, status: 'loading', loading: true, data: null, service: null }; });
-    await act(async () => getRetry().click());
+    // a refetch: the hook drops back to loading with no data
+    state = { ...state, status: 'loading', loading: true, data: null, service: null };
     await renderPage();
     expectNoDisplay();
     expect(container.textContent).not.toContain('Previous envelope disclosure.');
@@ -186,7 +234,7 @@ describe('accessible result states and preserved shell', () => {
     state = makeState();
     state.data.modules.pharmacogenetics[0].phenotype = 'Metabolizador lento';
     await renderPage();
-    expect(container.querySelector('dd').textContent).toContain('Metabolizador lento');
+    expect(container.querySelector('.pgx-card__say').textContent).toContain('casi no activa el clopidogrel');
     expect(apiRequest).toHaveBeenCalledTimes(1);
   });
 
@@ -209,14 +257,14 @@ describe('accessible result states and preserved shell', () => {
     if (mode === 'rejected') apiRequest.mockRejectedValueOnce(new Error('Profile unavailable'));
     else apiRequest.mockResolvedValueOnce({ ok: false, data: null });
     await renderPage();
-    expect(container.querySelector('dd').textContent).toContain('Metabolizador intermedio');
+    expect(container.querySelector('.pgx-card__say').textContent).toContain('más despacio');
     expect(getStatus().textContent).toContain('disponibles');
   });
 
   it('shows normalized results while the independent ME profile is still pending', async () => {
     apiRequest.mockImplementationOnce(() => new Promise(() => {}));
     await renderPage();
-    expect(container.querySelector('dd').textContent).toContain('Metabolizador intermedio');
+    expect(container.querySelector('.pgx-card__say').textContent).toContain('más despacio');
     expect(getStatus().textContent).toContain('disponibles');
     expectShell();
   });
@@ -225,34 +273,11 @@ describe('accessible result states and preserved shell', () => {
     Object.assign(state, { status, loading: status === 'loading' });
     await renderPage();
     expect([...container.querySelectorAll('nav a')].map((link) => link.getAttribute('href'))).toEqual([
-      '/dashboard/ancestria', '/dashboard/rasgos', '/dashboard/farmacogenetica',
-      '/dashboard/enfermedades', '/dashboard/modulos',
+      '/dashboard/ancestria', '/dashboard/farmacogenetica', '/dashboard/rasgos',
+      '/dashboard/enfermedades#polygenic_risk', '/dashboard/enfermedades#monogenic_risk', '/dashboard/modulos',
     ]);
     await act(async () => container.querySelector('a[href="/dashboard/ancestria"]').click());
     expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/dashboard/ancestria');
-  });
-
-  it.each(['ready', 'loading', 'permission', 'error'])('preserves accessible mobile menu and desktop resize in %s', async (status) => {
-    window.innerWidth = 768;
-    Object.assign(state, { status, loading: status === 'loading' });
-    await renderPage();
-    const burger = container.querySelector('button[aria-label="Abrir menú de navegación"]');
-    expect(burger.type).toBe('button');
-    expect(burger.getAttribute('aria-expanded')).toBe('false');
-    expect(burger.getAttribute('aria-controls')).toBe('farmaco-navigation');
-    expect(document.getElementById('farmaco-navigation')).toBe(container.querySelector('aside.farmaco-sidebar-area'));
-    expect(burger.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
-    await act(async () => burger.click());
-    expect(burger.getAttribute('aria-label')).toBe('Cerrar menú de navegación');
-    expect(burger.getAttribute('aria-expanded')).toBe('true');
-    expect(container.querySelector('nav').getAttribute('data-open')).toBe('true');
-    await act(async () => [...container.querySelectorAll('nav button')].find((button) => button.textContent === 'Cerrar navegación').click());
-    expect(burger.getAttribute('aria-expanded')).toBe('false');
-    await act(async () => burger.click());
-    await act(async () => { window.innerWidth = 1440; window.dispatchEvent(new Event('resize')); });
-    expect(container.querySelector('.farmaco-burger')).toBeNull();
-    expect(container.querySelector('nav').getAttribute('data-open')).toBe('false');
-    expectShell();
   });
 
   it.each(['ready', 'loading', 'permission', 'error'])('clears the shared session once and navigates home on logout in %s', async (status) => {
