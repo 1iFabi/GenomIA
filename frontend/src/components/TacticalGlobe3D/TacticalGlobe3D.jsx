@@ -1,19 +1,19 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './TacticalGlobe3D.css';
 
 const GLOBE_WIDTH = 600;
 const GLOBE_HEIGHT = 600;
-// Palette: e6e5e0 · 230462 · 203590 · 6083c5 · 96b8db · c5dbf0 (coolors.co).
-const OCEAN_COLOR = '#C5DBF0';
-const DEFAULT_COUNTRY_STROKE = '#96B8DB';
+// Palette: Ancestría's lilac world (config/resultNav.js): sheet ocean, grey-lilac land, its rung and ink for ancestry.
+const OCEAN_COLOR = '#F5ECF8';
+const DEFAULT_COUNTRY_STROKE = '#C9B3D9';
 const SELECTED_COUNTRY_STROKE = '#230462';
-const HOVERED_COUNTRY_STROKE = '#6083C5';
-const POSITIVE_COUNTRY_FILL = '#203590';
-const NEUTRAL_COUNTRY_FILL = '#E6E5E0';
+const HOVERED_COUNTRY_STROKE = '#7D4FB0';
+const POSITIVE_COUNTRY_FILL = '#4A1C5F';
+const NEUTRAL_COUNTRY_FILL = '#DCCFE2';
 const LOCATOR_PIN_COLOR = '#230462';
-const CONTINENT_FILL = '#6083C5';
-const ACTIVE_CONTINENT_FILL = '#96B8DB';
-const SHADE_COLOR = '#203590';
+const CONTINENT_FILL = '#9B72C9';
+const ACTIVE_CONTINENT_FILL = '#CDB5E0';
+const SHADE_COLOR = '#4A1C5F';
 const LABEL_FONT_SIZE = 11;
 const LABEL_STROKE_ALLOWANCE = 1.5;
 const LABEL_COLLISION_GAP = 2;
@@ -774,11 +774,13 @@ const TacticalGlobe3D = ({
 
   const updateRotation = useCallback((elapsedMs) => {
     const rotationStep = IDLE_ROTATION_DEGREES_PER_SECOND * elapsedMs / 1000;
-    setRotation(([longitude, latitude, roll]) => [
+    // The idle spin is decoration: as a transition it rides along with a route change instead of
+    // interrupting it every frame (at normal priority it starved navigation away from Ancestría).
+    startTransition(() => setRotation(([longitude, latitude, roll]) => [
       (longitude + rotationStep) % 360,
       latitude,
       roll,
-    ]);
+    ]));
   }, []);
   const startIdleRotation = useCallback(() => {
     if (isRotationPausedRef.current || rotationFrameRef.current !== null) return;

@@ -428,6 +428,8 @@ export const PieSlice = memo(function PieSlice({
       <path
         d={hitboxPath}
         fill="transparent"
+        // Browser focus ring on an SVG path is its rectangular bbox; focus is shown by the pop-out + glow instead.
+        style={{ outline: "none", WebkitTapHighlightColor: "transparent" }}
         role={onClick ? "button" : undefined}
         tabIndex={onClick ? 0 : undefined}
         aria-label={onClick ? ariaLabel : undefined}

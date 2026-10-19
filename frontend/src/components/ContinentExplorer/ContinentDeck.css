@@ -1,0 +1,272 @@
+/* The phone's continent deck: cards on the page's lilac, under the thumb. */
+.cdeck {
+  --card: min(19rem, 80vw);
+  display: flex;
+  gap: 0.75rem;
+  height: min(20rem, 40dvh);
+  margin: 0;
+  padding: 0.5rem calc((100% - var(--card)) / 2) calc(1rem + env(safe-area-inset-bottom));
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.cdeck::-webkit-scrollbar {
+  display: none;
+}
+
+.cdeck__card {
+  flex: none;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: var(--card);
+  padding: 1.1rem 1.15rem 0.5rem;
+  border-radius: 1.25rem;
+  background: #f6f1fa;
+  color: #230462;
+  scroll-snap-align: center;
+  opacity: 0.6;
+  transform: scale(0.95);
+  transition: opacity 0.3s ease, transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cdeck__card[aria-current='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+.cdeck__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.75rem;
+}
+
+.cdeck__name {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.cdeck__count {
+  grid-row: 2;
+  font-size: 0.875rem;
+  color: #5b4a78;
+}
+
+.cdeck__shape {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  width: 3.25rem;
+  height: 2.75rem;
+}
+
+.cdeck__shape-land {
+  fill: #cdb5e0;
+}
+
+.cdeck__shape-ancestry {
+  fill: #4a1c5f;
+}
+
+.cdeck__share {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.35rem;
+  font-size: 2.75rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cdeck__share span {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #5b4a78;
+}
+
+/* many countries scroll inside their card, never the page */
+.cdeck__rows {
+  margin: 0 -0.25rem;
+  padding: 0 0.25rem;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #c3aedb transparent;
+}
+
+.cdeck__rows button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.45rem 0 0.75rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cdeck__rows button:active {
+  transform: scale(0.98);
+}
+
+.cdeck__rows button:focus-visible,
+.cdeck-detail__back:focus-visible {
+  outline: 2px solid #230462;
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.cdeck__flag {
+  width: 24px;
+  height: 17px;
+  border-radius: 3px;
+  object-fit: cover;
+  outline: 1px solid rgba(35, 4, 98, 0.12);
+  outline-offset: -1px;
+}
+
+.cdeck__country {
+  display: grid;
+  font-size: 0.975rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.cdeck__country span {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: #5b4a78;
+}
+
+.cdeck__value {
+  font-size: 0.975rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cdeck__bar {
+  position: absolute;
+  left: calc(24px + 0.7rem);
+  right: 0;
+  bottom: 0.35rem;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(#4a1c5f, #4a1c5f) 0 0 / var(--share) 100% no-repeat, #e4dcef; /* taste-skill-ignore: a filled bar, not a decoration */
+}
+
+/* A country opens in place of the deck, rising over the bottom of the globe. */
+.cdeck-detail {
+  height: min(34rem, 60dvh);
+  padding: 0.75rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+  border-radius: 1.5rem 1.5rem 0 0;
+  background: #f6f1fa;
+  color: #230462;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: cdeck-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cdeck-detail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2.75rem;
+  margin-left: -0.35rem;
+  padding: 0 0.35rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+@keyframes cdeck-rise {
+  from {
+    transform: translateY(2.5rem);
+    opacity: 0;
+  }
+}
+
+/* ---- Loading (ContinentDeckSkeleton.jsx): each bar fills its line, one sweep of light crosses them all ---- */
+.cdeck--loading {
+  overflow: hidden;
+}
+
+.cdeck-skel {
+  display: block;
+  border-radius: 999px;
+  background-color: #e4d6ec;
+  background-image: linear-gradient(100deg, transparent 43%, rgb(255 255 255 / 0.55) 47%, rgb(255 255 255 / 0.95) 50%, rgb(255 255 255 / 0.55) 53%, transparent 57%); /* taste-skill-ignore: the loading light, not a fill */
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: cdeck-sweep 1.7s cubic-bezier(0.45, 0, 0.35, 1) -0.45s infinite;
+}
+
+@keyframes cdeck-sweep {
+  from { background-position: 120% 0; }
+  to { background-position: -20% 0; }
+}
+
+.cdeck-skel--name { width: 7.5rem; height: 0.95rem; margin: 0.18rem 0; }
+.cdeck-skel--count { width: 3.5rem; height: 0.7rem; margin: 0.31rem 0; }
+.cdeck-skel--shape { border-radius: 0.75rem; }
+.cdeck-skel--share { width: 9.5rem; height: 2.1rem; border-radius: 0.6rem; margin: 0.32rem 0; }
+
+.cdeck-skel__row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3.25rem;
+  padding: 0.45rem 0 0.75rem;
+}
+
+.cdeck-skel--flag { width: 24px; height: 17px; border-radius: 3px; }
+.cdeck-skel--country { width: 5rem; height: 0.8rem; margin: 0.21rem 0; }
+.cdeck-skel--pop { width: 4rem; height: 0.65rem; margin: 0.2rem 0; }
+.cdeck-skel--value { width: 3rem; height: 0.8rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cdeck-skel {
+    background-image: none;
+    animation: cdeck-skel-breathe 1.4s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes cdeck-skel-breathe {
+  to { opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cdeck__card {
+    transform: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .cdeck-detail {
+    animation-name: cdeck-fade;
+  }
+}
+
+@keyframes cdeck-fade {
+  from {
+    opacity: 0;
+  }
+}

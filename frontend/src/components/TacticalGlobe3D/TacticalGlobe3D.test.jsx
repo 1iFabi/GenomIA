@@ -286,7 +286,7 @@ describe('TacticalGlobe3D', () => {
       .toBe('Globo de referencia geográfica');
     expect(globe.querySelectorAll('[data-globe-pin], [data-globe-label], path[role="button"]'))
       .toHaveLength(0);
-    expect(globe.querySelector('[data-globe-sphere]')?.getAttribute('fill')).toBe('#C5DBF0');
+    expect(globe.querySelector('[data-globe-sphere]')?.getAttribute('fill')).toBe('#F5ECF8');
   });
   it('reuses source great-circle samples across globe rotations', async () => {
     globeTestFixtures.topology = createRingTopology([[
@@ -416,7 +416,7 @@ describe('TacticalGlobe3D', () => {
     expect(globe.querySelector('svg').getAttribute('data-rotation')).toBe('[0,0,12]');
     const ocean = globe.querySelector('[data-globe-sphere="true"]');
     expect(ocean?.tagName.toLowerCase()).toBe('circle');
-    expect(ocean.getAttribute('fill')).toBe('#C5DBF0');
+    expect(ocean.getAttribute('fill')).toBe('#F5ECF8');
     expect(globe.querySelector('[data-globe-graticule="true"]')).not.toBeNull();
     expect(countryPaths.length).toBeGreaterThan(0);
     expect(countryPaths.every((path) => path.getAttribute('d')?.startsWith('M'))).toBe(true);
@@ -424,17 +424,17 @@ describe('TacticalGlobe3D', () => {
       path.getAttribute('data-geography-id'),
       path.getAttribute('fill'),
     ])).toEqual([
-      ['152', '#203590'],
-      ['246', '#E6E5E0'],
-      ['840', '#E6E5E0'],
-      ['484', '#E6E5E0'],
-      ['724', '#203590'],
-      ['032', '#203590'],
-      ['604', '#203590'],
-      ['380', '#203590'],
+      ['152', '#4A1C5F'],
+      ['246', '#DCCFE2'],
+      ['840', '#DCCFE2'],
+      ['484', '#DCCFE2'],
+      ['724', '#4A1C5F'],
+      ['032', '#4A1C5F'],
+      ['604', '#4A1C5F'],
+      ['380', '#4A1C5F'],
     ]);
     expect(countryPaths.map((path) => path.getAttribute('stroke')))
-      .toEqual(Array(countryPaths.length).fill('#96B8DB'));
+      .toEqual(Array(countryPaths.length).fill('#C9B3D9'));
   });
 
   it('decodes synthetic TopoJSON arcs into SVG country paths without forbidden renderers', async () => {
@@ -705,7 +705,7 @@ describe('TacticalGlobe3D', () => {
     const { container: globe } = await renderGlobe();
     const label = globe.querySelector('[data-globe-label="CL"]');
     const labelStrokeColor = parseCssColor('#230462');
-    const oceanColor = parseCssColor('#C5DBF0');
+    const oceanColor = parseCssColor('#F5ECF8');
 
     expect(label).not.toBeNull();
     expect(globeStyles).toMatch(/\.tactical-globe__label\s*\{[^}]*fill:\s*#230462[^}]*\}/s);
@@ -733,7 +733,7 @@ describe('TacticalGlobe3D', () => {
     });
 
     expect(onHoverCountry).not.toHaveBeenCalled();
-    expect(chile.getAttribute('stroke')).toBe('#96B8DB');
+    expect(chile.getAttribute('stroke')).toBe('#C9B3D9');
     await act(async () => chile.focus());
     expect(onHoverCountry).toHaveBeenCalledWith('CL');
     expect(chile.getAttribute('role')).toBe('button');

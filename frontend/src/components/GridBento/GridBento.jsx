@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { gsap } from 'gsap';
 import './GridBento.css';
 
@@ -538,7 +538,6 @@ const MagicBento = ({
     cards = cardData
   }) => {
   const gridRef = useRef(null);
-  const navigate = useNavigate();
   const isMobile = useMobileDetection();
   const prefersReducedMotion = usePrefersReducedMotion();
   const noStarCardEffectsRef = useRef(new Map());
@@ -560,18 +559,14 @@ const MagicBento = ({
       
       if (isInternalRoute) {
         return (
-          <button
-            type="button"
+          <Link
+            to={cta.href}
             className="card__cta"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate(cta.href);
-              if (cta.onClick) cta.onClick(e);
-            }}
+            onClick={cta.onClick}
             aria-label={cta.ariaLabel}
           >
             {cta.label}
-          </button>
+          </Link>
         );
       }
       
@@ -599,7 +594,7 @@ const MagicBento = ({
         {cta.label}
       </button>
     );
-  }, [navigate]);
+  }, []);
 
   const renderCardContent = useCallback((card) => {
     const contentClasses = ['card__content'];

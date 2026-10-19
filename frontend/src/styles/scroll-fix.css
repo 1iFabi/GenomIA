@@ -36,8 +36,6 @@ body {
     /* Asegurar que no hay alturas fijas que interfieran */
     height: auto !important;
     min-height: 100vh;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
     touch-action: manipulation;
     /* Evitar zoom en inputs */
@@ -46,16 +44,22 @@ body {
     -ms-text-size-adjust: 100%;
   }
 
+  /* only html scrolls (it is the viewport). An overflow on body made it a scroll container of its own,
+     and on touch screens it swallowed the drag: the page did not scroll at all on phones. */
+  html {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
   body {
-    /* Evitar rebotes al hacer scroll */
-    overscroll-behavior: contain;
     position: relative !important;
-    overflow: auto !important;
+    overflow-x: clip !important;
+    overflow-y: visible !important;
   }
 
   #root {
-    overflow-x: hidden;
-    overflow-y: auto;
+    /* clip, not hidden: hidden would make #root a scroll container too */
+    overflow-x: clip;
     position: relative;
     min-height: 100vh;
     height: auto;
@@ -66,9 +70,9 @@ body {
 @supports (-webkit-touch-callout: none) {
   html, body {
     height: auto;
-    overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
+  html { overflow: auto; }
 }
 
 /* Evitar problemas con contenedores flex */

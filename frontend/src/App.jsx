@@ -6,7 +6,6 @@ import Hero from "./pages/Hero/Hero";
 import PurchaseEmailNotice from "./components/PurchaseEmailNotice/PurchaseEmailNotice";
 import Loader from "./components/Loader/Loader";
 import DashboardSkeleton from "./components/DashboardSkeleton/DashboardSkeleton";
-import RasgosLoading from "./pages/Rasgos/RasgosLoading";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login/Login";
 // Static, like Login: the plate exchange must never suspend into the route fallback.
@@ -48,11 +47,9 @@ export default function App() {
       {!hideNavbar && <Navbar />}
       <Suspense
         fallback={
-          normalizedPath === "/dashboard/rasgos"
-            ? <RasgosLoading />
-            : isDashboardRoute
-              ? <DashboardSkeleton variant="neutral" pathname={normalizedPath} />
-              : <Loader />
+          isDashboardRoute
+            ? <DashboardSkeleton variant="neutral" pathname={normalizedPath} />
+            : <Loader />
         }
       >
         <Routes>
@@ -72,10 +69,10 @@ export default function App() {
                   <GenomaPricing />
                 </Suspense>
                 <Suspense fallback={<Loader />}>
-                  <Preguntas />
+                  <SobreNosotros />
                 </Suspense>
                 <Suspense fallback={<Loader />}>
-                  <SobreNosotros />
+                  <Preguntas />
                 </Suspense>
                 <Suspense fallback={<Loader />}>
                   <Contacto />
@@ -111,6 +108,7 @@ export default function App() {
             }
           />
           {/* Página 404 */}
+          <Route path="/404" element={<NotFound />} />
           <Route
             path="/profile"
             element={
@@ -119,7 +117,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/404" element={<NotFound />} />
           {/* Catch-all: cualquier ruta inexistente redirige a /404 */}
           <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>

@@ -194,6 +194,9 @@
     --genomia-motion-duration-slow: 0.4s;
     --genomia-motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
     --genomia-motion-ease-emphasis: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    /* Superficie de las páginas de acceso: la mediana de los bordes del video de login (#f3f3f3). */
+    --auth-surface: #f3f3f3;
+    --auth-surface-rgb: 243, 243, 243;
 }
 
 /* Reduced motion en las páginas de acceso: las animaciones CSS pasan a instantáneas, sin slides ni

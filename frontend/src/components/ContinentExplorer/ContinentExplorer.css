@@ -1,9 +1,9 @@
 .cx {
   --cx-ink: #230462;
   --cx-text: #1f2347;
-  --cx-muted: #4a5480;
-  --cx-line: #c5dbf0;
-  --cx-accent: #203590;
+  --cx-muted: #5b4a78;
+  --cx-line: #d3bce0;
+  --cx-accent: #4a1c5f;
   display: grid;
   gap: 1rem;
   color: var(--cx-text);
@@ -103,7 +103,7 @@
   padding: 0.75rem 0.9rem 0.85rem;
   border: 1px solid var(--cx-line);
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--anc-sheet, #ffffff);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -114,7 +114,7 @@
 
 .cx-card:hover,
 .cx-card:focus-visible {
-  border-color: #96b8db;
+  border-color: #b597d4;
   box-shadow: 0 0.75rem 1.5rem rgba(35, 4, 98, 0.1);
   transform: translateY(-2px);
 }
@@ -171,11 +171,11 @@
 }
 
 .cx-shape__context {
-  fill: #eceae4;
+  fill: #e9dfee;
 }
 
 .cx-shape__land {
-  fill: #96b8db;
+  fill: #cdb5e0;
   transition: fill 200ms ease-out;
 }
 
@@ -184,7 +184,7 @@
 }
 
 .cx-card:hover .cx-shape__land {
-  fill: #6083c5;
+  fill: #9b72c9;
 }
 
 /* Continent */
@@ -284,7 +284,7 @@
   width: calc((100% - 28px - 1.35rem) * 0.6);
   height: 3px;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--cx-accent) var(--share), #e6e5e0 var(--share));
+  background: linear-gradient(90deg, var(--cx-accent) var(--share), #e4dcef var(--share));
 }
 
 /* World view fits its column: the cards share whatever height is left and their maps shrink, never scroll. */
@@ -328,7 +328,7 @@
 }
 
 .cx--loading .dashboard-skeleton__block {
-  background: #e9eef5;
+  background-color: #e2d3eb; /* lilac, deep enough for the shared light to read */
 }
 
 .cx-skeleton__title {

@@ -1,6 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import DashboardSkeleton, { DashboardPageSkeleton, SkeletonBlock } from './DashboardSkeleton';
 
 
@@ -26,32 +27,64 @@ afterEach(async () => {
 });
 
 describe('DashboardSkeleton', () => {
-  it('reserves exactly the four retained result cards for the user dashboard', async () => {
-    const view = await render(<DashboardSkeleton variant="user" />);
-    expect([...view.querySelectorAll('.dashboard-skeleton__card')].map((card) => (
-      [...card.classList].find((className) => className.startsWith('dashboard-skeleton__card--'))
-    ))).toEqual([
-      'dashboard-skeleton__card--ancestria', 'dashboard-skeleton__card--rasgos',
-      'dashboard-skeleton__card--farmacogenetica', 'dashboard-skeleton__card--enfermedades',
-    ]);
+  it.each(['user', 'neutral'])('shows the client stage on /dashboard for %s: five modules, no sidebar, no spinner', async (variant) => {
+    const view = await render(<DashboardSkeleton variant={variant} />);
+    expect(view.querySelector('.cskel-stage')?.getAttribute('aria-busy')).toBe('true');
+    expect(view.querySelectorAll('.cskel-mod')).toHaveLength(5);
+    expect(view.querySelector('.dashboard-skeleton__sidebar, [role="progressbar"]')).toBeNull();
+    expect(view.textContent).not.toMatch(/Cargando panel/);
   });
 
+  it('draws Rasgos with the very skeleton its page shows while results load, aligned to the overview', async () => {
+    const view = await render(
+      <MemoryRouter initialEntries={['/dashboard/rasgos']}>
+        <DashboardSkeleton variant="neutral" pathname="/dashboard/rasgos" />
+      </MemoryRouter>
+    );
+    expect(view.querySelector('.cskel-page')).toBeNull();
+    expect(view.querySelector('.rbar__mod[aria-current="page"] .rbar__full')?.textContent).toBe('Rasgos');
+    expect(view.querySelector('.rasgos-header__title')?.textContent).toBe('Lo que te hace tú');
+    const loading = view.querySelector('.rasgos-loading');
+    expect(loading.getAttribute('aria-busy')).toBe('true');
+    expect(loading.querySelector('.rasgos-overview__pie.rasgos-loading__donut')).not.toBeNull();
+    expect(loading.querySelectorAll('.rasgos-overview__legend-item')).toHaveLength(5);
+  });
 
+  it('draws Farmacogenética with the very skeleton its page shows while results load', async () => {
+    const view = await render(
+      <MemoryRouter initialEntries={['/dashboard/farmacogenetica']}>
+        <DashboardSkeleton variant="neutral" pathname="/dashboard/farmacogenetica" />
+      </MemoryRouter>
+    );
+    expect(view.querySelector('.cskel-page')).toBeNull();
+    expect(view.querySelector('main h1')?.textContent).toBe('Tus remedios');
+    const loading = view.querySelector('.pgx-loading');
+    expect(loading.getAttribute('aria-busy')).toBe('true');
+    expect(loading.querySelectorAll('.pgx-card--ghost')).toHaveLength(6);
+  });
 
   it.each([
-    ['/dashboard/ancestria', '.dashboard-skeleton__map-panel', 1],
-    ['/dashboard/farmacogenetica', '.dashboard-skeleton__report-panel', 1],
-    ['/dashboard/enfermedades', '.dashboard-skeleton__report-panel', 2],
-    ['/dashboard/modulos', '.dashboard-skeleton__module-grid .dashboard-skeleton__report-panel', 4],
-    ['/dashboard/admin/analysts', '.dashboard-skeleton__table-row--access', 5],
-  ])('matches loading structure to %s before the page is ready', async (pathname, selector, count) => {
+    // one globe for the desktop frame, one for the phone's, which carries the continent deck under it
+    ['/dashboard/ancestria', 'ancestria', '.cskel-globe', 2],
+    ['/dashboard/ancestria', 'ancestria', '.askel__phone .cdeck__card', 2],
+    ['/dashboard/enfermedades', 'enfermedades', '.cskel-panel', 2],
+    ['/dashboard/modulos', 'modulos', '.cskel-panel', 3],
+  ])('draws %s like the result page: module bar, title and its own content', async (pathname, page, selector, count) => {
     const view = await render(<DashboardSkeleton variant="neutral" pathname={pathname} />);
-    expect(view.querySelectorAll(selector)).toHaveLength(count);
-    expect(view.querySelector('.dashboard-skeleton')?.getAttribute('data-page')).not.toBe('overview');
-    expect(view.querySelector('[role="progressbar"], button, a')).toBeNull();
+    const root = view.querySelector('.cskel-page');
+    expect(root?.getAttribute('data-page')).toBe(page);
+    expect(root.querySelectorAll('.cskel-bar .cskel-disc')).toHaveLength(2);
+    expect(root.querySelectorAll('.cskel-strand__dot')).toHaveLength(5);
+    expect(root.querySelectorAll(selector)).toHaveLength(count);
+    expect(view.querySelector('.dashboard-skeleton__sidebar, button, a')).toBeNull();
   });
 
-  it.each(['user', 'admin', 'analyst', 'reception'])('supports the %s dashboard variant', async (variant) => {
+  it('keeps the staff access list skeleton', async () => {
+    const view = await render(<DashboardSkeleton variant="admin" pathname="/dashboard/admin/analysts" />);
+    expect(view.querySelectorAll('.dashboard-skeleton__table-row--access')).toHaveLength(5);
+  });
+
+  it.each(['admin', 'analyst', 'reception'])('supports the %s dashboard variant', async (variant) => {
     const view = await render(<DashboardSkeleton variant={variant} />);
 
     expect(view.querySelector('.dashboard-skeleton')?.getAttribute('data-variant')).toBe(variant);
