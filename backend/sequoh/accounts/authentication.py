@@ -1,6 +1,7 @@
 from typing import Optional, Tuple
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.utils.crypto import constant_time_compare
 from rest_framework.authentication import BaseAuthentication, get_authorization_header
 from rest_framework import exceptions
 from .jwt_utils import decode_jwt
@@ -48,4 +49,8 @@ class JWTAuthentication(BaseAuthentication):
             user = User.objects.get(id=user_id, is_active=True)
         except User.DoesNotExist:
             raise exceptions.AuthenticationFailed("User not found")
+        # Login cookies carry the password-bound hash; a password change invalidates them.
+        sah = payload.get("sah")
+        if sah is not None and not constant_time_compare(sah, user.get_session_auth_hash()):
+            raise exceptions.AuthenticationFailed("Session ended by password change")
         return (user, token)

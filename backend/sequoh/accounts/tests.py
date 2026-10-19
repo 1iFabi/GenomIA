@@ -6,6 +6,7 @@ from django.utils import timezone
 from unittest.mock import patch
 
 from django.apps import apps
+from django.core.cache import cache
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, User
@@ -35,6 +36,7 @@ class AuthHttpOnlyCookieTests(TestCase):
     """Verifica el flujo auth JWT en cookie HttpOnly + blacklist (Opción B)."""
 
     def setUp(self):
+        cache.clear()  # The login throttle counts across tests otherwise.
         self.client = APIClient()
         self.username = "user@example.com"
         self.password = "SuperSecret123!"
@@ -172,6 +174,58 @@ class AuthHttpOnlyCookieTests(TestCase):
             HTTP_X_CSRFTOKEN=csrf_cookie.value,
         )
         self.assertEqual(ok.status_code, 200)
+
+    def test_password_change_ends_other_sessions_but_keeps_the_current_one(self):
+        other = APIClient()
+        other.cookies[self.cookie_name] = self._login().cookies[self.cookie_name].value
+        self.client.cookies[self.cookie_name] = self._login().cookies[self.cookie_name].value
+        self.client.get("/api/auth/csrf/")
+        changed = self.client.post(
+            "/api/auth/me/change-password/",
+            data=json.dumps({
+                "current_password": self.password,
+                "new_password": "NewPassword456!",
+                "confirm_password": "NewPassword456!",
+            }),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value,
+        )
+        self.assertEqual(changed.status_code, 200)
+        self.assertIn(other.get("/api/auth/me/").status_code, (401, 403))
+        self.assertEqual(self.client.get("/api/auth/me/").status_code, 200)
+
+    def test_password_reset_token_works_once_and_ends_sessions(self):
+        from .models import PasswordResetToken
+        old_session = self._login().cookies[self.cookie_name].value
+        prt = PasswordResetToken.objects.create(user=self.user, expires_at=timezone.now() + timedelta(hours=1))
+        expired = PasswordResetToken.objects.create(user=self.user, expires_at=timezone.now() - timedelta(seconds=1))
+
+        def confirm(token):
+            return self.client.post("/api/auth/password-reset-confirm/", data=json.dumps({
+                "token": str(token), "password": "ResetPassword789!", "confirmPassword": "ResetPassword789!",
+            }), content_type="application/json")
+
+        self.assertEqual(confirm(expired.token).status_code, 400)
+        self.assertEqual(confirm(prt.token).status_code, 200)
+        self.assertEqual(confirm(prt.token).status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("ResetPassword789!"))
+        self.client.cookies[self.cookie_name] = old_session
+        self.assertIn(self.client.get("/api/auth/me/").status_code, (401, 403))
+
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=True)
+    def test_wrong_password_on_unverified_account_gives_the_generic_error(self):
+        resp = self._login(password="WrongPassword1!")
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data, {"success": False, "error": "Credenciales inválidas"})
+
+    def test_logout_purges_expired_revoked_tokens(self):
+        RevokedToken.objects.create(jti='expired-jti', expires_at=timezone.now() - timedelta(seconds=1))
+        self.client.cookies[self.cookie_name] = self._login().cookies[self.cookie_name].value
+        self.client.get("/api/auth/csrf/")
+        self.client.post("/api/auth/logout/", HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value)
+        self.assertFalse(RevokedToken.objects.filter(jti='expired-jti').exists())
+        self.assertEqual(RevokedToken.objects.count(), 1)
 
     def test_protected_mutations_require_csrf(self):
         admin = User.objects.create_user(
@@ -400,6 +454,20 @@ class FunctionalRoleAuthorizationTests(TestCase):
         response = self.request_as(admin, 'GET', '/api/reception/search/?sample_code=GX-TARGET', None)
         self.assertEqual(response.status_code, 200)
 
+    def test_manage_role_never_overwrites_an_admin(self):
+        admin = User.objects.create_user(username='acting-admin')
+        grant_admin_role(admin)
+        grant_admin_role(self.target)
+        for actor_target in (self.target, admin):
+            for role in ('analyst', 'reception'):
+                for grant in (True, False):
+                    with self.subTest(target=actor_target.username, role=role, grant=grant):
+                        response = self.request_as(admin, 'POST', '/api/admin/analysts/', {
+                            'userId': actor_target.pk, 'grant': grant, 'role': role,
+                        })
+                        self.assertEqual(response.status_code, 409, response.data)
+                        self.assertEqual(AppUser.objects.get(django_user=actor_target).role.code, 'ADMIN')
+
     def test_manage_role_rejects_non_boolean_grant_without_mutation(self):
         admin = User.objects.create_user(username='boolean-admin')
         grant_admin_role(admin)
@@ -577,10 +645,7 @@ class FunctionalRoleReadSurfaceTests(TestCase):
                 self.assertEqual(fallback.status_code, 200, fallback.data)
                 self.assertEqual(fallback.data['total_users'], 2)
                 self.assertEqual(fallback.data['analysis_count'], 0)
-                self.assertEqual(set(fallback.data), {
-                    'total_users', 'analysis_count', 'user_growth', 'report_growth',
-                    'analysis_growth', 'last_update',
-                })
+                self.assertEqual(set(fallback.data), {'total_users', 'analysis_count', 'last_update'})
                 self.assert_no_legacy_snp_queries(queries)
 
 
@@ -670,8 +735,7 @@ class AccountReadProjectionTests(TestCase):
                 response = self.read_as(actor, '/api/admin/stats/')
                 self.assertEqual(response.status_code, 200, response.data)
                 self.assertEqual(set(response.data), {
-                    'total_users', 'pending_reports', 'analysis_count',
-                    'user_growth', 'report_growth', 'analysis_growth', 'last_update',
+                    'total_users', 'pending_reports', 'analysis_count', 'last_update',
                 })
                 self.assertEqual((response.data['total_users'], response.data['pending_reports'],
                                   response.data['analysis_count']), (4, 1, 1))

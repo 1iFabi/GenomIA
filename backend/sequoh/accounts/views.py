@@ -78,6 +78,8 @@ def issue_auth_cookie(resp, user, *, remember=False):
     token = encode_jwt({
         "sub": str(user.id),
         "email": user.email,
+        # Changes with the password hash, so a password change ends every older session.
+        "sah": user.get_session_auth_hash(),
     })
     cookie_name = getattr(settings, 'AUTH_COOKIE_NAME', 'access_token')
     samesite = getattr(settings, 'AUTH_COOKIE_SAMESITE', 'Lax')
@@ -146,21 +148,8 @@ class LoginAPIView(APIView):
 
                 resp = Response({"mensaje": "Inicio de sesión exitoso", "success": True})
                 return issue_auth_cookie(resp, user, remember=bool(data.get('remember', False)))
-            else:
-                # Detectar caso de usuario pendiente de verificación (is_active=False)
-                try:
-                    possible_user = resolved_user
-                    if possible_user and getattr(settings, 'REQUIRE_EMAIL_VERIFICATION', False):
-                        if not EmailAddress.objects.filter(user=possible_user, email=possible_user.email, verified=True).exists():
-                            return Response({
-                                "error": "Tu cuenta está pendiente de verificación. Revisa tu correo para activar tu cuenta.",
-                                "requires_verification": True
-                            }, status=400)
-                except Exception as e:
-                    logger.warning("LoginAPIView.check_email_verified failed: %s", repr(e))
-                
-                # Respuesta genérica: no revela si el correo existe ni si la contraseña es correcta
-                return Response({"success": False, "error": "Credenciales inválidas"}, status=400)
+            # Respuesta genérica: no revela si el correo existe ni si la contraseña es correcta
+            return Response({"success": False, "error": "Credenciales inválidas"}, status=400)
         except json.JSONDecodeError:
             # Maneja el error si el formato JSON es incorrecto
             return Response({"error": "Formato de solicitud inválido"}, status=400)
@@ -335,10 +324,11 @@ class ChangePasswordAPIView(CSRFDoubleSubmitMixin, APIView):
             user.set_password(new_password)
             user.save()
 
-            return Response(
+            # Older sessions die with the old password hash; this one gets a fresh cookie.
+            return issue_auth_cookie(Response(
                 {"success": True, "message": "Contraseña actualizada exitosamente"},
                 status=status.HTTP_200_OK
-            )
+            ), user)
 
         except json.JSONDecodeError:
             return Response(
@@ -425,6 +415,8 @@ class LogoutAPIView(CSRFDoubleSubmitMixin, APIView):
                 if jti:
                     exp_dt = datetime.fromtimestamp(payload['exp'], tz=dt_timezone.utc)
                     RevokedToken.objects.get_or_create(jti=jti, defaults={'expires_at': exp_dt, 'user_id': payload.get('sub')})
+                # An expired token is rejected by its signature check, so its blacklist row is dead weight.
+                RevokedToken.objects.filter(expires_at__lt=timezone.now()).delete()
             except Exception as e:
                 logger.warning("LogoutAPIView.decode_jwt failed: %s", repr(e))
         resp = Response({"success": True})
@@ -530,6 +522,8 @@ class RegistrationEmailValidationAPIView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterAPIView(APIView):
+    # Public: a stale auth cookie must not turn this into a 403.
+    authentication_classes = []
     throttle_scope = 'register'
 
     def post(self, request):
@@ -716,6 +710,7 @@ class RegisterAPIView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetRequestAPIView(APIView):
+    authentication_classes = []
     throttle_scope = 'reset'
 
     def post(self, request):
@@ -752,6 +747,8 @@ class PasswordResetRequestAPIView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetConfirmAPIView(APIView):
+    authentication_classes = []
+
     def post(self, request):
         try:
             data = json.loads(request.body or '{}')
@@ -776,11 +773,12 @@ class PasswordResetConfirmAPIView(APIView):
             if prt.is_expired:
                 return Response({"error": "El enlace ha expirado"}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Claim the token atomically so two concurrent requests cannot both use it.
+            if not PasswordResetToken.objects.filter(pk=prt.pk, used=False).update(used=True):
+                return Response({"error": "El enlace ha expirado"}, status=status.HTTP_400_BAD_REQUEST)
             user = prt.user
             user.set_password(password)
             user.save()
-            prt.used = True
-            prt.save(update_fields=['used'])
 
             return Response({"success": True})
         except Exception as e:
@@ -813,6 +811,10 @@ class ManageAnalystRoleAPIView(CSRFDoubleSubmitMixin, APIView):
             target = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        # Granting or revoking would overwrite ADMIN and could leave the system without an admin.
+        if AppUser.objects.filter(django_user=target, role__code=Role.Code.ADMIN).exists():
+            return Response({"error": "No se puede cambiar el rol de un administrador"},
+                            status=status.HTTP_409_CONFLICT)
 
         role_raw = (data.get("role") or data.get("rol") or "analyst")
         role_value = str(role_raw).strip().lower()
@@ -926,9 +928,6 @@ class AdminStatsAPIView(APIView):
                 "total_users": total_users,
                 "pending_reports": pending_reports,
                 "analysis_count": analysis_count,
-                "user_growth": "+12%",
-                "report_growth": "+8%",
-                "analysis_growth": "+18%",
                 "last_update": timezone.now().strftime("%d/%m/%Y"),
             }
             resp = Response(payload)
@@ -940,8 +939,5 @@ class AdminStatsAPIView(APIView):
             return Response({
                 "total_users": clients.count(),
                 "analysis_count": 0,
-                "user_growth": "+0%",
-                "report_growth": "+0%",
-                "analysis_growth": "+0%",
                 "last_update": timezone.now().strftime("%d/%m/%Y"),
             })

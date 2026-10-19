@@ -59,9 +59,6 @@ class RevokedToken(models.Model):
         verbose_name = 'Token revocado'
         verbose_name_plural = 'Tokens revocados'
         ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['jti']),
-        ]
 
     def __str__(self):
         return f"RevokedToken(jti={self.jti[:8]}...)"
