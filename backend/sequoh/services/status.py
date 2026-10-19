@@ -6,7 +6,7 @@ from datetime import datetime
 from django.db import models
 from django.db.models import F
 
-from services.models import Purchase, Sample, ServiceRequest, ServiceStatusLog
+from services.models import Purchase, Sample, ServiceStatusLog
 
 
 class ClientStatus(models.TextChoices):
@@ -102,24 +102,5 @@ def get_service_projections(user_ids, *, include_samples=False):
 
 
 def get_service_projection(user):
-    """Never use an older service to mask a broken newest paid purchase."""
-    purchase = (Purchase.objects.filter(owner__django_user=user, status__code='PAID')
-                .order_by(F('purchased_at').desc(nulls_first=True), '-created_at', '-pk')
-                .first())
-    if purchase is None:
-        return ServiceProjection(ClientStatus.NO_PURCHASED, None)
-    if purchase.purchased_at is None:
-        return _project_paid(purchase, None, has_initial=False, latest_log=None, participant_owned=True)
-
-    service = ServiceRequest.objects.select_related('status').filter(purchase=purchase).first()
-    if service is None:
-        return _project_paid(purchase, None, has_initial=False, latest_log=None, participant_owned=True)
-    participant_owned = True
-    if service.participant_id is not None:
-        from participants.models import Participant
-        participant_owned = Participant.objects.filter(pk=service.participant_id, user_id=user.pk).exists()
-    has_initial = ServiceStatusLog.objects.filter(request=service, status__code='WAITING_SAMPLE').exists()
-    latest_log = (ServiceStatusLog.objects.filter(request=service)
-                  .order_by('-changed_at', '-pk').first())
-    return _project_paid(purchase, service, has_initial=has_initial,
-                         latest_log=latest_log, participant_owned=participant_owned)
+    """Single-user form of get_service_projections, so both apply the same rule."""
+    return get_service_projections([user.pk]).get(user.pk, ServiceProjection(ClientStatus.NO_PURCHASED, None))
