@@ -1,139 +1,71 @@
-// src/components/Descubre/Descubre.jsx
-import { useEffect, useRef, useState } from "react";
-import TextType from "../../components/TextType/TextType";
+import { useRef } from "react";
+import OriginsGlobe from "./visuals/OriginsGlobe";
+import { DrugExample, MonogenicExample, PolygenicExample } from "./visuals/ExampleResults";
+import TraitQuestions from "./visuals/TraitQuestions";
+import CardHelp from "./CardHelp";
+import useDescubreIntro from "./useDescubreIntro";
 import "./Descubre.css";
 import "../../styles/breadcrumb.css";
 
+// row 1: Ancestría (wide) and Farmacogenética; row 2: the two risks side by side, then Rasgos.
+// Each card asks its question in plain words and answers it with a sample of the report;
+// the two risk terms carry a "?" that says what they mean without any genetics in it.
+const MODULES = [
+  {
+    id: "farmacogenetica",
+    title: "Farmacogenética",
+    text: "¿Te funcionan los medicamentos como a la mayoría?",
+    visual: <DrugExample />,
+  },
+  {
+    id: "monogenico",
+    title: "Riesgo monogénico",
+    text: "¿Heredaste una variante que aumenta mucho tu riesgo?",
+    help: "Lo decide un solo gen. Si heredaste una variante concreta (como BRCA2), tu riesgo sube mucho; si no la tienes, es el riesgo de siempre. Por eso el informe va variante por variante.",
+    visual: <MonogenicExample />,
+  },
+  {
+    id: "poligenico",
+    title: "Riesgo poligénico",
+    text: "¿Tu riesgo es mayor o menor que el promedio?",
+    help: "Lo deciden miles de variantes pequeñas que se suman entre sí. Ninguna pesa sola, pero juntas te dejan por encima o por debajo del promedio. Por eso se mide en una escala, no en un sí o no.",
+    visual: <PolygenicExample />,
+  },
+  { id: "rasgos", title: "Rasgos", text: "Preguntas cotidianas que tu ADN ayuda a responder.", visual: <TraitQuestions /> },
+];
+
 const Descubre = () => {
   const sectionRef = useRef(null);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
-      },
-      { threshold: 0.3 }
-    );
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
+  useDescubreIntro(sectionRef);
 
   return (
-    <section
-      ref={sectionRef}
-      className="descubre"
-      data-nav-theme="light"
-      id="learn-more"
-      aria-label="Sección Descubre"
-    >
+    <section ref={sectionRef} className="descubre" data-nav-theme="light" id="learn-more" aria-labelledby="descubre-title">
       <div className="descubre-container">
-        <div className="descubre-content">
-          {/* Header */}
-          <div className={`descubre-header ${isVisible ? "animate" : ""}`}>
-<div className="breadcrumb breadcrumb--blue">Descubre</div>
+        <header className="descubre-header">
+          <div className="breadcrumb breadcrumb--blue">Descubre</div>
+          <h2 id="descubre-title" className="descubre-title">Lo que tu ADN cuenta sobre ti</h2>
+          <p className="descubre-subtitle">Transformamos tu ADN en reportes claros sobre tu origen, tu salud y tus rasgos.</p>
+        </header>
 
-            <h2 className="descubre-title">
-              Descubre tus{" "}
-              <TextType
-                text={[
-                  "Enfermedades",
-                  "Ancestros",
-                  "Biométricas",
-                  "Rasgos Genéticos",
-                  "Biomarcadores",
-                ]}
-                typingSpeed={75}
-                pauseDuration={1500}
-                showCursor={true}
-                cursorCharacter="|"
-                className="text-type-spacing"
-              />
-            </h2>
+        <div className="descubre-grid">
+          <article className="dcard dcard--ancestria" aria-labelledby="dcard-ancestria">
+            <div className="dcard__copy">
+              <h3 id="dcard-ancestria" className="dcard__title">Ancestría</h3>
+              <p className="dcard__text">Descubre de qué regiones del mundo viene tu ADN.</p>
+            </div>
+            <OriginsGlobe />
+          </article>
 
-            <p className="descubre-subtitle">
-              Transformamos tu ADN en reportes claros que revelan tu salud,
-              rasgos, biometría y ancestría
-            </p>
-          </div>
-
-          {/* GRID */}
-          <div className={`features-grid ${isVisible ? "animate" : ""}`}>
-            {/* 1. Farmacogenética */}
-            <article className="feature-card">
-              <div className="card-content">
-                <h3 className="card-title">Farmacogenética</h3>
-                <p className="card-description">
-                  Optimiza tratamientos según tu genética para mayor eficacia y
-                  menor riesgo de efectos adversos.
-                </p>
+          {MODULES.map(({ id, title, text, help, visual }) => (
+            <article key={id} className={`dcard dcard--${id}`} aria-labelledby={`dcard-${id}`}>
+              <div className="dcard__head">
+                <h3 id={`dcard-${id}`} className="dcard__title">{title}</h3>
+                {help && <CardHelp label={title.toLowerCase()}>{help}</CardHelp>}
               </div>
-              <div className="card-image">
-                <img src="/Descubree/Farmacogen.png" alt="Farmacogenética" />
-              </div>
+              <p className="dcard__text">{text}</p>
+              <div className="dcard__visual">{visual}</div>
             </article>
-
-            {/* 2. Enfermedades */}
-            <article className="feature-card">
-              <div className="card-content">
-                <h3 className="card-title">Enfermedades</h3>
-                <p className="card-description">
-                  Reportes claros de predisposición genética para apoyar la
-                  prevención y el cuidado personal.
-                </p>
-              </div>
-              <div className="card-image">
-                <img src="/Descubree/Enfermedades.png" alt="Farmacogenética" />
-              </div>
-            </article>
-
-            {/* 3. Explora tus Orígenes (alta, span 2 filas) */}
-            <article className="feature-card card-origenes">
-              <header className="origenes-head">
-                <h3 className="card-title">Explora tus Orígenes</h3>
-                <p className="card-description">
-                  Traza tus orígenes y la diversidad genética que compone tu historia familiar.
-                </p>
-              </header>
-
-              {/* Imagen compuesta (pills + globo) */}
-              <div className="origenes-art">
-                <img
-                  src="/Descubree/Ancestry.png"  /* usa tu ruta real */
-                  alt="Distribución de ancestría"
-                  loading="lazy"
-                />
-              </div>
-            </article>
-
-            {/* 4. Biométricas */}
-            <article className="feature-card">
-              <div className="card-content">
-                <h3 className="card-title">Biométricas</h3>
-                <p className="card-description">
-                  Indicadores corporales influenciados por tus genes: metabolismo,
-                  peso, altura y más.
-                </p>
-              </div>
-              <div className="card-image">
-                <img src="/Descubree/Biometric.png" alt="Farmacogenética" />
-              </div>
-            </article>
-
-            {/* 5. Rasgos */}
-            <article className="feature-card">
-              <div className="card-content">
-                <h3 className="card-title">Rasgos</h3>
-                <p className="card-description">
-                  Características determinadas por tu ADN: sueño, sabores,
-                  energía y otros rasgos.
-                </p>
-              </div>
-              <div className="card-image">
-                <img src="/Descubree/Rasgos.png" alt="Farmacogenética" />
-              </div>
-            </article>
-          </div>
+          ))}
         </div>
       </div>
     </section>
