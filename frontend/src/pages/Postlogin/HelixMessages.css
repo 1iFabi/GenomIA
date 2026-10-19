@@ -1,0 +1,119 @@
+/* Genomin's lines over the helix: placed and moved by HelixMessages.jsx, over the stage, under the menu. */
+.hxm {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hxm__wire {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.hxm__wire line {
+  stroke: var(--hxm-rung);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 4;
+  opacity: 0;
+}
+
+.hxm__cap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0.75rem 1rem 0.8rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 80%, var(--tint)); /* taste-skill-ignore: a frosted slip over the glass */
+  box-shadow: 0 0.75rem 2rem -0.9rem color-mix(in srgb, var(--ink) 45%, transparent); /* taste-skill-ignore: a slip floating off the glass */
+  backdrop-filter: blur(10px); /* taste-skill-ignore: the one floating slip, read over the glass */
+  color: var(--ink);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* Genomin sits on the slip's corner nearest the glass, pointing the way the thread runs */
+.hxm__cap .genomin-mascot {
+  position: absolute;
+  top: -4.5rem;
+  right: -2rem;
+}
+
+/* the hidden copy sizes the slip; the dots, then the decoder, sit in the same cell over it */
+.hxm__text {
+  display: grid;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.hxm__text > * {
+  grid-area: 1 / 1;
+}
+
+.hxm__sizer {
+  visibility: hidden;
+}
+
+.hxm__typing {
+  display: inline-flex;
+  align-self: start;
+  gap: 0.3rem;
+  padding-top: 0.45em;
+}
+
+.hxm__typing i {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--hxm-rung);
+  animation: hxm-dot 1.4s ease-in-out infinite;
+}
+
+.hxm__typing i:nth-child(2) {
+  animation-delay: 0.22s;
+}
+
+.hxm__typing i:nth-child(3) {
+  animation-delay: 0.44s;
+}
+
+@keyframes hxm-dot {
+  0%, 60%, 100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-0.3rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hxm__typing i {
+    animation: none;
+  }
+}
+
+/* while the camera dives, the lines step back with the words */
+.hx:has(.dna-helix[data-diving]) .hxm {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+@media (max-width: 860px) {
+  .hxm {
+    z-index: 2; /* above the list's shade */
+  }
+
+  /* the slip hugs the screen's right edge here, so Genomin takes the left corner */
+  .hxm__cap .genomin-mascot {
+    right: auto;
+    left: -0.75rem;
+  }
+}

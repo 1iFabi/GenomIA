@@ -1,300 +1,475 @@
 .dashboard {
   display: flex;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #f3f7ff 0%, #ffffff 60%);
+  min-height: 100dvh;
+  background: #f3f7ff;
   color: #0f2341;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Inter', /* taste-skill-ignore: GenomIA's brand face */ system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   position: relative;
-}
-
-/* Burger Button */
-.dashboard__burger {
-  position: fixed;
-  top: 1.5rem;
-  left: 1.5rem;
-  z-index: 1100;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
-  color: #ffffff;
-  border: none;
-  cursor: pointer;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 24px rgba(11, 122, 208, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  outline: none;
-  backdrop-filter: blur(10px);
-}
-
-.dashboard__burger:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(11, 122, 208, 0.45), 0 4px 12px rgba(0, 0, 0, 0.2);
-  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
-}
-
-.dashboard__burger:active {
-  transform: translateY(0);
-  box-shadow: 0 4px 16px rgba(11, 122, 208, 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
-}
-
-.dashboard__sidebar {
-  width: 280px;
-  min-width: 280px;
-  background: transparent;
-  display: flex;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-}
-
-.dashboard__sidebar:has(.sidebar--folded) {
-  width: 80px;
-  min-width: 80px;
-}
-
-.dashboard__panel {
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: 28px;
-  padding: 2.5rem 2rem;
-  width: 100%;
-  min-height: 420px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-shadow: 0 24px 40px rgba(9, 85, 163, 0.25);
-}
-
-.dashboard__panel-header {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.dashboard__panel-tag {
-  background: rgba(9, 85, 163, 0.1);
-  color: #0b7ad0;
-  border-radius: 999px;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  width: fit-content;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.dashboard__panel-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #0f2341;
-}
-
-.dashboard__panel-subtitle {
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: #4f637c;
-}
-
-.dashboard__panel-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.dashboard__panel-note {
-  font-size: 0.85rem;
-  color: #4f637c;
-  opacity: 0.9;
-  line-height: 1.4;
-}
-
-.dashboard__logout {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  align-self: flex-start;
-  padding: 0.55rem 1.2rem;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #ffffff 0%, #eaf2ff 100%);
-  color: #0b7ad0;
-  font-weight: 600;
-  border: 1px solid rgba(11, 122, 208, 0.3);
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.dashboard__logout:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(11, 122, 208, 0.2);
 }
 
 .dashboard__main {
   flex: 1 1 auto;
-  padding: 1.5rem 2.5rem 1.5rem 2.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  height: 100vh;
-  overflow-y: auto;
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
   overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* ---- Helix stage (layout A+): the helix fills the right, the words keep the left ---- */
+.dashboard__main--stage {
+  overflow: hidden;
+  background-color: var(--tint);
+  color: var(--ink);
+  transition: background-color 0.6s cubic-bezier(0.16, 1, 0.3, 1), color 0.6s ease;
+}
+
+.hx {
+  --gutter: clamp(1.5rem, 3.3vw, 3rem);
+  position: relative;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
-.dashboard__header {
+.hx ::selection {
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+/* ---- Top: the welcome on the left, the account menu on the right ---- */
+.hx__bar {
+  position: absolute;
+  top: clamp(1.25rem, 3.5vh, 2.25rem);
+  left: var(--gutter);
+  right: var(--gutter);
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
-  flex-shrink: 0;
-}
-
-.dashboard__headline {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.dashboard__actions {
-  display: flex;
-  align-items: center;
   gap: 1rem;
-  flex-shrink: 0;
 }
 
-.dashboard__welcome {
-  font-size: 1.65rem;
+.hx__hello {
+  margin: 0;
+  font-size: clamp(1.25rem, 1.6vw, 1.5rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.hx__stage {
+  --helix-clear: calc(var(--gutter) + clamp(18rem, 38%, 32rem) + 2rem); /* the words column, plus air */
+  --helix-start: 0.31; /* all but the outermost 5% of the glass (rest_1, rest_3) stays clear of the words */
+  --helix-scale: 0.88; /* a little smaller, so it sits toward the middle and the account menu leaves it in view */
+  --focus: var(--ink);
+  position: absolute;
+  inset: 0;
+}
+
+/* ---- The words: centred in the room under the bar, never under the greeting ---- */
+.hx__copy {
+  --gap: clamp(0.75rem, 2.6vh, 1.5rem);
+  position: absolute;
+  left: var(--gutter);
+  top: calc(clamp(1.25rem, 3.5vh, 2.25rem) + 3.75rem); /* the bar: its offset, the 2.75rem button, then air */
+  bottom: clamp(1rem, 3vh, 2rem);
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: var(--gap);
+  width: clamp(18rem, 38%, 32rem);
+  transition: opacity 0.3s ease;
+}
+
+/* a short notebook screen sizes the title by its height too */
+.hx__title {
+  margin: 0;
+  font-size: clamp(2.25rem, min(4.2vw, 7.2vh), 4.25rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.012em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.hx__line {
+  margin: 0;
+  min-height: 3em; /* two lines: the module change never jumps what follows */
+  max-width: 30ch;
+  font-size: clamp(1.125rem, 1.35vw, 1.3rem);
+  line-height: 1.5;
+}
+
+.hx__line strong {
   font-weight: 700;
-  color: #0b7ad0;
-  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
-.dashboard__subtitle {
-  font-size: 0.85rem;
-  line-height: 1.45;
-  color: #4f637c;
-  max-width: 75ch;
+.hx__title,
+.hx__line,
+.hx__enter {
+  animation: hx-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.dashboard__download {
+.hx__line {
+  animation-delay: 70ms;
+}
+
+.hx__enter {
+  animation-delay: 140ms;
+}
+
+@keyframes hx-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+.hx__line-loading {
+  animation: hx-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes hx-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+
+.hx__retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* The way in speaks in the page's own voice: a strong line of type, underlined in the colour
+   of the stretch the camera dives into (the legend's dot, the helix's base pairs). It is a link,
+   because it goes somewhere; the arrow leans toward the helix under the pointer. */
+.hx__enter {
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.85rem 1.4rem;
-  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
-  color: #ffffff;
-  font-weight: 600;
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-  box-shadow: 0 12px 24px rgba(12, 140, 240, 0.25);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  margin-top: 0.25rem;
+  color: var(--ink);
+  font-size: clamp(1.2rem, 1.45vw, 1.4rem);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  text-decoration: none;
+  transition: color 0.6s ease, transform 0.1s ease-out;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.dashboard__download:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 28px rgba(12, 140, 240, 0.3);
+.hx__enter-text {
+  text-decoration: underline;
+  text-decoration-color: var(--rung);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 0.3em;
+  transition: text-decoration-thickness 0.3s cubic-bezier(0.16, 1, 0.3, 1), text-underline-offset 0.3s cubic-bezier(0.16, 1, 0.3, 1), text-decoration-color 0.6s ease;
 }
 
-.dashboard__grid {
-  background: transparent;
-  border-radius: 0;
+.hx__enter-arrow {
+  flex: none;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hx__enter:hover .hx__enter-text,
+.hx__enter:focus-visible .hx__enter-text {
+  text-decoration-thickness: 6px;
+  text-underline-offset: 0.22em;
+}
+
+.hx__enter:hover .hx__enter-arrow,
+.hx__enter:focus-visible .hx__enter-arrow {
+  transform: translateX(6px);
+}
+
+.hx__enter:active {
+  transform: scale(0.98);
+}
+
+.hx__notice p {
+  max-width: 26rem;
+  color: inherit;
+  font-size: 0.9375rem;
+  opacity: 0.8;
+}
+
+/* ---- The modules: a quiet legend of the helix under the words ---- */
+.hx__mods {
+  margin-top: clamp(0.25rem, 1.8vh, 1.25rem);
+}
+
+.hx__mods ul {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
   padding: 0;
-  box-shadow: none;
-  overflow: visible;
-  flex: 1 1 auto;
+  list-style: none;
+}
+
+.hx__mods button {
   display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: clamp(0.2rem, 0.75vh, 0.4rem) 0;
+  border: 0;
+  background: none;
+  color: color-mix(in srgb, var(--ink) 62%, var(--tint));
+  font: inherit;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.1s ease-out;
+  -webkit-tap-highlight-color: transparent;
 }
 
+.hx__mods button::before {
+  content: '';
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--dot);
+  opacity: 0.45;
+  transform: scale(0.75);
+  transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
-@media (max-width: 1024px) {
-  .dashboard__burger {
-    display: flex;
-  }
+.hx__mods button:hover {
+  color: var(--ink);
+}
 
-  .dashboard {
-    flex-direction: column;
-  }
+.hx__mods button:active {
+  transform: scale(0.98);
+}
 
-  .dashboard__sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: auto;
-    min-width: 0;
-    height: 100vh;
-    z-index: 1000;
-  }
+.hx__mods button[aria-current='true'] {
+  color: var(--ink);
+  font-weight: 650;
+}
 
+.hx__mods button[aria-current='true']::before {
+  opacity: 1;
+  transform: none;
+}
+
+.hx__mods button:focus-visible,
+.hx__enter:focus-visible,
+.hx__retry:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.hx__mods button:focus-visible {
+  outline-offset: 2px;
+}
+
+/* while the camera dives, the words step back */
+.hx:has(.dna-helix[data-diving]) :is(.hx__copy, .hx__bar) {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.hx__live {
+  position: absolute;
+  width: 1px;
+  height: 1px; /* taste-skill-ignore: screen-reader-only box, not a line */
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.hx__mod-short {
+  display: none;
+}
+
+.hx__way {
+  display: contents;
+}
+
+.hx__mod-title,
+.hx__mod-go {
+  display: none;
+}
+
+/* ---- Phone: the helix always behind, turning, and the modules as a list on the left that fades
+   at both ends, in a shade of the module's own colour. Scrolling the list turns the helix to each
+   stretch; the centred module enters with the dive. ---- */
+@media (max-width: 860px) {
   .dashboard__main {
     width: 100%;
-    padding: 6rem 2rem 2rem 2rem;
+  }
+
+  .hx {
+    --gutter: 1.375rem;
+  }
+
+  /* the phone dashboard is the helix alone: Genomin opens from the account menu */
+  :root:has(.hx__mods) .genomin-launcher {
+    display: none;
+  }
+
+  .hx__hello {
+    font-size: 1.25rem;
+  }
+
+  /* the helix fills the right of the screen; its left edge melts into the page */
+  .hx__stage {
+    inset: 0 -3.75rem 0 7rem;
+    mask-image: linear-gradient(to right, transparent, #000 30%);
+  }
+
+  /* the shade the list sits in: the module's colour washing over the helix from the left */
+  .hx::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(to right, var(--tint) 30%, color-mix(in srgb, var(--tint) 55%, transparent) 58%, transparent 80%); /* taste-skill-ignore: the list's shade */
+    transition: background 0.6s ease;
+  }
+
+  .hx__copy {
+    inset: 0 auto 0 0;
+    width: 80%;
+    display: block;
+  }
+
+  /* the title, the figure and the link stay for screen readers and the tests; the list shows them */
+  .hx__title,
+  .hx__way,
+  .hx__notice {
+    display: block; /* .hx__way is display: contents on the desktop, which ignores the clip */
+    position: absolute;
+    width: 1px;
+    height: 1px; /* taste-skill-ignore: screen-reader-only box, not a line */
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    animation: none;
+  }
+
+  .hx__mods {
+    --row: 10rem;
+    position: absolute;
+    inset: 4.5rem 0 0;
     margin: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    padding-block: calc((100dvh - 4.5rem - var(--row)) / 2); /* the first and last rows can reach the middle */
+    mask-image: linear-gradient(transparent, #000 34%, #000 66%, transparent); /* taste-skill-ignore: the list fades at both ends */
   }
 
-  .dashboard__header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.85rem;
+  .hx__mods::-webkit-scrollbar {
+    display: none;
   }
 
-  .dashboard__headline {
-    max-width: 100%;
-    gap: 0.5rem;
+  .hx__mods ul {
+    gap: 0;
   }
 
-  .dashboard__actions {
+  .hx__mods li {
+    height: var(--row);
+    scroll-snap-align: center;
+  }
+
+  .hx__mods button {
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    gap: 0.25rem;
     width: 100%;
-    justify-content: flex-start;
-  }
-}
-
-@media (max-width: 640px) {
-  .dashboard__burger {
-    width: 48px;
-    height: 48px;
-    top: 1.25rem;
-    left: 1.25rem;
-  }
-
-  .dashboard__main {
-    padding: 5.5rem 1.5rem 1.5rem 1.5rem;
-  }
-
-  .dashboard__header {
-    gap: 0.65rem;
-  }
-
-  .dashboard__grid {
-    padding: 0;
-  }
-
-  .dashboard__welcome {
-    font-size: 1.4rem;
-  }
-
-  .dashboard__subtitle {
-    font-size: 0.8rem;
+    height: 100%;
+    padding: 0 var(--gutter);
+    color: var(--ink);
     white-space: normal;
+    text-align: left;
+    opacity: 0.32;
+    transform: translateX(-0.5rem) scale(0.9);
+    transform-origin: left center;
+    transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), color 0.6s ease;
   }
 
-  .dashboard__download {
-    width: 100%;
-    justify-content: center;
-    padding: 0.7rem 1.1rem;
-    font-size: 0.85rem;
+  .hx__mods button::before {
+    display: none;
   }
 
-  .dashboard__headline {
-    padding-right: 0;
-    gap: 0.4rem;
+  .hx__mods button[aria-current='true'] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .hx__mods button:focus-visible {
+    outline-offset: -0.5rem;
+    border-radius: 1rem;
+  }
+
+  .hx__mod-full {
+    font-size: clamp(1.875rem, 8.8vw, 2.25rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.035em;
+  }
+
+  .hx__mod-title {
+    display: block;
+    font-size: 1.0625rem;
+    font-weight: 500;
+  }
+
+  .hx__mod-go {
+    display: block;
+    margin-top: 0.6rem;
+    font-size: 1rem;
+    font-weight: 650;
+    text-decoration: underline;
+    text-decoration-color: var(--rung);
+    text-decoration-thickness: 3px;
+    text-underline-offset: 0.3em;
+    opacity: 0;
+    transition: opacity 0.25s ease, text-decoration-color 0.6s ease;
+  }
+
+  .hx__mods button[aria-current='true'] .hx__mod-go {
+    opacity: 1;
   }
 }
 
+/* no travel, only fades: the pastel still crossfades, the words fade in place */
+@media (prefers-reduced-motion: reduce) {
+  .hx__title,
+  .hx__line,
+  .hx__enter {
+    animation-name: hx-fade;
+  }
+
+  .hx__line-loading {
+    animation: none;
+  }
+
+  .hx__enter,
+  .hx__way,
+  .hx__enter-arrow,
+  .hx__mods button,
+  .hx__mods button::before {
+    transform: none !important;
+  }
+}
+
+@keyframes hx-fade {
+  from {
+    opacity: 0;
+  }
+}
