@@ -1,12 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
 import { clearToken } from '../../config/api';
-import { RESULT_NAV_ITEMS } from '../../config/resultNav';
 import { useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
 import { useSession } from '../../hooks/useSession';
-import Sidebar from '../../components/Sidebar/Sidebar';
-import { animatedSidebarIcons } from '../../components/Sidebar/animatedSidebarIcons';
+import ResultsBar from '../../components/ResultsBar/ResultsBar';
 import { DashboardPageSkeleton, SkeletonBlock } from '../../components/DashboardSkeleton/DashboardSkeleton';
 import './GuiaModulos.css';
 
@@ -44,7 +41,7 @@ const MODULE_GUIDE = [
     ],
   },
   {
-    key: 'monogenic_risk', title: 'Riesgo monogénico', page: '/dashboard/enfermedades', pageLabel: 'Enfermedades',
+    key: 'monogenic_risk', title: 'Riesgo monogénico', page: '/dashboard/enfermedades#monogenic_risk', pageLabel: 'Enfermedades',
     what: 'Variantes patogénicas o probablemente patogénicas encontradas en tu genoma. En estas condiciones '
       + 'una sola variante puede ser relevante.',
     source: 'Real: significado clínico de ClinVar para las variantes asignadas.',
@@ -59,7 +56,7 @@ const MODULE_GUIDE = [
     ],
   },
   {
-    key: 'polygenic_risk', title: 'Riesgo poligénico', page: '/dashboard/enfermedades', pageLabel: 'Enfermedades',
+    key: 'polygenic_risk', title: 'Riesgo poligénico', page: '/dashboard/enfermedades#polygenic_risk', pageLabel: 'Enfermedades',
     what: 'Suma el efecto de muchas variantes de bajo impacto para una condición y te compara con una '
       + 'población de referencia.',
     source: 'Simulado a partir de tus genotipos asignados.',
@@ -194,20 +191,7 @@ const GuiaModulos = () => {
   const { user } = useSession();
   const navigate = useNavigate();
   const results = useLatestGenomicsResults();
-  const [isMobile, setIsMobile] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const ready = results.status === 'ready';
-
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth <= 1024;
-      setIsMobile(mobile);
-      if (!mobile) setIsMobileMenuOpen(false);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   const handleLogout = async () => {
     await clearToken();
@@ -216,28 +200,8 @@ const GuiaModulos = () => {
 
   return (
     <div className="guia-layout">
-      {isMobile && (
-        <button
-          type="button"
-          className="guia-burger"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label={isMobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
-          aria-expanded={isMobileMenuOpen}
-        >
-          {isMobileMenuOpen ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
-        </button>
-      )}
-      <aside className="guia-layout__sidebar">
-        <Sidebar
-          iconOverrides={animatedSidebarIcons}
-          items={RESULT_NAV_ITEMS}
-          onLogout={handleLogout}
-          user={user}
-          isMobileMenuOpen={isMobileMenuOpen}
-          setIsMobileMenuOpen={setIsMobileMenuOpen}
-        />
-      </aside>
       <main className="guia-layout__main">
+        <ResultsBar user={user} onLogout={handleLogout} />
         <header className="guia-header">
           <span className="guia-header__kicker">Referencia</span>
           <h1>Guía de módulos</h1>

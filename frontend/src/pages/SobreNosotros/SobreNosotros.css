@@ -11,7 +11,8 @@
   box-sizing: border-box;
   font-family: 'DM Sans','Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   padding: 120px 24px 80px;
-  background: linear-gradient(180deg, #F7FBFF 0%, #E6F2FE 55%, #D6E8FD 100%);
+  /* blanco: el corte contra el celeste de Obtén el Tuyo separa las dos secciones */
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 55%, #F2F8FF 100%);
 }
 
 /* ========== BREADCRUMB ========== */

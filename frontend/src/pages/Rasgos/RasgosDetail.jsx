@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import NumberFlow from '@number-flow/react';
-import { motion as Motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion as Motion, useReducedMotion } from 'motion/react';
 import { ArrowLeft } from 'lucide-react';
 import gsap from 'gsap';
 import { SplitText } from 'gsap/SplitText';
@@ -10,8 +10,8 @@ import { prefersStill } from '../../lib/utils';
 gsap.registerPlugin(useGSAP, SplitText);
 
 const percent = (share) => `${Math.round(share * 100)}%`;
-// Two-phase pill (after Bencho's segmented "Icon bar"): the leading edge runs ahead,
-// the pill stretches across both tabs, then the trailing edge catches up with a small overshoot.
+// The pill hints where it is going: the leading edge runs ahead, the trailing edge follows a beat
+// later. Both settle critically damped: a tap carries no momentum, so nothing overshoots.
 function CategoryTabs({ groups, active, colors, onSelect }) {
   const listRef = useRef(null);
   const tabRefs = useRef({});
@@ -28,12 +28,18 @@ function CategoryTabs({ groups, active, colors, onSelect }) {
       setEdges((prev) => ({ left, right, forward: !prev || left >= prev.left }));
     };
     measure();
+    // on a narrow row the chosen tab slides to the middle, so its neighbours stay in reach of the thumb
+    const tab = tabRefs.current[active];
+    const list = listRef.current;
+    if (tab && list && list.scrollWidth > list.clientWidth) {
+      list.scrollTo({ left: tab.offsetLeft - (list.clientWidth - tab.offsetWidth) / 2, behavior: reduce ? 'auto' : 'smooth' });
+    }
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, [active, groups.length]);
+  }, [active, groups.length, reduce]);
 
-  const lead = { type: 'spring', stiffness: 560, damping: 42 };
-  const trail = { type: 'spring', stiffness: 300, damping: 21, delay: 0.05 };
+  const lead = { type: 'spring', bounce: 0, duration: 0.32 };
+  const trail = { type: 'spring', bounce: 0, duration: 0.46 };
   const transition = reduce ? { duration: 0 }
     : edges?.forward ? { right: lead, left: trail } : { left: lead, right: trail };
 
@@ -55,6 +61,7 @@ function CategoryTabs({ groups, active, colors, onSelect }) {
           ref={(node) => { tabRefs.current[group.name] = node; }}
           type="button"
           className="rasgos-tabs__tab"
+          data-label={group.name}
           aria-current={group.name === active ? 'true' : undefined}
           onClick={() => onSelect(group.name)}
         >
@@ -159,17 +166,29 @@ function TraitRow({ trait, delay }) {
   );
 }
 
-const traitDelay = (index) => 0.25 + index * 0.12;
-// Shares start rolling exactly when their bars start growing.
-const barDelay = (index) => traitDelay(index) + 0.15;
+// Opening from the overview gets the full authored moment; moving between tabs only lets the
+// traits settle and the bars regrow, so a quick run along the row never waits on a title.
+const timing = (intro) => {
+  const trait = intro ? (index) => 0.25 + index * 0.12 : (index) => 0.08 + index * 0.05;
+  // Shares start rolling exactly when their bars start growing.
+  return { trait, bar: (index) => trait(index) + 0.15 };
+};
 
-// One authored moment per category: the title rises word by word from behind a mask, its rule
-// draws, then each trait arrives while its bars grow and the shares roll up.
-function CategoryBody({ category, description }) {
+function CategoryBody({ category, description, intro }) {
   const scope = useRef(null);
+  const [{ trait: traitDelay, bar: barDelay }] = useState(() => timing(intro));
 
   useGSAP(() => {
     if (prefersStill()) return undefined;
+    if (!intro) {
+      const tl = gsap.timeline({ defaults: { ease: 'expo.out' } });
+      gsap.utils.toArray('.rasgos-trait', scope.current).forEach((trait, index) => {
+        tl.from(trait, { autoAlpha: 0, y: 10, duration: 0.5 }, traitDelay(index));
+        const fills = trait.querySelectorAll('.rasgos-bars__fill');
+        if (fills.length) tl.from(fills, { scaleX: 0, transformOrigin: 'left center', duration: 0.8, stagger: 0.06 }, barDelay(index));
+      });
+      return undefined;
+    }
     const title = new SplitText('.rasgos-detail__title', { type: 'words', mask: 'words' });
     const tl = gsap.timeline({ defaults: { ease: 'expo.out' } });
     tl.from(title.words, { yPercent: 110, duration: 0.8, stagger: 0.07 })
@@ -205,7 +224,31 @@ function CategoryBody({ category, description }) {
   );
 }
 
+// Categories sit side by side in the tab row: the next one drifts in from the side it lives on
+// while the one you leave drifts out the other way, both in the same place at once, so there is
+// never an empty gap and a new tap simply retargets. Reduced motion keeps only the crossfade.
+const slide = {
+  enter: ({ dir, reduce }) => ({ opacity: 0, x: reduce ? 0 : dir * 24 }),
+  center: { opacity: 1, x: 0 },
+  exit: ({ dir, reduce }) => ({
+    opacity: 0,
+    x: reduce ? 0 : dir * -24,
+    pointerEvents: 'none',
+    // the old words clear quickly so the two never read on top of each other
+    transition: { default: { type: 'spring', bounce: 0, duration: 0.3 }, opacity: { duration: 0.12, ease: 'easeOut' } },
+  }),
+};
+
 export default function RasgosDetail({ groups, category, colors, descriptions, onSelect, onBack }) {
+  const reduce = useReducedMotion();
+  const index = groups.findIndex((group) => group.name === category.name);
+  const previous = useRef(index);
+  const dir = index >= previous.current ? 1 : -1;
+  useEffect(() => { previous.current = index; }, [index]);
+  // only the category opened from the overview plays the full entrance
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; }, []);
+
   return (
     <section className="rasgos-detail" aria-labelledby="traits-title" style={{ '--cat-color': colors(category.name) }}>
       <div className="rasgos-detail__bar">
@@ -214,7 +257,21 @@ export default function RasgosDetail({ groups, category, colors, descriptions, o
         </button>
         <CategoryTabs groups={groups} active={category.name} colors={colors} onSelect={onSelect} />
       </div>
-      <CategoryBody key={category.name} category={category} description={descriptions[category.name]} />
+      <div className="rasgos-detail__stage">
+      <AnimatePresence initial={false} custom={{ dir, reduce }}>
+        <Motion.div
+          key={category.name}
+          custom={{ dir, reduce }}
+          variants={slide}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
+        >
+          <CategoryBody category={category} description={descriptions[category.name]} intro={!mounted.current} />
+        </Motion.div>
+      </AnimatePresence>
+      </div>
     </section>
   );
 }

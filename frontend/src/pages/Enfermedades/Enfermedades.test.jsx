@@ -14,16 +14,18 @@ vi.mock('../../hooks/useLatestGenomicsResults', async (importOriginal) => ({
 vi.mock('../../config/api', async (importOriginal) => ({
   ...await importOriginal(), apiRequest: vi.fn(), clearToken: vi.fn(),
 }));
-vi.mock('../../components/Sidebar/Sidebar', () => ({
-  default: ({ items, onLogout, user, isMobileMenuOpen, setIsMobileMenuOpen }) => (
-    <nav aria-label="Dashboard navigation" data-open={isMobileMenuOpen}>
-      <span>{user?.name}</span>
-      {items.map((item) => <Link key={item.href} to={item.href}>{item.label}</Link>)}
-      <button type="button" onClick={onLogout}>Cerrar sesión</button>
-      <button type="button" onClick={() => setIsMobileMenuOpen(false)}>Cerrar navegación</button>
-    </nav>
-  ),
-}));
+vi.mock('../../components/ResultsBar/ResultsBar', async () => {
+  const { RESULT_MODULES, GUIDE_HREF } = await import('../../config/resultNav');
+  return {
+    default: ({ user, onLogout }) => (
+      <nav aria-label="Dashboard navigation">
+        <span>{user?.name}</span>
+        {[...RESULT_MODULES, { href: GUIDE_HREF, name: 'Guía de módulos' }].map((m) => <Link key={m.href} to={m.href}>{m.name}</Link>)}
+        <button type="button" onClick={onLogout}>Cerrar sesión</button>
+      </nav>
+    ),
+  };
+});
 
 const disclaimer = 'Resultados de desarrollo. Solo el riesgo monogénico usa datos reales de ClinVar; '
   + 'el resto es simulado y no tiene valor clínico.';
@@ -51,9 +53,9 @@ let originalInnerWidth;
 function LocationMarker() {
   return <output aria-label="Current route">{useLocation().pathname}</output>;
 }
-const renderPage = async ({ protectedRoute = false } = {}) => {
+const renderPage = async ({ protectedRoute = false, entry = '/dashboard/enfermedades' } = {}) => {
   await act(async () => root.render(
-    <MemoryRouter initialEntries={['/dashboard/enfermedades']}>
+    <MemoryRouter initialEntries={[entry]}>
       <AuthProvider>
         {protectedRoute ? (
           <React.StrictMode><ProtectedRoute><Enfermedades /></ProtectedRoute></React.StrictMode>
@@ -68,7 +70,9 @@ const getStatus = () => container.querySelector('main [role="status"], main [rol
 const getRetry = () => [...container.querySelectorAll('main button')]
   .find((button) => button.textContent === 'Reintentar');
 const expectNeutralCopy = () => {
-  const copy = container.querySelector('main');
+  // the page's own words: the bar on top carries the client's name, not result copy
+  const copy = container.querySelector('main').cloneNode(true);
+  copy.querySelector('nav[aria-label="Dashboard navigation"]')?.remove();
   const accessibleCopy = [...copy.querySelectorAll('[aria-label], [aria-description], [aria-valuetext], [title], [alt]')]
     .flatMap((node) => ['aria-label', 'aria-description', 'aria-valuetext', 'title', 'alt']
       .map((attribute) => node.getAttribute(attribute) || '')).join(' ');
@@ -80,7 +84,7 @@ const expectNoValues = () => expect(container.querySelector('dd')).toBeNull();
 const expectShell = () => {
   expect(container.querySelector('h1').textContent).toBe('ENFERMEDADES');
   expect(container.querySelector('main.enfermedades-layout__main')).not.toBeNull();
-  expect(container.querySelector('aside.enfermedades-layout__sidebar nav')).not.toBeNull();
+  expect(container.querySelector('nav[aria-label="Dashboard navigation"]')).not.toBeNull();
   expectNeutralCopy();
 };
 
@@ -122,6 +126,22 @@ describe('risk results', () => {
     await renderPage();
     expect(container.querySelector('nav').textContent).toContain('Demo account');
     expect(apiRequest).toHaveBeenCalledExactlyOnceWith(API_ENDPOINTS.ME, { method: 'GET' });
+  });
+
+  it.each(['polygenic_risk', 'monogenic_risk'])('opens straight on the %s section linked from its dashboard card', async (module) => {
+    const scrolled = [];
+    Element.prototype.scrollIntoView = vi.fn(function scrollIntoView() { scrolled.push(this.id); });
+    await renderPage({ entry: `/dashboard/enfermedades#${module}` });
+    expect(getPanel(module).id).toBe(module);
+    expect(scrolled).toEqual([module]);
+    delete Element.prototype.scrollIntoView;
+  });
+
+  it('stays at the top when no section is linked', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    await renderPage();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    delete Element.prototype.scrollIntoView;
   });
 
   it('never requests the legacy disease endpoint', async () => {
@@ -237,31 +257,11 @@ describe('result states and independent page shell', () => {
     Object.assign(state, { status, loading: status === 'loading' });
     await renderPage();
     expect([...container.querySelectorAll('nav a')].map((link) => link.getAttribute('href'))).toEqual([
-      '/dashboard/ancestria', '/dashboard/rasgos', '/dashboard/farmacogenetica',
-      '/dashboard/enfermedades', '/dashboard/modulos',
+      '/dashboard/ancestria', '/dashboard/farmacogenetica', '/dashboard/rasgos',
+      '/dashboard/enfermedades#polygenic_risk', '/dashboard/enfermedades#monogenic_risk', '/dashboard/modulos',
     ]);
     await act(async () => container.querySelector('a[href="/dashboard/rasgos"]').click());
     expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/dashboard/rasgos');
-    expectShell();
-  });
-
-  it.each(['ready', 'loading', 'permission', 'error'])('keeps the mobile menu working in %s', async (status) => {
-    window.innerWidth = 768;
-    Object.assign(state, { status, loading: status === 'loading' });
-    await renderPage();
-    const burger = container.querySelector('button[aria-label="Abrir menú"]');
-    expect(burger.getAttribute('aria-expanded')).toBe('false');
-    expect(burger.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
-    await act(async () => burger.click());
-    expect(burger.getAttribute('aria-label')).toBe('Cerrar menú');
-    expect(burger.getAttribute('aria-expanded')).toBe('true');
-    expect(container.querySelector('nav').getAttribute('data-open')).toBe('true');
-    await act(async () => [...container.querySelectorAll('nav button')].find((button) => button.textContent === 'Cerrar navegación').click());
-    expect(burger.getAttribute('aria-expanded')).toBe('false');
-    await act(async () => burger.click());
-    await act(async () => { window.innerWidth = 1440; window.dispatchEvent(new Event('resize')); });
-    expect(container.querySelector('.enfermedades-layout__burger')).toBeNull();
-    expect(container.querySelector('nav').getAttribute('data-open')).toBe('false');
     expectShell();
   });
 

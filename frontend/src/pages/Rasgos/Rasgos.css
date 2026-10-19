@@ -7,52 +7,6 @@
   position: relative;
 }
 
-.rasgos-layout .rasgos-layout__burger {
-  position: fixed;
-  top: 1.5rem;
-  left: 1.5rem;
-  z-index: 1100;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
-  color: #ffffff;
-  border: none;
-  cursor: pointer;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 24px rgba(11, 122, 208, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  outline: none;
-}
-
-.rasgos-layout .rasgos-layout__burger:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(11, 122, 208, 0.45), 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.rasgos-layout .rasgos-layout__burger:active {
-  transform: translateY(0);
-  box-shadow: 0 4px 16px rgba(11, 122, 208, 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
-}
-
-.rasgos-layout .rasgos-layout__sidebar {
-  width: 280px;
-  min-width: 280px;
-  background: transparent;
-  display: flex;
-  transition: width var(--genomia-motion-duration-standard) ease, min-width var(--genomia-motion-duration-standard) ease, height var(--genomia-motion-duration-standard) ease;
-  flex-shrink: 0;
-}
-
-.rasgos-layout .rasgos-layout__sidebar:has(.sidebar--folded) {
-  width: 80px;
-  min-width: 80px;
-}
-
 .rasgos-layout .rasgos-layout__main {
   flex: 1 1 auto;
   padding: 2rem 2.5rem 2.5rem 2.5rem;
@@ -102,7 +56,7 @@
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: clamp(1.9rem, 3.4vw, 2.7rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.012em;
   line-height: 1.02;
   text-transform: uppercase;
   color: #4f4f4f !important;
@@ -601,34 +555,21 @@ button.rasgos-breadcrumb__crumb:hover {
 /* Responsive                                                          */
 /* ------------------------------------------------------------------ */
 @media (max-width: 1024px) {
-  .rasgos-layout .rasgos-layout__burger {
-    display: flex;
-  }
 
   .rasgos-layout {
     flex-direction: column;
   }
 
-  .rasgos-layout .rasgos-layout__sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: auto;
-    min-width: 0;
-    height: 100vh;
-    z-index: 1000;
-  }
-
   .rasgos-layout .rasgos-layout__main {
     width: 100%;
-    padding: 6rem 2rem 2rem 2rem;
+    padding: 0.5rem 2rem 2rem 2rem;
     margin: 0;
   }
 }
 
 @media (max-width: 768px) {
   .rasgos-layout .rasgos-layout__main {
-    padding: 5.5rem 1.25rem 1.5rem 1.25rem;
+    padding: 0.5rem 1.25rem 1.5rem 1.25rem;
   }
 
   .rasgos-field-grid {
@@ -641,12 +582,6 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 @media (max-width: 480px) {
-  .rasgos-layout .rasgos-layout__burger {
-    width: 48px;
-    height: 48px;
-    top: 1.25rem;
-    left: 1.25rem;
-  }
 
   .rasgos-chart-card {
     padding: 1rem;
@@ -674,8 +609,16 @@ button.rasgos-breadcrumb__crumb:hover {
 /* Editorial visual system                                              */
 /* ------------------------------------------------------------------ */
 .rasgos-layout {
-  background: #ffffff;
+  /* Rasgos' own sky (config/resultNav.js), as Farmacogenética wears its paper */
+  --ras-paper: #d4e8f8;
+  --ras-sheet: #eaf4fc;
+  --ras-ink: #1e3a5f;
+  background: var(--ras-paper);
   color: #182027;
+}
+
+.rasgos-layout .rbar::before {
+  background: linear-gradient(to bottom, var(--ras-paper) 65%, rgb(212 232 248 / 0)); /* taste-skill-ignore: the bar's scroll edge fades into the page */
 }
 
 .rasgos-layout .rasgos-layout__main {
@@ -689,7 +632,6 @@ button.rasgos-breadcrumb__crumb:hover {
 
 .rasgos-header {
   padding: 1rem 0 2.75rem;
-  border-bottom: 1px solid #cdd2d3;
 }
 
 .rasgos-header__kicker,
@@ -706,27 +648,23 @@ button.rasgos-breadcrumb__crumb:hover {
   text-transform: uppercase;
 }
 
-.rasgos-header__title {
-  margin: 0;
-  color: #0f2341;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+.rasgos-layout .rasgos-header__title {
+  margin: 0 0 0.5rem;
+  color: var(--ras-ink) !important; /* beats the legacy header's !important */
+  font-size: clamp(2.125rem, 4.6vw, 3.75rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
   line-height: 1.02;
-  text-transform: uppercase;
-}
-
-.rasgos-header__accent {
-  color: #84b9f5;
+  text-transform: none;
+  text-wrap: balance;
 }
 
 .rasgos-header__subtitle {
-  color: #526169;
-  font-size: 0.96rem;
-  line-height: 1.65;
-  margin-top: 1rem;
-  max-width: 58ch;
+  color: #3d5878;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  margin-top: 0;
+  max-width: 44ch;
 }
 
 .rasgos-report {
@@ -750,14 +688,14 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-report__list {
-  border-top: 1px solid #aeb8bb;
+  border-top: 1px solid #9dbbd6;
 }
 
 .rasgos-report__section {
   align-items: stretch;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid #cdd2d3;
+  border-bottom: 1px solid #b5cfe6;
   border-radius: 0;
   box-shadow: none;
   display: grid;
@@ -769,7 +707,7 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-report__section::before {
-  background: #fffefa;
+  background: var(--ras-sheet);
   content: '';
   inset: 0 -0.75rem;
   opacity: 0;
@@ -781,7 +719,7 @@ button.rasgos-breadcrumb__crumb:hover {
 .rasgos-report__section:hover,
 .rasgos-report__section:active {
   background: transparent;
-  border-color: #aeb8bb;
+  border-color: #9dbbd6;
   box-shadow: none;
   transform: none;
 }
@@ -867,8 +805,8 @@ button.rasgos-breadcrumb__crumb:hover {
 .rasgos-cat-header {
   background: transparent;
   border: 0;
-  border-bottom: 1px solid #aeb8bb;
-  border-top: 1px solid #aeb8bb;
+  border-bottom: 1px solid #9dbbd6;
+  border-top: 1px solid #9dbbd6;
   border-radius: 0;
   margin-bottom: 1.5rem;
   padding: 1.75rem 0;
@@ -896,7 +834,7 @@ button.rasgos-breadcrumb__crumb:hover {
 
 .rasgos-trait-list__header {
   align-items: center;
-  border-bottom: 1px solid #cdd2d3;
+  border-bottom: 1px solid #b5cfe6;
   color: #68757b;
   display: flex;
   font-size: 0.7rem;
@@ -911,7 +849,7 @@ button.rasgos-breadcrumb__crumb:hover {
 .rasgos-trait-row {
   background: transparent;
   border: 0;
-  border-bottom: 1px solid #cdd2d3;
+  border-bottom: 1px solid #b5cfe6;
   border-radius: 0;
   box-shadow: none;
   min-height: 4.25rem;
@@ -921,8 +859,8 @@ button.rasgos-breadcrumb__crumb:hover {
 
 .rasgos-trait-row:hover,
 .rasgos-trait-row:active {
-  background: #fffefa;
-  border-color: #aeb8bb;
+  background: var(--ras-sheet);
+  border-color: #9dbbd6;
   box-shadow: none;
   transform: none;
 }
@@ -951,8 +889,8 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-trait-detail {
-  background: #fffefa;
-  border: 1px solid #aeb8bb;
+  background: var(--ras-sheet);
+  border: 1px solid #9dbbd6;
   border-radius: 0;
   overflow: hidden;
 }
@@ -960,7 +898,7 @@ button.rasgos-breadcrumb__crumb:hover {
 .rasgos-trait-detail__header {
   background: transparent;
   background-image: none;
-  border-bottom: 1px solid #cdd2d3;
+  border-bottom: 1px solid #b5cfe6;
   display: block;
   padding: 1.5rem 1.75rem 1.75rem;
 }
@@ -1005,7 +943,7 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-trait-detail__metadata {
-  border-top: 1px solid #cdd2d3;
+  border-top: 1px solid #b5cfe6;
   padding-top: 1.5rem;
 }
 
@@ -1021,7 +959,7 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-field {
-  border-bottom: 1px solid #e0e3e2;
+  border-bottom: 1px solid #c3d9ec;
   padding: 1rem 1rem 1rem 0;
 }
 
@@ -1030,7 +968,7 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-trait-detail__disclaimer {
-  border-top: 1px solid #cdd2d3;
+  border-top: 1px solid #b5cfe6;
   color: #68757b;
   padding: 1.25rem 1.75rem 1.5rem;
 }
@@ -1055,12 +993,6 @@ button.rasgos-breadcrumb__crumb:hover {
   outline-offset: 3px;
 }
 
-.rasgos-layout .rasgos-layout__burger {
-  background: #145f9f;
-  border-radius: 0;
-  box-shadow: 0 6px 18px rgba(24, 32, 39, 0.18);
-}
-
 .rasgos-page__error button {
   background: #145f9f;
   border-radius: 0;
@@ -1069,7 +1001,7 @@ button.rasgos-breadcrumb__crumb:hover {
 
 @media (min-width: 769px) and (max-width: 1024px) {
   .rasgos-layout .rasgos-layout__main {
-    padding: 6rem 2.25rem 2.5rem;
+    padding: 0.5rem 2.25rem 2.5rem;
   }
 
   .rasgos-layout .rasgos-page {
@@ -1083,7 +1015,7 @@ button.rasgos-breadcrumb__crumb:hover {
 
 @media (max-width: 768px) {
   .rasgos-layout .rasgos-layout__main {
-    padding: 5.5rem 1.25rem 2rem;
+    padding: 0.5rem 1.25rem 2rem;
   }
 
   .rasgos-layout .rasgos-page {
@@ -1094,8 +1026,8 @@ button.rasgos-breadcrumb__crumb:hover {
     padding-bottom: 2rem;
   }
 
-  .rasgos-header__title {
-    font-size: clamp(2.25rem, 13vw, 3.5rem);
+  .rasgos-layout .rasgos-header__title {
+    font-size: clamp(2.125rem, 9vw, 2.75rem);
   }
 
   .rasgos-report {
@@ -1190,12 +1122,12 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rasgos-report__section::before,
+  
+.rasgos-report__section::before,
   .rasgos-report__section,
   .rasgos-trait-row,
   .rasgos-trait-row__chevron,
   .rasgos-back,
-  .rasgos-layout .rasgos-layout__burger,
   .rasgos-page__error button {
     transition: none;
   }
@@ -1233,7 +1165,7 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-category-guide {
-  border-bottom: 1px solid #cdd2d3;
+  border-bottom: 1px solid #b5cfe6;
   padding: 1.05rem 0 1.15rem;
 }
 
@@ -1333,7 +1265,7 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-category-guide__note {
-  border-top: 1px solid #e0e3e2;
+  border-top: 1px solid #c3d9ec;
   color: #68757b;
   font-size: 0.72rem;
   line-height: 1.4;
@@ -1342,7 +1274,7 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-glossary {
-  border-bottom: 1px solid #cdd2d3;
+  border-bottom: 1px solid #b5cfe6;
   padding: 1rem 0;
 }
 
@@ -1397,7 +1329,6 @@ button.rasgos-breadcrumb__crumb:hover {
   }
 }
 
-
 /* ------------------------------------------------------------------ */
 /* Overview category chart                                             */
 /* ------------------------------------------------------------------ */
@@ -1416,7 +1347,6 @@ button.rasgos-breadcrumb__crumb:hover {
 
 .rasgos-overview__body {
   align-items: center;
-  border-bottom: 1px solid #cdd2d3;
   display: grid;
   gap: clamp(2rem, 7vw, 5rem);
   grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.1fr);
@@ -1481,7 +1411,7 @@ button.rasgos-breadcrumb__crumb:hover {
   align-items: center;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid #cdd2d3;
+  border-bottom: 1px solid #b5cfe6;
   color: #182027;
   cursor: pointer;
   display: grid;
@@ -1494,11 +1424,11 @@ button.rasgos-breadcrumb__crumb:hover {
 }
 
 .rasgos-overview__legend-item:first-child {
-  border-top: 1px solid #cdd2d3;
+  border-top: 1px solid #b5cfe6;
 }
 
 .rasgos-overview__legend-item:hover {
-  background: #fffefa;
+  background: var(--ras-sheet);
   padding-left: 0.75rem;
   padding-right: 0.75rem;
 }
@@ -1647,7 +1577,6 @@ button.rasgos-breadcrumb__crumb:hover {
 .rasgos-detail {
   --cat-ink: color-mix(in oklab, var(--cat-color) 60%, #000000);
   margin-top: 1.5rem;
-  border-top: 1px solid #aeb8bb;
 }
 
 .rasgos-detail__bar {
@@ -1655,7 +1584,7 @@ button.rasgos-breadcrumb__crumb:hover {
   align-items: center;
   gap: 1.25rem;
   padding: 1rem 0;
-  border-bottom: 1px solid #e0e3e2;
+  border-bottom: 1px solid #c3d9ec;
 }
 
 .rasgos-layout .rasgos-detail__back {
@@ -1698,7 +1627,7 @@ button.rasgos-breadcrumb__crumb:hover {
   top: 0;
   bottom: 0;
   border-radius: 999px;
-  background: color-mix(in oklab, var(--tab-color) 16%, #fffefa);
+  background: color-mix(in oklab, var(--tab-color) 16%, var(--ras-sheet));
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tab-color) 55%, #ffffff);
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
@@ -1716,11 +1645,38 @@ button.rasgos-breadcrumb__crumb:hover {
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color 0.2s ease, transform 0.1s ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* the bold weight's width is held from the start, so choosing a tab never nudges its neighbours */
+.rasgos-layout .rasgos-tabs__tab::after {
+  content: attr(data-label);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 650;
 }
 
 .rasgos-layout .rasgos-tabs__tab:hover {
   color: #182027;
+}
+
+.rasgos-layout .rasgos-tabs__tab:active {
+  transform: scale(0.97);
+}
+
+/* the leaving category and the arriving one share one cell, so they crossfade in place */
+.rasgos-stage,
+.rasgos-detail__stage {
+  display: grid;
+}
+
+.rasgos-stage > *,
+.rasgos-detail__stage > * {
+  grid-area: 1 / 1;
+  min-width: 0;
 }
 
 .rasgos-layout .rasgos-tabs__tab[aria-current="true"] {
@@ -1737,7 +1693,7 @@ button.rasgos-breadcrumb__crumb:hover {
 
 .rasgos-detail__aside {
   position: sticky;
-  top: 1.5rem;
+  top: 6rem; /* clear of the sticky module bar */
   align-self: start;
 }
 
@@ -1787,7 +1743,7 @@ button.rasgos-breadcrumb__crumb:hover {
 
 .rasgos-trait + .rasgos-trait {
   padding-top: 2.25rem;
-  border-top: 1px solid #e0e3e2;
+  border-top: 1px solid #c3d9ec;
 }
 
 .rasgos-trait__head {
@@ -1889,7 +1845,7 @@ button.rasgos-breadcrumb__crumb:hover {
 .rasgos-bars__you {
   padding: 0.05rem 0.4rem;
   border-radius: 999px;
-  background: color-mix(in oklab, var(--cat-color) 16%, #fffefa);
+  background: color-mix(in oklab, var(--cat-color) 16%, var(--ras-sheet));
   color: #182027;
   font-size: 0.65rem;
   font-weight: 700;
@@ -1901,14 +1857,14 @@ button.rasgos-breadcrumb__crumb:hover {
   position: relative;
   height: 14px;
   border-radius: 0 4px 4px 0;
-  background: #f1f3f3;
+  background: var(--ras-sheet);
 }
 
 .rasgos-bars__fill {
   display: block;
   height: 100%;
   border-radius: 0 4px 4px 0;
-  background: #c9d0d2;
+  background: #a9c4dd;
   transition: filter 0.15s ease;
 }
 
@@ -1996,8 +1952,29 @@ button.rasgos-breadcrumb__crumb:hover {
     gap: 0.5rem;
   }
 
+  /* the row runs edge to edge under the thumb; its soft ends say there is more to either side */
   .rasgos-tabs {
     justify-content: flex-start;
+    margin: 0 -1rem;
+    padding: 0.25rem 1rem;
+    scroll-padding-inline: 1rem;
+    mask-image: linear-gradient(90deg, transparent, #000 1rem, #000 calc(100% - 2rem), transparent);
+  }
+
+  .rasgos-tabs__indicator {
+    top: 0.25rem;
+    bottom: 0.25rem;
+  }
+
+  .rasgos-layout .rasgos-tabs__tab {
+    min-height: 2.75rem;
+    padding: 0 1.1rem;
+    font-size: 0.9375rem;
+  }
+
+  .rasgos-layout .rasgos-detail__back {
+    min-height: 2.75rem;
+    font-size: 0.9375rem;
   }
 
   .rasgos-detail__body {
@@ -2023,145 +2000,77 @@ button.rasgos-breadcrumb__crumb:hover {
   }
 }
 
-.rasgos-layout--loading .rasgos-layout__sidebar {
-  width: 80px;
-  min-width: 80px;
+/* ---- Loading: the overview's own layout, with the data as shapes ----
+   One sweep of light crosses the whole page left to right (the gradient is pinned to the
+   window), so the shapes read as one surface waiting, not a dozen blinking blocks. */
+.rasgos-loading {
+  --skel: #bcd5ea;
+  /* a band about a third of the window wide: narrow enough to read as light passing, not a tint */
+  --skel-sweep: linear-gradient(100deg, transparent 43%, rgb(255 255 255 / 0.55) 47%, rgb(255 255 255 / 0.95) 50%, rgb(255 255 255 / 0.55) 53%, transparent 57%);
 }
 
-.rasgos-loading__sidebar {
-  width: 100%;
-  min-height: 100vh;
-  padding: 1.2rem 0.5rem;
-  background: #0955a3;
-}
-
-.rasgos-loading__sidebar-brand,
-.rasgos-loading__sidebar-nav span {
-  display: block;
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.rasgos-loading__sidebar-brand {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto 2rem;
-  border-radius: 50%;
-}
-
-.rasgos-loading__sidebar-nav {
-  display: grid;
-  justify-items: center;
-  gap: 1.25rem;
-}
-
-.rasgos-loading__sidebar-nav span {
-  width: 32px;
-  height: 32px;
-  border-radius: 0.5rem;
-}
-
-.rasgos-layout .rasgos-loading__menu {
-  cursor: default;
-  pointer-events: none;
-}
-
-.rasgos-loading .rasgos-overview {
-  margin-top: 0;
-}
-
-.rasgos-loading__eyebrow { width: 8rem; height: 0.75rem; }
-.rasgos-loading__hint { width: 10rem; height: 0.85rem; }
-.rasgos-loading__donut {
-  display: grid;
-  place-items: center;
-  position: relative;
-  width: min(100%, 320px);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: #e8edf3;
-}
-
-.rasgos-loading__donut::after {
-  content: '';
-  position: absolute;
-  inset: clamp(2rem, 7vw, 3.7rem);
-  border-radius: 50%;
-  background: #fff;
-}
-
-.rasgos-loading__donut-center { position: relative; z-index: 1; width: 40%; height: 1.5rem; }
-.rasgos-loading__legend-item {
-  display: grid;
-  grid-template-columns: 0.7rem minmax(0, 1fr);
-  align-items: center;
-  gap: 0.85rem;
-  min-height: 4.25rem;
-  padding: 1rem 0.25rem;
-  border-bottom: 1px solid #cdd2d3;
-  transition: background 0.2s ease, padding 0.2s ease;
-}
-.rasgos-loading__legend-item:first-child { border-top: 1px solid #cdd2d3; }
-.rasgos-loading__legend-item:hover {
-  background: #fffefa;
-  padding-inline: 0.75rem;
-}
-.rasgos-loading__marker { width: 0.7rem; height: 0.7rem; border-radius: 50%; }
-.rasgos-loading__legend-copy { display: grid; gap: 0.35rem; }
-.rasgos-loading__legend-name { width: 68%; height: 0.9rem; }
-.rasgos-loading__legend-count { width: 28%; height: 0.7rem; }
-
-@media (max-width: 1024px) {
-  .rasgos-layout--loading .rasgos-layout__sidebar { display: none; }
-}
-
-@media (max-width: 768px) {
-  .rasgos-loading__donut { width: min(100%, 280px); }
-  .rasgos-loading__hint { display: none; }
-}
-/* Brillo unificado con ritmo de pulso. Todas las formas del loader usan un degradado
-   fijo al viewport (background-attachment: fixed), así el reflejo cruza de izquierda
-   a derecha por todo el loader como un solo barrido, no uno por bloque. */
-.rasgos-loading .dashboard-skeleton__block {
-  background-color: #cfd8e3;
-}
-
-.rasgos-loading .dashboard-skeleton__block::after {
-  display: none;
-}
-
-.rasgos-loading .dashboard-skeleton__block,
-.rasgos-loading__donut,
-.rasgos-loading__sidebar-brand,
-.rasgos-loading__sidebar-nav span {
-  background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.95) 50%, transparent 70%);
+.rasgos-loading__bar,
+.rasgos-loading__shape,
+.rasgos-loading__donut::before {
+  background-color: var(--skel);
+  background-image: var(--skel-sweep);
   background-size: 250% 100%;
   background-repeat: no-repeat;
   background-attachment: fixed;
-  animation: rasgos-loading-sweep 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  animation: skeleton-sweep 1.7s cubic-bezier(0.45, 0, 0.35, 1) -0.45s infinite; /* starts mid-screen: a short load still sees the light move */
 }
 
+.rasgos-loading__bar {
+  display: inline-block;
+  width: var(--w, 60%);
+  height: 0.72em;
+  border-radius: 999px;
+  vertical-align: -0.04em;
+}
+
+/* the ring, cut to the real chart's hole */
 .rasgos-loading__donut {
-  background-color: #cfd8e3;
+  position: relative;
+  display: grid;
+  place-items: center;
 }
 
-.rasgos-loading__sidebar-brand,
-.rasgos-loading__sidebar-nav span {
-  background-color: rgba(255, 255, 255, 0.2);
-  background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.6) 50%, transparent 70%);
+.rasgos-loading__donut::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(closest-side, transparent 51.5%, #000 calc(51.5% + 1px) 95%, transparent calc(95% + 1px));
+  mask: radial-gradient(closest-side, transparent 51.5%, #000 calc(51.5% + 1px) 95%, transparent calc(95% + 1px));
 }
 
-@keyframes rasgos-loading-sweep {
-  0% { background-position: 100% 0; }
-  55%, 100% { background-position: 0 0; }
+.rasgos-loading__donut > .rasgos-loading__bar {
+  position: relative;
+  height: 1.75rem;
+  border-radius: 0.5rem;
 }
 
+.rasgos-loading__row,
+.rasgos-loading__row:hover {
+  padding-inline: 0.25rem;
+  background: transparent;
+  cursor: default;
+}
+
+.rasgos-loading__row > svg {
+  color: #d3dae2;
+}
+
+/* without travel the shapes still breathe, so the page never looks frozen */
 @media (prefers-reduced-motion: reduce) {
-  .rasgos-loading .dashboard-skeleton__block,
-  .rasgos-loading__donut,
-  .rasgos-loading__sidebar-brand,
-  .rasgos-loading__sidebar-nav span {
-    animation: none;
+  .rasgos-loading__bar,
+  .rasgos-loading__shape,
+  .rasgos-loading__donut::before {
     background-image: none;
+    animation: rasgos-skel-breathe 1.4s ease-in-out infinite alternate;
   }
-  .rasgos-loading__legend-item { transition: none; }
+}
+
+@keyframes rasgos-skel-breathe {
+  to { opacity: 0.5; }
 }

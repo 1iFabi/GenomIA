@@ -1,184 +1,183 @@
-.conoce-section{
-  --uoh:#108ac2;
-  --fg:#fff;
-  --fg-soft:rgba(255,255,255,.85);
-  --chip-bg:#fff;
-  --chip-fg:#108ac2;
-  --card-bg:rgba(0,0,0,.12);
-  background:var(--uoh);
-  min-height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:120px 20px;
-  color:var(--fg);
-  font-family:'DM Sans','Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  position:relative;
-  overflow:hidden; /* para los brillos decorativos */
+/* src/pages/Conoce/Conoce.css */
+
+.conoce-section {
+  /* the brand blue lives at the top, behind the title; text below sits on a deeper blue of
+     the same hue so white body copy holds 4.5:1 (the brand blue alone gives 3.9:1) */
+  --c-brand: #108ac2;
+  --c-deep: #0e7cb0;
+  --c-deeper: #0b6e9f;
+  --c-fg: #f5fbff;
+  --c-ease: cubic-bezier(.16, 1, .3, 1);
+  position: relative;
+  padding: 112px 20px 104px;
+  background:
+    radial-gradient(70% 45% at 50% 0%, var(--c-brand) 0%, transparent 100%),
+    linear-gradient(180deg, var(--c-brand) 0%, var(--c-deep) 32%, var(--c-deeper) 100%);
+  color: var(--c-fg);
+  font-family: 'DM Sans', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+}
+.conoce-section ::selection { background: var(--c-fg); color: var(--c-deeper); }
+
+.conoce-container { width: 100%; max-width: 1180px; margin-inline: auto; }
+
+/* ====== Header ====== */
+.conoce-header { text-align: center; }
+.conoce-section .breadcrumb { font-family: inherit; }
+.conoce-title {
+  margin: 0 0 12px;
+  font-family: 'Geist', 'DM Sans', 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: clamp(30px, 4.6vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  color: var(--c-fg);
+  text-wrap: balance;
+}
+.conoce-subtitle {
+  margin: 0 auto;
+  max-width: 60ch;
+  font-size: clamp(15px, 1.4vw, 17px);
+  line-height: 1.5;
+  color: var(--c-fg);
+  text-wrap: pretty;
 }
 
+/* ====== The route: a road through four stations, travelled once by the sample ====== */
+.conoce-route { position: relative; margin-top: 72px; }
 
-.conoce-container{
-  width:100%;
-  max-width:1180px;
-  margin-inline:auto;
-  padding-inline:16px;
-  box-sizing:border-box;
+.conoce-road { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.conoce-road path { fill: none; stroke-linecap: round; }
+.conoce-road__base { stroke: rgba(255, 255, 255, .4); stroke-width: 2; stroke-dasharray: 1 9; }
+.conoce-road__trail { stroke: var(--c-fg); stroke-width: 2.5; }
+/* the sample and its trail exist only during a walk: they fade in and out with it */
+.conoce-road__trail,
+.conoce-capsule { opacity: 0; transition: opacity .5s var(--c-ease); }
+.conoce-road[data-live="true"] .conoce-road__trail,
+.conoce-road[data-live="true"] .conoce-capsule { opacity: 1; }
+.conoce-capsule { filter: drop-shadow(0 4px 8px rgba(4, 40, 64, .35)); }
+/* the reset: the road and the stations go dim slowly and evenly, so clearing reads as a reset; lighting up stays quick */
+.conoce-road:not([data-live="true"]) .conoce-road__trail,
+.conoce-road:not([data-live="true"]) .conoce-capsule,
+.conoce-step:not([data-lit]) .conoce-station,
+.conoce-step:not([data-lit]) .conoce-step__copy {
+  transition-duration: 1.6s;
+  transition-timing-function: cubic-bezier(.45, 0, .55, 1);
 }
 
-.conoce-header{
-  text-align:center;
+.conoce-steps {
+  position: relative; /* over the road: the stations hide the capsule as it passes through */
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)); /* no gap: the road joins column centres */
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.conoce-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 18px;
+  text-align: center;
 }
 
-/* Breadcrumb usa estilos compartidos en src/styles/breadcrumb.css */
-/* Se aplica la tipografía nueva solo dentro de esta sección */
-.conoce-section .breadcrumb{
-  font-family:'DM Sans','Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+.conoce-station {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 24px;
+  border-radius: 50%;
+  background: var(--c-deep);
+  color: rgba(255, 255, 255, .75);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .45);
+  transition:
+    background-color .45s var(--c-ease),
+    color .45s var(--c-ease),
+    box-shadow .45s var(--c-ease),
+    transform .6s var(--c-ease);
+}
+.conoce-station svg { width: 28px; height: 28px; }
+.conoce-station__num {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--c-deeper);
+  color: var(--c-fg);
+  font: 700 12px/1 'Geist', 'DM Sans', sans-serif;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--c-deep);
+}
+/* the ring that marks where the sample is now */
+.conoce-station::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, .65);
+  opacity: 0;
+  transform: scale(.8);
+  transition: opacity .4s var(--c-ease), transform .6s var(--c-ease);
 }
 
-.conoce-title{
-  margin:0 0 12px 0;
-  font-family:'Geist','DM Sans','Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  font-weight:600;
-  font-size:clamp(28px,5vw,48px);
-  line-height:1.06;
-  letter-spacing:-.015em;
-  color:#fff;
+.conoce-step__title {
+  margin: 0 0 8px;
+  max-width: 20ch;
+  margin-inline: auto;
+  font-family: 'Geist', 'DM Sans', sans-serif;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--c-fg);
+  text-wrap: balance;
 }
-
-.conoce-subtitle{
-  margin:0 auto;
-  max-width:65ch;
-  font-size:clamp(15px,1.5vw,18px);
-  line-height:1.45;
-  color:var(--fg-soft);
+.conoce-step__text {
+  margin: 0 auto;
+  max-width: 26ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--c-fg);
+  text-wrap: pretty;
 }
+.conoce-step__copy { opacity: .5; transform: translateY(8px); transition: opacity .6s var(--c-ease), transform .7s var(--c-ease); }
 
-/* ===== Grid de pasos ===== */
-.conoce-steps-grid{
-  display:grid;
-  grid-template-columns:repeat(4, 240px);  /* ancho fijo */
-  justify-content:center;                  /* centra el bloque */
-  column-gap:80px;
-  row-gap:40px;
-  align-items:start;
-  margin-top:34px;
-  position:relative;
-}
+/* lit: the sample has been here */
+.conoce-step[data-lit] .conoce-station { background: var(--c-fg); color: var(--c-deeper); box-shadow: 0 10px 24px rgba(4, 40, 64, .28); }
+.conoce-step[data-lit] .conoce-step__copy { opacity: 1; transform: none; }
+.conoce-step[data-current] .conoce-station { transform: scale(1.08); }
+.conoce-step[data-current][data-lit] .conoce-station::after { opacity: 1; transform: scale(1); }
 
-/* Línea conectora entre cards (desktop) */
-@media (min-width:1141px){
-  .conoce-step{ position:relative; }
-  .conoce-step::after{
-    content:"";
-    position:absolute;
-    top: 115px;                  /* bajo icono/badge */
-    left: calc(50% + 120px);     /* mitad card + mitad gap */
-    width: 80px;                 /* tramo dentro del gap */
-    height:2px;
-    background: repeating-linear-gradient(
-      90deg,
-      rgba(255,255,255,.75) 0 10px,
-      rgba(255,255,255,0) 10px 16px
-    );
-    opacity:.8;
+/* ====== Tablet: two by two would break the road, so stack early ====== */
+@media (max-width: 860px) {
+  .conoce-route { max-width: 520px; margin: 48px auto 0; }
+  .conoce-steps { grid-template-columns: minmax(0, 1fr); row-gap: 40px; }
+  .conoce-step {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    column-gap: 20px;
+    align-items: center;
+    padding: 0;
+    text-align: left;
   }
-  .conoce-step:last-child::after{ display:none; }
+  .conoce-station { margin: 0; }
+  .conoce-step__title, .conoce-step__text { max-width: none; margin-inline: 0; }
+  .conoce-step__copy { transform: translateX(8px); }
+}
+@media (max-width: 640px) {
+  .conoce-section { padding: 96px 16px 80px; }
+  .conoce-step { grid-template-columns: 56px minmax(0, 1fr); column-gap: 16px; }
+  .conoce-station { width: 56px; height: 56px; }
+  .conoce-station svg { width: 24px; height: 24px; }
+  .conoce-step__title { font-size: 18px; }
 }
 
-.conoce-step{
-  text-align:center;
-  width:240px; /* coincide con la columna */
-  margin:0;
-}
-
-/* Icono */
-.conoce-step-icon{
-  width:84px;
-  height:84px;
-  margin:0 auto 16px;
-  border-radius:18px;
-  display:grid;
-  place-items:center;
-  background:rgba(255,255,255,.16);
-  color:#fff;
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,.18);
-  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
-}
-.conoce-step-icon svg{ width:50px; height:50px; stroke-width:2; }
-
-/* Badge */
-.conoce-step-badge{
-  display:inline-block;
-  background:var(--chip-bg);
-  color:var(--chip-fg);
-  padding:6px 16px;
-  border-radius:999px;
-  font-size:15px;
-  font-weight:700;
-  margin-bottom:14px;
-}
-
-/* Título */
-.conoce-step-title{
-  margin:0 0 8px 0;
-  font-weight:700;
-  font-size:20px;
-  line-height:1.25;
-  color:#fff;
-  max-width:22ch;
-  margin-inline:auto;
-}
-
-/* Subrayado */
-.conoce-step-underline{
-  width:58px;
-  height:3px;
-  margin:10px auto 16px;
-  border-radius:3px;
-  background:linear-gradient(90deg, #fff, rgba(255,255,255,.65));
-}
-
-/* Descripción */
-.conoce-step-description{
-  margin:0;
-  padding:16px 14px;
-  border-radius:16px;
-  background:var(--card-bg);
-  font-size:15px;
-  line-height:1.45;
-  color:var(--fg-soft);
-  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
-}
-
-/* Micro-hover sutil */
-.conoce-step:hover .conoce-step-icon{
-  background: rgba(255,255,255,.2);
-  box-shadow:
-    inset 0 0 0 2px rgba(255,255,255,.28),
-    0 8px 24px rgba(0,0,0,.18);
-  transform: translateY(-2px);
-}
-.conoce-step:hover .conoce-step-description{
-  background: rgba(0,0,0,.16);
-  box-shadow: 0 8px 22px rgba(0,0,0,.18);
-  transform: translateY(-1px);
-}
-
-/* ===== Responsive ===== */
-@media (max-width:1140px){
-  .conoce-steps-grid{
-    grid-template-columns:repeat(2, 260px);
-    column-gap:60px;
-  }
-  .conoce-step{ width:260px; }
-  .conoce-step::after{ display:none !important; } /* sin conectores en tablet */
-}
-
-@media (max-width:640px){
-  .conoce-section{ min-height:auto; padding:100px 20px; }
-  .conoce-steps-grid{ grid-template-columns:300px; column-gap:0; }
-  .conoce-step{ width:300px; }
-  .conoce-step-icon{ width:76px; height:76px; }
-  .conoce-step-icon svg{ width:44px; height:44px; }
+@media (prefers-reduced-motion: reduce) {
+  .conoce-station, .conoce-station::after, .conoce-step__copy, .conoce-road__trail, .conoce-capsule { transition: none; }
 }

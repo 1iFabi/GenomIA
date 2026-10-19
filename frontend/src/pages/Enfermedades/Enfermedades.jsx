@@ -1,12 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { clearToken } from '../../config/api';
-import { RESULT_NAV_ITEMS } from '../../config/resultNav';
 import { moduleRows, useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
 import { useSession } from '../../hooks/useSession';
-import Sidebar from '../../components/Sidebar/Sidebar';
-import { animatedSidebarIcons } from '../../components/Sidebar/animatedSidebarIcons';
+import ResultsBar from '../../components/ResultsBar/ResultsBar';
 import { DashboardPageSkeleton, SkeletonBlock } from '../../components/DashboardSkeleton/DashboardSkeleton';
 import '../../styles/cards.css';
 import './Enfermedades.css';
@@ -40,7 +37,7 @@ const formatSignificance = (value) => value?.replaceAll('_', ' ').replace('/', '
 
 function RiskCard({ id, title, empty, children }) {
   return (
-    <section className="card-pro card-large-pro" aria-labelledby={`${id}-title`}>
+    <section className="card-pro card-large-pro" id={id} aria-labelledby={`${id}-title`}>
       <div className="card-pro__header">
         <h2 className="priority-section__title" id={`${id}-title`}>{title}</h2>
       </div>
@@ -51,9 +48,8 @@ function RiskCard({ id, title, empty, children }) {
 
 const Enfermedades = () => {
   const { user } = useSession();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const results = useLatestGenomicsResults();
   const polygenic = moduleRows(results, 'polygenic_risk');
   const monogenic = moduleRows(results, 'monogenic_risk');
@@ -61,16 +57,13 @@ const Enfermedades = () => {
     ? 'missing' : results.status;
   const failed = ['permission', 'error'].includes(resultStatus);
 
+  // The dashboard's two risk cards link here with #polygenic_risk or #monogenic_risk.
   useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth <= 1024;
-      setIsMobile(mobile);
-      if (!mobile) setIsMobileMenuOpen(false);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    if (resultStatus !== 'ready' || !hash) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById(decodeURIComponent(hash.slice(1)))
+      ?.scrollIntoView?.({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  }, [hash, resultStatus]);
 
   const handleLogout = async () => {
     await clearToken();
@@ -80,34 +73,10 @@ const Enfermedades = () => {
 
   return (
     <div className="enfermedades-layout">
-      {isMobile && (
-        <button
-          type="button"
-          className="enfermedades-layout__burger"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label={isMobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
-          aria-expanded={isMobileMenuOpen}
-        >
-          {isMobileMenuOpen ? (
-            <X size={24} strokeWidth={2.5} aria-hidden="true" />
-          ) : (
-            <Menu size={24} strokeWidth={2.5} aria-hidden="true" />
-          )}
-        </button>
-      )}
 
-      <aside className="enfermedades-layout__sidebar">
-        <Sidebar
-          iconOverrides={animatedSidebarIcons}
-          items={RESULT_NAV_ITEMS}
-          onLogout={handleLogout}
-          user={user}
-          isMobileMenuOpen={isMobileMenuOpen}
-          setIsMobileMenuOpen={setIsMobileMenuOpen}
-        />
-      </aside>
 
       <main className="enfermedades-layout__main">
+        <ResultsBar user={user} onLogout={handleLogout} />
         <div className="enfermedades-page">
           <EnfermedadesPageHeader />
           <div className="enfermedades-page__content">

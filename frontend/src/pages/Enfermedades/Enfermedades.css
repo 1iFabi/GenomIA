@@ -11,55 +11,6 @@
   position: relative;
 }
 
-/* Burger Button */
-.enfermedades-layout__burger {
-  position: fixed;
-  top: 1.5rem;
-  left: 1.5rem;
-  z-index: 1100;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
-  color: #ffffff;
-  border: none;
-  cursor: pointer;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 24px rgba(11, 122, 208, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  outline: none;
-  backdrop-filter: blur(10px);
-}
-
-.enfermedades-layout__burger:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(11, 122, 208, 0.45), 0 4px 12px rgba(0, 0, 0, 0.2);
-  background: linear-gradient(135deg, #0c8cf0 0%, #0a6ed8 100%);
-}
-
-.enfermedades-layout__burger:active {
-  transform: translateY(0);
-  box-shadow: 0 4px 16px rgba(11, 122, 208, 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
-}
-
-.enfermedades-layout__sidebar {
-  width: 280px;
-  min-width: 280px;
-  background: transparent;
-  display: flex;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-}
-
-.enfermedades-layout__sidebar:has(.sidebar--folded) {
-  width: 80px;
-  min-width: 80px;
-}
-
 .enfermedades-layout__main {
   flex: 1 1 auto;
   padding: 1.5rem 2.5rem 1.5rem 2.5rem;
@@ -417,8 +368,6 @@
   gap: 1.5rem;
 }
 
-
-
 .enfermedades-page__loading p {
   font-size: 1.1rem;
   color: #4f637c;
@@ -681,27 +630,14 @@
 }
 
 @media (max-width: 1024px) {
-  .enfermedades-layout__burger {
-    display: flex;
-  }
 
   .enfermedades-layout {
     flex-direction: column;
   }
 
-  .enfermedades-layout__sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: auto;
-    min-width: 0;
-    height: 100vh;
-    z-index: 1000;
-  }
-
   .enfermedades-layout__main {
     width: 100%;
-    padding: 6rem 2rem 2rem 2rem;
+    padding: 0.5rem 2rem 2rem 2rem;
     margin: 0;
   }
 
@@ -718,7 +654,7 @@
 
 @media (max-width: 768px) {
   .enfermedades-layout__main {
-    padding: 6rem 1.5rem 1.5rem 1.5rem;
+    padding: 0.5rem 1.5rem 1.5rem 1.5rem;
   }
 
   .card-large-pro,
@@ -784,15 +720,9 @@
 }
 
 @media (max-width: 480px) {
-  .enfermedades-layout__burger {
-    width: 48px;
-    height: 48px;
-    top: 1.25rem;
-    left: 1.25rem;
-  }
 
   .enfermedades-layout__main {
-    padding: 5.5rem 1rem 1rem 1rem;
+    padding: 0.5rem 1rem 1rem 1rem;
   }
 
   .priority-section__header {
@@ -951,7 +881,6 @@
 .priority-section:nth-child(3) { animation-delay: 0.3s; }
 
 /* Keep keyboard focus visible on the page's native controls. */
-.enfermedades-layout__burger:focus-visible,
 .enfermedades-page button:focus-visible {
   outline: 3px solid #0b7ad0;
   outline-offset: 4px;

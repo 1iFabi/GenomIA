@@ -3,23 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown as ChevronDownIcon,
   ChevronUp as ChevronUpIcon,
-  Menu as MenuIcon,
-  X as CloseIcon,
 } from '@animateicons/react/lucide';
-import { animatedSidebarIcons } from '../../components/Sidebar/animatedSidebarIcons';
 import { Expand as FullscreenIcon, Shrink as ExitFullscreenIcon } from 'lucide-react';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
-import { RESULT_NAV_ITEMS } from '../../config/resultNav';
-import Sidebar from '../../components/Sidebar/Sidebar';
-import SectionHeader from '../../components/SectionHeader/SectionHeader';
+import ResultsBar from '../../components/ResultsBar/ResultsBar';
 import { moduleRows, useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
 import { useSession } from '../../hooks/useSession';
 import SpinningCoin from '../../components/SpinningCoin/SpinningCoin';
 import TacticalGlobe3D from '../../components/TacticalGlobe3D/TacticalGlobe3D';
 import ContinentExplorer from '../../components/ContinentExplorer/ContinentExplorer';
+import ContinentDeck from '../../components/ContinentExplorer/ContinentDeck';
+import ContinentDeckSkeleton from '../../components/ContinentExplorer/ContinentDeckSkeleton';
 import { CONTINENT_LABELS, buildContinentShapes, groupByContinent } from '../../components/ContinentExplorer/continents';
 import './Ancestria.css';
 import { SkeletonBlock } from '../../components/DashboardSkeleton/DashboardSkeleton';
+import ModuleTitle from '../../components/ModuleTitle/ModuleTitle';
 
 // URL del mapa mundial (TopoJSON)
 const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
@@ -344,10 +342,11 @@ const getGeoCountryInfo = (geo) => {
 };
 
 // Paleta harmónica: púrpura → azules progresivos (coolors.co)
-const ANCESTRY_COLORS = { NAT: '#203590', EUR: '#230462', EAS: '#6083c5', AFR: '#96b8db' };
-const ancestryColor = (code) => ANCESTRY_COLORS[code] || '#748CAB';
+const ANCESTRY_COLORS = { NAT: '#4A1C5F', EUR: '#230462', EAS: '#7D4FB0', AFR: '#B597D4' };
+const ancestryColor = (code) => ANCESTRY_COLORS[code] || '#8E7AA3';
 // Mirrors the globe's continent-view fills so the legend always matches what is painted.
-const MAP_COLORS = { withAncestry: '#6083C5', ancestry: '#203590', continent: '#96B8DB', none: '#E6E5E0' };
+const MAP_COLORS = { withAncestry: '#9B72C9', ancestry: '#4A1C5F', continent: '#CDB5E0', none: '#DCCFE2' };
+const PHONE_MAX = 860; // the phone's own composition (globe + continent deck), in step with the dashboard
 const ancestryStateMessages = {
   loading: 'Cargando datos…',
   empty: 'No hay datos de ancestría disponibles.',
@@ -358,9 +357,8 @@ const ancestryStateMessages = {
 
 const Ancestria = () => {
   const { user } = useSession();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const results = useLatestGenomicsResults();
+  const [isPhone, setIsPhone] = useState(false);  const results = useLatestGenomicsResults();
   const globalAncestry = moduleRows(results, 'global_ancestry');
   const localAncestry = moduleRows(results, 'local_ancestry');
   const resultStatus = results.status === 'ready' && !globalAncestry.length && !localAncestry.length
@@ -420,11 +418,17 @@ const Ancestria = () => {
     setIsInsightPanelOpen(true);
     setFocusRequest({ continent: key, requestId: Date.now() });
   }, []);
-  const openCountry = useCallback((row) => {
+  const openCountry = useCallback((row, withSheet = true) => {
     setActiveContinent(continentOfCode(row.country_code));
     setSelectedCountryCode(row.country_code);
-    setIsInsightPanelOpen(true);
+    if (withSheet) setIsInsightPanelOpen(true);
     setFocusRequest({ countryCode: row.country_code, requestId: Date.now() });
+  }, []);
+  // The phone's deck turns the globe without raising the sheet over it.
+  const pickContinent = useCallback((key) => {
+    setActiveContinent(key);
+    setSelectedCountryCode(null);
+    setFocusRequest({ continent: key, requestId: Date.now() });
   }, []);
   const goToWorld = useCallback(() => {
     setActiveContinent(null);
@@ -496,15 +500,22 @@ const Ancestria = () => {
 
   useEffect(() => {
     const checkMobile = () => {
-      const mobile = window.innerWidth <= 1024;
-      setIsMobile(mobile);
-      if (!mobile) setIsMobileMenuOpen(false);
+      setIsMobile(window.innerWidth <= 1024);
+      setIsPhone(window.innerWidth <= PHONE_MAX);
     };
     
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // The phone opens on its first card, so the globe starts turned to the strongest continent.
+  const phoneStarted = useRef(false);
+  useEffect(() => {
+    if (!isPhone || phoneStarted.current || resultStatus !== 'ready' || !continents.length) return;
+    phoneStarted.current = true;
+    if (!activeContinent) pickContinent(continents[0].key);
+  }, [isPhone, resultStatus, continents, activeContinent, pickContinent]);
 
   const handleLogout = async () => {
     try {
@@ -608,47 +619,129 @@ const Ancestria = () => {
   }, [handleFullscreenToggle]);
 
 
+  const globe = (
+    <TacticalGlobe3D
+      geographyUrl={GEO_URL}
+      accessibleLabel="Globo de ancestría por país"
+      countryDataByIso={countryDataByIso}
+      getGeoCountryInfo={getGeoCountryInfo}
+      selectedCountryCode={selectedCountryCode}
+      hoveredCountryCode={hoveredCountryCode}
+      onHoverCountry={setHoveredCountryCode}
+      onSelectCountry={(_data, info) => {
+        const row = globalAncestry.find((item) => item.country_code === info.code);
+        if (row) openCountry(row, !isPhone); // the phone opens the country in its deck
+      }}
+      focusRequest={focusRequest}
+      onBackgroundClick={handleMapBackgroundClick}
+      onNoDataCountryClick={handleNoDataCountryClick}
+      continentView={continentView}
+      onGeographiesLoaded={setGeographies}
+    />
+  );
+  const legend = resultStatus === 'ready' && continents.length > 0 && (
+    <ul className="ancestria-map-legend" aria-label="Leyenda del mapa">
+      {(activeContinent
+        ? [
+          [MAP_COLORS.ancestry, 'Países con tu ancestría'],
+          [MAP_COLORS.continent, `Resto de ${CONTINENT_LABELS[activeContinent] || activeContinent}`],
+          [MAP_COLORS.none, 'Otros continentes'],
+        ]
+        : [
+          [MAP_COLORS.withAncestry, 'Continente con tu ancestría'],
+          [MAP_COLORS.none, 'Sin ancestría registrada'],
+        ]
+      ).map(([color, label]) => (
+        <li key={label}>
+          <span className="ancestria-map-legend__swatch" style={{ background: color }} />
+          {label}
+        </li>
+      ))}
+    </ul>
+  );
+  const statusBlock = resultStatus !== 'ready' && (
+    <div
+      className={`ancestria-results-status${resultStatus === 'loading' ? ' ancestria-results-status--loading' : ''}`}
+      role={['permission', 'error'].includes(resultStatus) ? 'alert' : 'status'}
+      aria-label="Estado de los resultados"
+      aria-live={['permission', 'error'].includes(resultStatus) ? 'assertive' : 'polite'}
+      aria-busy={results.loading}
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      {ancestryStateMessages[resultStatus] && (
+        <p className={resultStatus === 'loading' ? 'dashboard-skeleton__announcement' : undefined}>
+          {ancestryStateMessages[resultStatus]}
+        </p>
+      )}
+      {resultStatus === 'loading' && (
+        <div className="ancestria-loading-summary" aria-hidden="true">
+          <SkeletonBlock className="ancestria-loading-summary__heading" />
+          {[0, 1, 2].map((index) => (
+            <div className="ancestria-loading-summary__row" key={index}>
+              <SkeletonBlock className="ancestria-loading-summary__marker" />
+              <SkeletonBlock className="ancestria-loading-summary__label" />
+              <SkeletonBlock className="ancestria-loading-summary__share" />
+            </div>
+          ))}
+        </div>
+      )}
+      {!results.loading && <button type="button" aria-label="Reintentar carga de resultados" onClick={results.retry}>Reintentar</button>}
+    </div>
+  );
+
+  // The phone: the globe on the module's lilac and the continent deck under the thumb.
+  // Everything the desktop panel shows lives in the deck.
+  if (isPhone) {
+    return (
+      <main className="anc-phone">
+        <ResultsBar user={user} onLogout={handleLogout} />
+        <h1 className="anc-phone__title">Ancestría</h1>
+        <div className="anc-phone__globe">
+          {globe}
+          {!selectedRow && legend}
+          {statusBlock}
+        </div>
+        {resultStatus === 'ready' && continents.length > 0 && (
+          <ContinentDeck
+            continents={continents}
+            shapes={continentShapes}
+            groups={ancestryGroups}
+            active={activeContinent}
+            selectedRow={selectedRow}
+            selectedRank={selectedRank}
+            cohort={cohort}
+            onPick={pickContinent}
+            onOpenCountry={(row) => openCountry(row, false)}
+            onBack={() => pickContinent(continentOfCode(selectedRow.country_code))}
+            onRequestCohort={loadCohort}
+          />
+        )}
+        {resultStatus === 'loading' && <ContinentDeckSkeleton />}
+      </main>
+    );
+  }
+
   return (
     <div className={`ancestria-dashboard${isMobile && isInsightPanelOpen ? ' ancestria-dashboard--sheet-open' : ''}`}>
-      {isMobile && (
-        <button
-          className="ancestria-dashboard__burger"
-          type="button"
-          aria-label={isMobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
-          aria-expanded={isMobileMenuOpen}
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        >
-          {isMobileMenuOpen
-            ? <CloseIcon size={24} duration={0.6} aria-hidden="true" />
-            : <MenuIcon size={24} duration={0.6} aria-hidden="true" />}
-        </button>
-      )}
 
-      <aside className="ancestria-dashboard__sidebar">
-        <Sidebar
-          items={RESULT_NAV_ITEMS}
-          onLogout={handleLogout}
-          user={user}
-          isMobileMenuOpen={isMobileMenuOpen}
-          setIsMobileMenuOpen={setIsMobileMenuOpen}
-          iconOverrides={animatedSidebarIcons}
-        />
-      </aside>
 
       <main className="ancestria-dashboard__main">
+        <ResultsBar user={user} onLogout={handleLogout} />
         <div className="ancestria-page">
-          <SectionHeader
-                title={(
-                <span className="ancestria-page__editorial-title">
-                  <span className="ancestria-page__title-main">
-                    <span className="ancestria-page__title-prefix">ANCE</span><span className="ancestria-page__title-accent">STRÍA</span>
-                  </span>
-                  <span className="ancestria-page__title-separator" aria-hidden="true">|</span>
-                  <span className="ancestria-page__title-supporting">
-                    Explora tus resultados y un mapa de referencia geográfica.
-                  </span>
-                </span>
-               )} />
+          <header className="anc-hero">
+            <ModuleTitle className="anc-hero__title" moduleKey="global_ancestry" title="Tus raíces"
+              shares={resultStatus === 'ready' ? continents.map((c) => c.proportion) : undefined} />
+            <p>
+              {resultStatus === 'ready' && continents.length > 1 && (
+                <>Tu genoma tiene raíces en <b>{continents.length} continentes</b>; la mayor parte, <b>{(continents[0].proportion * 100).toFixed(1)}%</b>, en {continents[0].label}.</>
+              )}
+              {resultStatus === 'ready' && continents.length === 1 && (
+                <>Toda tu ancestría registrada está en <b>{continents[0].label}</b>.</>
+              )}
+              {!(resultStatus === 'ready' && continents.length) && 'Un mapa de dónde vinieron tus antepasados, continente por continente.'}
+            </p>
+          </header>
 
           <div className="ancestria-page__content">
             <div
@@ -660,74 +753,9 @@ const Ancestria = () => {
                 <SpinningCoin src="/cNormal.png" alt="" size="100%" speed="12s" />
               </div>
 
-              <TacticalGlobe3D
-                geographyUrl={GEO_URL}
-                accessibleLabel="Globo de ancestría por país"
-                countryDataByIso={countryDataByIso}
-                getGeoCountryInfo={getGeoCountryInfo}
-                selectedCountryCode={selectedCountryCode}
-                hoveredCountryCode={hoveredCountryCode}
-                onHoverCountry={setHoveredCountryCode}
-                onSelectCountry={(_data, info) => {
-                  const row = globalAncestry.find((item) => item.country_code === info.code);
-                  if (row) openCountry(row);
-                }}
-                focusRequest={focusRequest}
-                onBackgroundClick={handleMapBackgroundClick}
-                onNoDataCountryClick={handleNoDataCountryClick}
-                continentView={continentView}
-                onGeographiesLoaded={setGeographies}
-              />
-              {resultStatus === 'ready' && continents.length > 0 && (
-                <ul className="ancestria-map-legend" aria-label="Leyenda del mapa">
-                  {(activeContinent
-                    ? [
-                      [MAP_COLORS.ancestry, 'Países con tu ancestría'],
-                      [MAP_COLORS.continent, `Resto de ${CONTINENT_LABELS[activeContinent] || activeContinent}`],
-                      [MAP_COLORS.none, 'Otros continentes'],
-                    ]
-                    : [
-                      [MAP_COLORS.withAncestry, 'Continente con tu ancestría'],
-                      [MAP_COLORS.none, 'Sin ancestría registrada'],
-                    ]
-                  ).map(([color, label]) => (
-                    <li key={label}>
-                      <span className="ancestria-map-legend__swatch" style={{ background: color }} />
-                      {label}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {resultStatus !== 'ready' && (
-                <div
-                  className={`ancestria-results-status${resultStatus === 'loading' ? ' ancestria-results-status--loading' : ''}`}
-                  role={['permission', 'error'].includes(resultStatus) ? 'alert' : 'status'}
-                  aria-label="Estado de los resultados"
-                  aria-live={['permission', 'error'].includes(resultStatus) ? 'assertive' : 'polite'}
-                  aria-busy={results.loading}
-                  onClick={(event) => event.stopPropagation()}
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  {ancestryStateMessages[resultStatus] && (
-                    <p className={resultStatus === 'loading' ? 'dashboard-skeleton__announcement' : undefined}>
-                      {ancestryStateMessages[resultStatus]}
-                    </p>
-                  )}
-                  {resultStatus === 'loading' && (
-                    <div className="ancestria-loading-summary" aria-hidden="true">
-                      <SkeletonBlock className="ancestria-loading-summary__heading" />
-                      {[0, 1, 2].map((index) => (
-                        <div className="ancestria-loading-summary__row" key={index}>
-                          <SkeletonBlock className="ancestria-loading-summary__marker" />
-                          <SkeletonBlock className="ancestria-loading-summary__label" />
-                          <SkeletonBlock className="ancestria-loading-summary__share" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {!results.loading && <button type="button" aria-label="Reintentar carga de resultados" onClick={results.retry}>Reintentar</button>}
-                </div>
-              )}
+              {globe}
+              {legend}
+              {statusBlock}
               <button
                 ref={fullscreenToggleRef}
                 className="ancestria-fullscreen-toggle"

@@ -11,13 +11,18 @@ vi.mock('../../hooks/useLatestGenomicsResults', () => ({ useLatestGenomicsResult
 vi.mock('../../config/api', async (importOriginal) => ({
   ...await importOriginal(), apiRequest: vi.fn(), clearToken: vi.fn(),
 }));
-vi.mock('../../components/Sidebar/Sidebar', () => ({
-  default: ({ items }) => (
-    <nav aria-label="Dashboard navigation">
-      {items.map((item) => <Link key={item.href} to={item.href}>{item.label}</Link>)}
-    </nav>
-  ),
-}));
+vi.mock('../../components/ResultsBar/ResultsBar', async () => {
+  const { RESULT_MODULES, GUIDE_HREF } = await import('../../config/resultNav');
+  return {
+    default: ({ user, onLogout }) => (
+      <nav aria-label="Dashboard navigation">
+        <span>{user?.name}</span>
+        {[...RESULT_MODULES, { href: GUIDE_HREF, name: 'Guía de módulos' }].map((m) => <Link key={m.href} to={m.href}>{m.name}</Link>)}
+        <button type="button" onClick={onLogout}>Cerrar sesión</button>
+      </nav>
+    ),
+  };
+});
 
 const traits = Array.from({ length: 12 }, (_, index) => ({
   trait: `t${index}`, label: `Rasgo ${index}`, category: 'Metabolismo', result: 'Rápido',

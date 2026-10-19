@@ -1,15 +1,14 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion as Motion, useReducedMotion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Menu, X } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { PieChart } from '../../components/charts/pie-chart';
 import { PieSlice } from '../../components/charts/pie-slice';
 import { PieCenter } from '../../components/charts/pie-center';
 import { clearToken } from '../../config/api';
-import { RESULT_NAV_ITEMS } from '../../config/resultNav';
 import { moduleRows, useLatestGenomicsResults } from '../../hooks/useLatestGenomicsResults';
 import { useSession } from '../../hooks/useSession';
-import Sidebar from '../../components/Sidebar/Sidebar';
-import { animatedSidebarIcons } from '../../components/Sidebar/animatedSidebarIcons';
+import ResultsBar from '../../components/ResultsBar/ResultsBar';
 import RasgosDetail from './RasgosDetail';
 import { RasgosHeader, RasgosLoadingContent } from './RasgosLoading';
 import '../../styles/cards.css';
@@ -25,12 +24,13 @@ const resultMessages = {
 const CATEGORY_ORDER = [
   'Metabolismo', 'Rendimiento Físico y Sensorial', 'Cognición', 'Bienestar y Salud', 'Apariencia Física',
 ];
+// Rasgos' sky (config/resultNav.js): one cool family, kept apart by value and by each slice's pattern.
 const CATEGORY_COLORS = {
-  Metabolismo: '#00a896',
-  'Rendimiento Físico y Sensorial': '#f15a24',
-  Cognición: '#6c5ce7',
-  'Bienestar y Salud': '#e9b949',
-  'Apariencia Física': '#e8488a',
+  Metabolismo: '#1e3a5f',
+  'Rendimiento Físico y Sensorial': '#2f7fd0',
+  Cognición: '#d9922e',
+  'Bienestar y Salud': '#23967f',
+  'Apariencia Física': '#cf5f5a',
 };
 const CATEGORY_DESCRIPTIONS = {
   Metabolismo: 'Rasgos asociados a cómo tu cuerpo transforma alimentos y sustancias.',
@@ -55,7 +55,7 @@ const CATEGORY_PATTERNS = {
     <path d="m9 3 6 6-6 6-6-6 6-6Z" {...PATTERN_WHITE} strokeOpacity="0.22" />
   ) },
 };
-const OTHER_COLOR = '#64748b';
+const OTHER_COLOR = '#94a9c0';
 
 // PieChart moves children whose name contains "Pattern" into its <defs>.
 function CategoryPattern({ id, size, color, children }) {
@@ -67,6 +67,25 @@ function CategoryPattern({ id, size, color, children }) {
   );
 }
 CategoryPattern.displayName = 'CategoryPattern';
+
+// Opening a category goes one level in: the overview steps back (a touch smaller, fading) while the
+// category rises into the same place, both at once; going back retraces the same path. No gap,
+// no bounce, and a tap mid-way just retargets from where things are.
+const LEVEL = {
+  overview: { scale: 0.97, y: -8 },
+  detail: { y: 20 },
+};
+const levelMotion = (level, reduce) => ({
+  initial: { opacity: 0, ...(reduce ? {} : LEVEL[level]) },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', bounce: 0, duration: 0.45 } },
+  exit: {
+    opacity: 0,
+    ...(reduce ? {} : LEVEL[level]),
+    pointerEvents: 'none',
+    // the old words clear quickly so the two never read on top of each other
+    transition: { default: { type: 'spring', bounce: 0, duration: 0.3 }, opacity: { duration: 0.12, ease: 'easeOut' } },
+  },
+});
 
 const OTHER_CATEGORY = 'Otros rasgos';
 const traitCount = (count) => `${count} ${count === 1 ? 'rasgo' : 'rasgos'}`;
@@ -83,8 +102,6 @@ const groupByCategory = (traits) => {
 
 const Rasgos = () => {
   const { user } = useSession();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 1024 : false);
   const navigate = useNavigate();
   const results = useLatestGenomicsResults();
   const traits = moduleRows(results, 'traits');
@@ -93,17 +110,18 @@ const Rasgos = () => {
   const groups = useMemo(() => groupByCategory(traits), [traits]);
   const [categoryName, setCategoryName] = useState(null);
   const category = groups.find((group) => group.name === categoryName);
-
+  const reduce = useReducedMotion();
+  // The first overview after loading only fades in over the skeleton, which already holds its place.
+  const fromLoading = useRef(status === 'loading');
   useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth <= 1024;
-      setIsMobile(mobile);
-      if (mobile) setIsMobileMenuOpen(false);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    if (status === 'loading') fromLoading.current = true;
+    else if (status === 'ready') fromLoading.current = false;
+  }, [status]);
+
+  // A new category starts at its top: if the reader had scrolled down, bring the page back up to it.
+  useEffect(() => {
+    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  }, [categoryName, reduce]);
 
   const handleLogout = async () => {
     await clearToken();
@@ -113,33 +131,11 @@ const Rasgos = () => {
 
   return (
     <div className="rasgos-layout">
-      {isMobile && (
-        <button
-          type="button"
-          className="rasgos-layout__burger"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label={isMobileMenuOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
-          aria-expanded={isMobileMenuOpen}
-        >
-          {isMobileMenuOpen ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
-        </button>
-      )}
-      <aside className="rasgos-layout__sidebar">
-        <Sidebar
-          iconOverrides={animatedSidebarIcons}
-          items={RESULT_NAV_ITEMS}
-          onLogout={handleLogout}
-          user={user}
-          isMobileMenuOpen={isMobileMenuOpen}
-          setIsMobileMenuOpen={setIsMobileMenuOpen}
-        />
-      </aside>
       <main className="rasgos-layout__main">
+        <ResultsBar user={user} onLogout={handleLogout} />
         <div className="rasgos-page">
           <RasgosHeader />
-          {status === 'loading' ? (
-            <RasgosLoadingContent />
-          ) : status !== 'ready' ? (
+          {!['loading', 'ready'].includes(status) && (
             <div className={failed ? 'rasgos-page__error' : 'rasgos-report__intro'}>
               <p role={failed ? 'alert' : 'status'} aria-label="Estado de los resultados" aria-busy={false}>
                 {resultMessages[status]}
@@ -148,9 +144,20 @@ const Rasgos = () => {
                 Reintentar
               </button>
             </div>
-          ) : null}
+          )}
+          <div className="rasgos-stage">
+          <AnimatePresence initial={false}>
+          {status === 'loading' && (
+            <Motion.div key="loading" exit={{ opacity: 0, transition: { duration: 0.35, ease: 'easeOut' } }}>
+              <RasgosLoadingContent />
+            </Motion.div>
+          )}
           {status === 'ready' && !category && (
-            <section className="rasgos-overview" aria-labelledby="rasgos-overview-title">
+            <Motion.section
+              key="overview"
+              {...levelMotion('overview', reduce)}
+              {...(fromLoading.current && { initial: { opacity: 0 } })}
+              style={{ transformOrigin: '50% 0' }} className="rasgos-overview" aria-labelledby="rasgos-overview-title">
               <div className="rasgos-overview__intro">
                 <span id="rasgos-overview-title" className="rasgos-report__eyebrow">Explorar resultados</span>
                 <span className="rasgos-report__hint">Selecciona una categoría</span>
@@ -209,7 +216,7 @@ const Rasgos = () => {
                     onClick={() => setCategoryName(group.name)}
                     aria-label={`Abrir categoría ${group.name}, ${traitCount(group.traits.length)}`}
                   >
-                    <span className="rasgos-overview__legend-marker" style={{ backgroundColor: CATEGORY_COLORS[group.name] || '#64748b' }} aria-hidden="true" />
+                    <span className="rasgos-overview__legend-marker" style={{ backgroundColor: CATEGORY_COLORS[group.name] || OTHER_COLOR }} aria-hidden="true" />
                     <span className="rasgos-overview__legend-copy">
                       <span className="rasgos-overview__legend-name">{group.name}</span>
                       <span className="rasgos-overview__legend-count">{traitCount(group.traits.length)}</span>
@@ -219,9 +226,10 @@ const Rasgos = () => {
                 ))}
               </div>
               </div>
-            </section>
+            </Motion.section>
           )}
           {status === 'ready' && category && (
+            <Motion.div key="detail" {...levelMotion('detail', reduce)}>
             <RasgosDetail
               groups={groups}
               category={category}
@@ -230,7 +238,10 @@ const Rasgos = () => {
               onSelect={setCategoryName}
               onBack={() => setCategoryName(null)}
             />
+            </Motion.div>
           )}
+          </AnimatePresence>
+          </div>
         </div>
       </main>
     </div>

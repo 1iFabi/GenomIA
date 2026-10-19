@@ -12,19 +12,6 @@
   padding: 1.5rem 2.5rem;
 }
 
-.guia-burger {
-  position: fixed;
-  top: 1.5rem;
-  left: 1.5rem;
-  z-index: 1100;
-  width: 52px;
-  height: 52px;
-  border: 0;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #0b7ad0 0%, #0955a3 100%);
-  color: #ffffff;
-}
-
 .guia-header__kicker {
   font-size: 0.75rem;
   font-weight: 700;
@@ -146,7 +133,7 @@
 
 @media (max-width: 1024px) {
   .guia-layout__main {
-    padding: 5rem 1rem 1.5rem;
+    padding: 0.5rem 1rem 1.5rem;
   }
 
   .guia-card__meta div,

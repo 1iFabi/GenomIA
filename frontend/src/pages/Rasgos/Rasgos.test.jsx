@@ -12,19 +12,25 @@ import Rasgos from './Rasgos';
 vi.mock('../../hooks/useLatestGenomicsResults', async (importOriginal) => ({
   ...await importOriginal(), useLatestGenomicsResults: vi.fn(),
 }));
+// The overview/category swap waits for its exit animation; tests read the result, not the motion.
+vi.mock('motion/react', async (importOriginal) => ({
+  ...await importOriginal(), AnimatePresence: ({ children }) => children,
+}));
 vi.mock('../../config/api', async (importOriginal) => ({
   ...await importOriginal(), apiRequest: vi.fn(), clearToken: vi.fn(),
 }));
-vi.mock('../../components/Sidebar/Sidebar', () => ({
-  default: ({ items, onLogout, user, isMobileMenuOpen, setIsMobileMenuOpen }) => (
-    <nav aria-label="Dashboard navigation" data-open={isMobileMenuOpen}>
-      <span>{user?.name}</span>
-      {items.map((item) => <Link key={item.href} to={item.href}>{item.label}</Link>)}
-      <button type="button" onClick={onLogout}>Cerrar sesión</button>
-      <button type="button" onClick={() => setIsMobileMenuOpen(false)}>Cerrar navegación</button>
-    </nav>
-  ),
-}));
+vi.mock('../../components/ResultsBar/ResultsBar', async () => {
+  const { RESULT_MODULES, GUIDE_HREF } = await import('../../config/resultNav');
+  return {
+    default: ({ user, onLogout }) => (
+      <nav aria-label="Dashboard navigation">
+        <span>{user?.name}</span>
+        {[...RESULT_MODULES, { href: GUIDE_HREF, name: 'Guía de módulos' }].map((m) => <Link key={m.href} to={m.href}>{m.name}</Link>)}
+        <button type="button" onClick={onLogout}>Cerrar sesión</button>
+      </nav>
+    ),
+  };
+});
 
 const disclaimer = 'Resultados de desarrollo. Solo el riesgo monogénico usa datos reales de ClinVar; '
   + 'el resto es simulado y no tiene valor clínico.';
@@ -61,7 +67,9 @@ const getStatus = () => container.querySelector('main [role="status"], main [rol
 const getRetry = () => [...container.querySelectorAll('main button')]
   .find((button) => button.textContent === 'Reintentar');
 const expectNeutralCopy = () => {
-  const copy = container.querySelector('main');
+  // the page's own words: the bar on top carries the client's name, not result copy
+  const copy = container.querySelector('main').cloneNode(true);
+  copy.querySelector('nav[aria-label="Dashboard navigation"]')?.remove();
   const accessibleCopy = [...copy.querySelectorAll('[aria-label], [aria-description], [aria-valuetext], [title], [alt]')]
     .flatMap((node) => ['aria-label', 'aria-description', 'aria-valuetext', 'title', 'alt']
       .map((attribute) => node.getAttribute(attribute) || '')).join(' ');
@@ -76,10 +84,9 @@ const openCategory = async (name = 'Metabolismo') => {
 };
 const expectShell = () => {
   expect(container.querySelector('h1')).not.toBeNull();
-  expect(container.querySelector('h1').textContent.replace(/\s+/g, ' ').trim()).toBe('Rasgos genéticos');
-  expect(container.querySelector('h1 .rasgos-header__accent').textContent).toBe('genéticos');
+  expect(container.querySelector('h1').textContent).toBe('Lo que te hace tú');
   expect(container.querySelector('main.rasgos-layout__main')).not.toBeNull();
-  expect(container.querySelector('aside.rasgos-layout__sidebar nav')).not.toBeNull();
+  expect(container.querySelector('nav[aria-label="Dashboard navigation"]')).not.toBeNull();
   expectNeutralCopy();
 };
 
@@ -198,7 +205,7 @@ describe('traits results', () => {
 });
 
 const stateCases = [
-  ['loading', { status: 'loading', loading: true, data: null }, 'Cargando datos', 'status'],
+  ['loading', { status: 'loading', loading: true, data: null }, 'Cargando tus rasgos', 'status'],
   ['empty', { status: 'empty', data: null }, 'Aún no tienes resultados', 'status'],
   ['permission', { status: 'permission', data: null, error: { status: 403 } }, 'No tienes permiso', 'alert'],
   ['unauthenticated', { status: 'permission', data: null, error: { status: 401 } }, 'No tienes permiso', 'alert'],
@@ -219,8 +226,8 @@ describe('result states and preserved independent shell', () => {
     expect(getStatus().getAttribute('aria-busy')).toBe(String(loading));
     if (loading) {
       expect(getStatus().querySelector('.rasgos-loading__donut')).not.toBeNull();
-      expect(getStatus().querySelectorAll('.rasgos-loading__legend-item')).toHaveLength(5);
-      expect(getStatus().querySelector('.dashboard-page-skeleton__content')?.getAttribute('aria-hidden')).toBe('true');
+      expect(getStatus().querySelectorAll('.rasgos-loading__row')).toHaveLength(5);
+      expect(getStatus().querySelector('.rasgos-overview')?.getAttribute('aria-hidden')).toBe('true');
     } else {
       expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
     }
@@ -253,7 +260,7 @@ describe('result states and preserved independent shell', () => {
     await renderPage();
     expectNoValues();
     expectShell();
-    expect(getStatus().textContent).toContain('Cargando datos');
+    expect(getStatus().textContent).toContain('Cargando tus rasgos');
     state = makeState();
     state.data.modules.traits = [makeTrait('Lento')];
     await renderPage();
@@ -290,32 +297,11 @@ describe('result states and preserved independent shell', () => {
     Object.assign(state, { status, loading: status === 'loading' });
     await renderPage();
     expect([...container.querySelectorAll('nav a')].map((link) => link.getAttribute('href'))).toEqual([
-      '/dashboard/ancestria', '/dashboard/rasgos', '/dashboard/farmacogenetica',
-      '/dashboard/enfermedades', '/dashboard/modulos',
+      '/dashboard/ancestria', '/dashboard/farmacogenetica', '/dashboard/rasgos',
+      '/dashboard/enfermedades#polygenic_risk', '/dashboard/enfermedades#monogenic_risk', '/dashboard/modulos',
     ]);
     await act(async () => container.querySelector('a[href="/dashboard/ancestria"]').click());
     expect(container.querySelector('[aria-label="Current route"]').textContent).toBe('/dashboard/ancestria');
-    expectShell();
-  });
-
-  it.each(['ready', 'loading', 'permission', 'error'])('preserves the mobile menu and resize behavior in %s', async (status) => {
-    window.innerWidth = 768;
-    Object.assign(state, { status, loading: status === 'loading' });
-    await renderPage();
-    const burger = container.querySelector('button[aria-label="Abrir menú de navegación"]');
-    expect(burger.getAttribute('aria-expanded')).toBe('false');
-    expect(burger.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
-    await act(async () => burger.click());
-    expect(burger.getAttribute('aria-label')).toBe('Cerrar menú de navegación');
-    expect(burger.getAttribute('aria-expanded')).toBe('true');
-    expect(container.querySelector('nav').getAttribute('data-open')).toBe('true');
-    await act(async () => [...container.querySelectorAll('nav button')].find((button) => button.textContent === 'Cerrar navegación').click());
-    expect(burger.getAttribute('aria-expanded')).toBe('false');
-    await act(async () => burger.click());
-    await act(async () => window.dispatchEvent(new Event('resize')));
-    expect(burger.getAttribute('aria-expanded')).toBe('false');
-    await act(async () => { window.innerWidth = 1440; window.dispatchEvent(new Event('resize')); });
-    expect(container.querySelector('.rasgos-layout__burger')).toBeNull();
     expectShell();
   });
 
