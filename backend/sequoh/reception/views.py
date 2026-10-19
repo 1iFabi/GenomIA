@@ -1,5 +1,3 @@
-import re
-
 from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -7,7 +5,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from accounts.authentication import JWTAuthentication
 from accounts.csrf import CSRFDoubleSubmitMixin
-from profiles.models import Profile
+from profiles.models import Profile, normalize_rut
 from accounts.models import AppUser, Role
 from accounts.roles import is_admin, is_reception
 from participants.models import Participant
@@ -88,10 +86,6 @@ class ReceptionSearchAPIView(APIView):
         ]})
 
 
-def _normalize_rut(value):
-    return re.sub(r'[.\s]', '', str(value or '')).upper()
-
-
 class ReceptionVerifyRutAPIView(CSRFDoubleSubmitMixin, APIView):
     """Answers only whether the RUT typed from the ID card matches; the stored RUT is never returned."""
     authentication_classes = [JWTAuthentication]
@@ -101,8 +95,8 @@ class ReceptionVerifyRutAPIView(CSRFDoubleSubmitMixin, APIView):
     def post(self, request):
         if not has_reception_access(request.user):
             return Response({"error": "No tienes permisos"}, status=status.HTTP_403_FORBIDDEN)
-        user_id, rut = request.data.get('userId'), _normalize_rut(request.data.get('rut'))
-        if type(user_id) is not int or user_id <= 0 or not re.fullmatch(r'\d{7,8}-[\dK]', rut):
+        user_id, rut = request.data.get('userId'), normalize_rut(request.data.get('rut'))
+        if type(user_id) is not int or user_id <= 0 or rut is None:
             return Response({"error": "userId y un RUT con formato 12345678-K son obligatorios"},
                             status=status.HTTP_400_BAD_REQUEST)
         profile = Profile.objects.filter(
@@ -110,7 +104,7 @@ class ReceptionVerifyRutAPIView(CSRFDoubleSubmitMixin, APIView):
         ).first()
         if profile is None:
             return Response({"error": "Cliente no encontrado"}, status=status.HTTP_404_NOT_FOUND)
-        matches = bool(profile.rut) and _normalize_rut(profile.rut) == rut
+        matches = bool(profile.rut) and normalize_rut(profile.rut) == rut
         _log(request, ReceptionAccessLog.Action.VERIFY_RUT, target_user_id=user_id,
              outcome='match' if matches else 'no_match')
         return Response({"matches": matches})

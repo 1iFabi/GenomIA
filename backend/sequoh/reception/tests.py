@@ -283,7 +283,7 @@ class ReceptionVerifyRutTests(APITestCase):
         self.receptionist = User.objects.create_user(username='rut-reception')
         grant_reception_role(self.receptionist)
         self.owner = User.objects.create_user(username='rut-client')
-        Profile.objects.create(user=self.owner, rut='12345678-K')
+        Profile.objects.create(user=self.owner, rut='12345670-K')
         self.as_actor(self.receptionist)
 
     def as_actor(self, user):
@@ -297,7 +297,7 @@ class ReceptionVerifyRutTests(APITestCase):
                                 content_type='application/json', HTTP_X_CSRFTOKEN=csrf)
 
     def test_answers_only_match_or_no_match_and_audits_without_the_rut(self):
-        for rut, matches in (('12345678-K', True), ('12.345.678-k', True), ('12345678-9', False)):
+        for rut, matches in (('12345670-K', True), ('12.345.670-k', True), ('12345678-5', False)):
             with self.subTest(rut=rut):
                 response = self.verify(rut)
                 self.assertEqual(response.status_code, 200, response.data)
@@ -308,22 +308,23 @@ class ReceptionVerifyRutTests(APITestCase):
 
     def test_rejects_bad_input_unknown_clients_roles_and_csrf(self):
         self.assertEqual(self.verify('not-a-rut').status_code, 400)
-        self.assertEqual(self.verify('12345678-K', user_id=999999).status_code, 404)
+        self.assertEqual(self.verify('12345678-9').status_code, 400)  # wrong check digit
+        self.assertEqual(self.verify('12345670-K', user_id=999999).status_code, 404)
         staff = User.objects.create_user(username='rut-staff-target')
         grant_reception_role(staff)
         Profile.objects.create(user=staff, rut='11111111-1')
         self.assertEqual(self.verify('11111111-1', user_id=staff.pk).status_code, 404)
-        self.assertEqual(self.verify('12345678-K', csrf='forged').status_code, 403)
+        self.assertEqual(self.verify('12345670-K', csrf='forged').status_code, 403)
         self.as_actor(self.owner)
-        self.assertEqual(self.verify('12345678-K').status_code, 403)
+        self.assertEqual(self.verify('12345670-K').status_code, 403)
         self.assertFalse(ReceptionAccessLog.objects.exists())
 
     def test_client_without_rut_never_matches(self):
         Profile.objects.filter(user=self.owner).update(rut=None)
-        self.assertEqual(self.verify('12345678-K').data, {'matches': False})
+        self.assertEqual(self.verify('12345670-K').data, {'matches': False})
 
     def test_guessing_is_rate_limited(self):
-        statuses = [self.verify('12345678-9').status_code for _ in range(31)]
+        statuses = [self.verify('12345678-5').status_code for _ in range(31)]
         self.assertEqual(statuses[:30], [200] * 30)
         self.assertEqual(statuses[30], 429)
 
