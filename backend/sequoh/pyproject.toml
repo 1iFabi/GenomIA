@@ -7,17 +7,14 @@ dependencies = [
     "Django==5.2.6",
     "dj-database-url==3.0.1",
     "django-allauth==65.11.2",
-    "django-cors-headers==4.6.0",
     "djangorestframework==3.15.2",
     "dnspython==2.7.0",
     "google-api-python-client==2.183.0",
     "google-auth[requests]==2.40.3",
     "google-auth-oauthlib==1.2.2",
-    "gunicorn==21.2.0",
     "psycopg2-binary==2.9.10",
     "PyJWT==2.10.1",
     "python-dotenv==1.0.0",
-    "whitenoise==6.6.0",
 ]
 
 [dependency-groups]
@@ -56,8 +53,6 @@ constraint-dependencies = [
     "urllib3==2.5.0",
 ]
 
-# Regenerate the production compatibility export; do not edit it by hand:
-# uv export --locked --no-dev --no-emit-project --no-hashes --output-file requirements.txt
 # Local tooling: uv run ruff check . / uv run ruff format .
 [tool.ruff]
 target-version = "py311"

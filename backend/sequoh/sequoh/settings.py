@@ -26,54 +26,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
+# ENVIRONMENT is the only switch between local development and a deployment.
+DEBUG = os.environ.get('ENVIRONMENT', 'development') != 'production'
+
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
-    if os.environ.get('ENVIRONMENT', 'development') == 'production' or os.environ.get('RENDER') or os.environ.get('DATABASE_URL'):
-        raise ImproperlyConfigured('SECRET_KEY must be set in the environment for production deployments.')
+    if not DEBUG:
+        raise ImproperlyConfigured('SECRET_KEY must be set when ENVIRONMENT=production.')
     SECRET_KEY = secrets.token_urlsafe(50)
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('ENVIRONMENT', 'development') != 'production'
 
 # Hosts permitidos (sin cadenas vacías)
 ALLOWED_HOSTS = [h for h in [
-    os.getenv("RENDER_EXTERNAL_HOSTNAME", ""),
     os.getenv("APP_DOMAIN", ""),
     "localhost",
     "127.0.0.1",
 ] if h]
 
-# Obtener el hostname de Render dinámicamente
-RENDER_EXTERNAL_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME")
-
-# ORÍGENES DE CONFIANZA CSRF (única definición)
+# The SPA reaches the API same-origin through the Vite proxy, so no CORS is needed.
 CSRF_TRUSTED_ORIGINS = [
-    "https://pds-kappa.vercel.app",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://pds-7idd.onrender.com",
 ]
-if RENDER_EXTERNAL_HOSTNAME:
-    CSRF_TRUSTED_ORIGINS += [
-        f"https://{RENDER_EXTERNAL_HOSTNAME}",
-        f"http://{RENDER_EXTERNAL_HOSTNAME}",
-    ]
-
-# CORS (única definición)
-CORS_ALLOWED_ORIGINS = [
-    "https://pds-kappa.vercel.app",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://pds-7idd.onrender.com",
-]
-if RENDER_EXTERNAL_HOSTNAME:
-    CORS_ALLOWED_ORIGINS += [
-        f"https://{RENDER_EXTERNAL_HOSTNAME}",
-        f"http://{RENDER_EXTERNAL_HOSTNAME}",
-    ]
 
 
 # Application definition
@@ -86,7 +59,6 @@ INSTALLED_APPS = [
     'reception',
     'genoma',
     'rest_framework',
-    'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -127,9 +99,7 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -163,48 +133,34 @@ WSGI_APPLICATION = 'sequoh.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Database - PostgreSQL en producción (Render) y desarrollo (local)
+# Database - PostgreSQL only: the service projections and results use DISTINCT ON.
 import dj_database_url
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    # Usar DATABASE_URL (Render en producción o local si está definida)
     DATABASES = {
         'default': dj_database_url.config(
             default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
-            ssl_require=False,  # Render maneja SSL automáticamente
         )
     }
 else:
-    # Fallback: construir desde variables individuales o usar SQLite
-    db_engine = os.getenv('DB_ENGINE', 'sqlite')
-    
-    if db_engine == 'postgresql':
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': os.getenv('DB_NAME', 'genomia_db'),
-                'USER': os.getenv('DB_USER', 'postgres'),
-                'PASSWORD': os.getenv('DB_PASSWORD', ''),
-                'HOST': os.getenv('DB_HOST', 'localhost'),
-                'PORT': os.getenv('DB_PORT', '5432'),
-                'OPTIONS': {
-                    'connect_timeout': 10,
-                },
-                'CONN_MAX_AGE': 600,
-            }
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'genomia_db'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+            'OPTIONS': {
+                'connect_timeout': 10,
+            },
+            'CONN_MAX_AGE': 600,
         }
-    else:
-        # Fallback final: SQLite (solo si no hay ninguna configuración de PostgreSQL)
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
+    }
 
 
 # Password validation
@@ -243,9 +199,8 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Seguridad tras proxy (Render/Reverse Proxy)
+# Seguridad tras reverse proxy
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
@@ -264,11 +219,9 @@ JWT_ISSUER = os.getenv('JWT_ISSUER', 'genomia')
 JWT_AUDIENCE = os.getenv('JWT_AUDIENCE', 'genomia-app')
 JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', '8'))
 
-# Cookie de autenticación (JWT en HttpOnly).
-# En prod (cross-site, https): SameSite=None; Secure=True.
-# En dev (proxy Vite, same-origin): SameSite=Lax; Secure=False.
+# Cookie de autenticación (JWT en HttpOnly), same-origin: SameSite=Lax.
 AUTH_COOKIE_NAME = os.getenv('AUTH_COOKIE_NAME', 'access_token')
-AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'None' if not DEBUG else 'Lax')
+AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'Lax')
 AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', '0' if DEBUG else '1') not in ('0', 'False', 'false')
 
 # Seguridad de sesión y cookies
@@ -306,14 +259,8 @@ ALLOWED_EMAIL_DOMAINS = os.getenv(
     'gmail.com,googlemail.com,outlook.com,hotmail.com,live.com,yahoo.com,icloud.com,me.com,proton.me,protonmail.com,pregrado.uoh.cl,uoh.cl',
 )
 
-# Dominio del FRONTEND: detecta automáticamente el entorno
-# En Render, usa DATABASE_URL como indicador de producción
-is_production = os.environ.get('DATABASE_URL') is not None or os.environ.get('RENDER') is not None
-
-FRONTEND_DOMAIN = os.environ.get(
-    'FRONTEND_DOMAIN',
-    'https://pds-kappa.vercel.app' if is_production else 'http://localhost:5173'
-)
+# Dominio del FRONTEND (enlaces en correos)
+FRONTEND_DOMAIN = os.environ.get('FRONTEND_DOMAIN', 'http://localhost:5173')
 # URL absoluta de redirección al login del FRONTEND
 FRONTEND_LOGIN_REDIRECT = os.environ.get(
     'FRONTEND_LOGIN_URL', f"{FRONTEND_DOMAIN.rstrip('/')}/login?verified=1"
@@ -329,30 +276,8 @@ ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = False
 ACCOUNT_CONFIRM_EMAIL_ON_GET = True
 ACCOUNT_AUTHENTICATION_METHOD = 'email'
 
-
-# CORS configuration for development and production
-# Permitir todos los orígenes solo en desarrollo
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-# Habilitar envío de cookies/sesiones desde el frontend (React)
-CORS_ALLOW_CREDENTIALS = True
-
-# CORS headers
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
-
-# Cookies de sesión/CSRF. En producción con dominios distintos (Vercel/Render)
-# puede requerirse SameSite=None + Secure=True para que el navegador acepte cookies cross-site.
 SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
 
 LOGIN_URL = '/login'
 LOGIN_REDIRECT_URL = '/dashboard'
