@@ -47,3 +47,6 @@ skills-lock.json
 /frontend/vercel.json
 /backend/vercel.json
 /render.yaml
+
+# Claude Code project instructions: kept locally, not shared through the repo
+/CLAUDE.md
