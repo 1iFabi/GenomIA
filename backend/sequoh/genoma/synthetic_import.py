@@ -52,7 +52,7 @@ MODULES = (
 )
 LOCAL_ONLY = (
     'Synthetic import requires explicit local development: ENVIRONMENT=development, DEBUG=True, '
-    'no deployment signals or database routers, and a verified loopback PostgreSQL development database.'
+    'no database routers, and a verified loopback PostgreSQL development database.'
 )
 INCONSISTENT = 'Inconsistent or duplicate synthetic import; no rows were changed. Manual inspection is required.'
 
@@ -235,7 +235,6 @@ def _require_local_development():
     config = connection.settings_dict
     if (
         os.environ.get('ENVIRONMENT') != 'development' or settings.DEBUG is not True
-        or any(os.environ.get(key) for key in ('RENDER', 'RENDER_EXTERNAL_HOSTNAME'))
         or settings.DATABASE_ROUTERS or config.get('ENGINE') != 'django.db.backends.postgresql'
         or config.get('HOST') not in ('127.0.0.1', '::1', 'localhost')
         or not config.get('NAME') or config['NAME'] in ('postgres', 'template0', 'template1')

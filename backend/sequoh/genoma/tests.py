@@ -666,8 +666,7 @@ class SyntheticServiceResultReadTests(APITestCase):
 
     def setUp(self):
         environment = patch.dict(os.environ, {
-            'ENVIRONMENT': 'development', 'RENDER': '',
-            'RENDER_EXTERNAL_HOSTNAME': '', 'DATABASE_URL': '',
+            'ENVIRONMENT': 'development', 'DATABASE_URL': '',
         })
         environment.start()
         self.addCleanup(environment.stop)
@@ -1017,11 +1016,6 @@ class SyntheticServiceResultReadTests(APITestCase):
                 for path in (self.list_url, self.detail_url(), self.metrics_url()):
                     with self.assertNumQueries(0):
                         self.assert_response(self.client.get(path), 404, {'detail': 'Not found.'})
-        for key in ('RENDER', 'RENDER_EXTERNAL_HOSTNAME'):
-            with patch.dict(os.environ, {key: 'deployment-present'}):
-                for path in (self.detail_url(), self.metrics_url()):
-                    with self.assertNumQueries(0):
-                        self.assert_response(self.client.get(path), 404, {'detail': 'Not found.'})
         for config in ({'HOST': '192.0.2.1'}, {'NAME': 'postgres'},
                        {'ENGINE': 'django.db.backends.sqlite3'}, {'OPTIONS': {'host': 'override'}}):
             with self.subTest(config=config), patch.dict(connection.settings_dict, config):
@@ -1216,8 +1210,7 @@ class SyntheticGenomicsImportTests(TestCase):
 
     def setUp(self):
         environment = patch.dict(os.environ, {
-            'ENVIRONMENT': 'development', 'RENDER': '',
-            'RENDER_EXTERNAL_HOSTNAME': '', 'DATABASE_URL': '',
+            'ENVIRONMENT': 'development', 'DATABASE_URL': '',
         })
         environment.start()
         self.addCleanup(environment.stop)
@@ -1446,14 +1439,10 @@ class SyntheticGenomicsImportTests(TestCase):
                 with self.assertNumQueries(0), self.assertRaisesRegex(CommandError, 'local development'):
                     self.import_demo()
 
-    def test_requires_exact_debug_true_and_rejects_deployment_signals_before_database_access(self):
+    def test_requires_exact_debug_true_before_database_access(self):
         for debug in (False, None, 1, 'True'):
             with self.subTest(debug=debug), self.settings(DEBUG=debug), self.assertNumQueries(0):
                 with self.assertRaisesRegex(CommandError, 'local development'):
-                    self.import_demo()
-        for key in ('RENDER', 'RENDER_EXTERNAL_HOSTNAME'):
-            with self.subTest(signal=key), patch.dict(os.environ, {key: 'deployment-present'}):
-                with self.assertNumQueries(0), self.assertRaisesRegex(CommandError, 'local development'):
                     self.import_demo()
 
     def test_requires_postgresql_exact_loopback_host_and_nonmaintenance_database_without_overrides(self):
