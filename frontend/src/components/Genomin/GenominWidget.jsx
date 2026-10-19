@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, X, CornerDownLeft } from "lucide-react";
 import { useLocation } from "react-router-dom";
-import glossary from "../../constants/nalaGlossary.es.json";
-import "./NalaWidget.css";
-import { useNala } from "../../context/NalaContext";
+import glossary from "../../constants/genominGlossary.es.json";
+import "./GenominWidget.css";
+import { useGenomin } from "../../context/GenominContext";
+import GenominMascot from "./GenominMascot";
+import { pickMascotState } from "./mascotState";
+
+const SLEEP_AFTER_MS = 60000;
+const ENTRANCE_MS = 1800;
 
 const QUICK_CHIPS = [
   { label: "Alelo", query: "alelo" },
@@ -34,15 +39,48 @@ const searchEntry = (text) => {
   );
 };
 
-export default function NalaWidget() {
-  const { open, setOpen, pendingQuery, consumePendingQuery } = useNala();
+export default function GenominWidget() {
+  const { open, setOpen, pendingQuery, consumePendingQuery } = useGenomin();
   const [query, setQuery] = useState("");
   const [activeEntry, setActiveEntry] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [hover, setHover] = useState(false);
+  const [entering, setEntering] = useState(true);
+  const [sleeping, setSleeping] = useState(false);
   const location = useLocation();
 
-  const base = import.meta.env.BASE_URL || "/";
-  const nalaImg = `${base}nala.png`;
+  useEffect(() => {
+    const id = setTimeout(() => setEntering(false), ENTRANCE_MS);
+    return () => clearTimeout(id);
+  }, []);
+
+  // Se duerme tras un minuto sin actividad en la página y despierta con cualquier movimiento
+  useEffect(() => {
+    let id;
+    const wake = () => {
+      setSleeping(false);
+      clearTimeout(id);
+      id = setTimeout(() => setSleeping(true), SLEEP_AFTER_MS);
+    };
+    const events = ["pointermove", "keydown", "scroll", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, wake, { passive: true }));
+    wake();
+    return () => {
+      clearTimeout(id);
+      events.forEach((e) => window.removeEventListener(e, wake));
+    };
+  }, []);
+
+  const mascotState = pickMascotState({
+    entering,
+    open,
+    hover,
+    sleeping,
+    typing,
+    notFound,
+    found: Boolean(activeEntry),
+  });
 
   const relatedEntries = useMemo(() => {
     if (!activeEntry?.related?.length) return [];
@@ -53,6 +91,7 @@ export default function NalaWidget() {
     const entry = searchEntry(text);
     setActiveEntry(entry);
     setNotFound(!entry);
+    setTyping(false);
   };
 
   const onSubmit = (e) => {
@@ -71,10 +110,11 @@ export default function NalaWidget() {
       setQuery(entry.question);
       setActiveEntry(entry);
       setNotFound(false);
+      setTyping(false);
     }
   };
 
-  // Ejecuta consultas externas (askNala)
+  // Ejecuta consultas externas (askGenomin)
   useEffect(() => {
     if (!pendingQuery) return;
     const q = consumePendingQuery();
@@ -91,55 +131,48 @@ export default function NalaWidget() {
   }
 
   return (
-    <div className="nala-shell" aria-live="polite">
+    <div className="genomin-shell" aria-live="polite">
       {!open && (
         <button
           type="button"
-          className="nala-launcher"
+          className="genomin-launcher"
           aria-expanded={open}
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setHover(false);
+            setOpen(true);
+          }}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
         >
-          <span
-            className="nala-launcher-avatar"
-            aria-hidden
-            style={{ backgroundImage: `url(${nalaImg})` }}
-          />
-          <span>Pregúntale a Nala</span>
+          <GenominMascot state={mascotState} size={96} />
+          <span className="genomin-launcher-text">Pregúntale a Genomin</span>
         </button>
       )}
 
       {open && (
-        <div className="nala-card" role="dialog" aria-label="Pregúntale a Nala">
-          <header className="nala-header">
-            <div className="nala-title-wrap">
-              <div
-                className="nala-avatar nala-avatar-img"
-                aria-hidden
-                style={{ backgroundImage: `url(${nalaImg})` }}
-              />
-              <div>
-                <p className="nala-kicker">¡Pregúntame lo que quieras!</p>
-              </div>
-            </div>
+        <div className="genomin-card" role="dialog" aria-label="Pregúntale a Genomin">
+          <header className="genomin-header">
+            <GenominMascot state={mascotState} size={120} />
+            <h2 className="genomin-title">Pregúntale a Genomin</h2>
 
             <button
               type="button"
-              className="nala-close-btn"
-              aria-label="Cerrar Nala"
+              className="genomin-close-btn"
+              aria-label="Cerrar Genomin"
               onClick={() => setOpen(false)}
             >
-              <X size={16} aria-hidden />
+              <X size={18} aria-hidden />
             </button>
           </header>
 
-          <div className="nala-chips" aria-label="Preguntas rápidas">
-            <span className="nala-chips-label">Preguntas rápidas</span>
-            <div className="nala-chips-row">
+          <div className="genomin-chips" aria-label="Preguntas rápidas">
+            <span className="genomin-chips-label">Preguntas rápidas</span>
+            <div className="genomin-chips-row">
               {QUICK_CHIPS.map((chip) => (
                 <button
                   key={chip.query}
                   type="button"
-                  className="nala-chip"
+                  className="genomin-chip"
                   onClick={() => onChip(chip)}
                 >
                   {chip.label}
@@ -148,33 +181,32 @@ export default function NalaWidget() {
             </div>
           </div>
 
-          {/* ✅ Aquí se quitó el contenedor vacío */}
           {notFound || activeEntry ? (
-            <div className="nala-response" aria-live="polite">
+            <div className="genomin-response" aria-live="polite">
               {notFound && (
-                <div className="nala-not-found">
+                <div className="genomin-not-found">
                   No encontré eso. Prueba: alelo, rsID, SNP, genotipo.
                 </div>
               )}
 
               {activeEntry && (
-                <article className="nala-answer">
+                <article className="genomin-answer">
                   <h3>{activeEntry.question}</h3>
-                  <p className="nala-answer-main">{activeEntry.answer}</p>
+                  <p className="genomin-answer-main">{activeEntry.answer}</p>
 
                   {activeEntry.details && (
-                    <p className="nala-answer-details">{activeEntry.details}</p>
+                    <p className="genomin-answer-details">{activeEntry.details}</p>
                   )}
 
                   {activeEntry.related?.length ? (
-                    <div className="nala-related">
+                    <div className="genomin-related">
                       <span>Relacionado:</span>
-                      <div className="nala-related-row">
+                      <div className="genomin-related-row">
                         {relatedEntries.map((item) => (
                           <button
                             key={item.id}
                             type="button"
-                            className="nala-related-chip"
+                            className="genomin-related-chip"
                             onClick={() => onRelated(item.id)}
                           >
                             {item.question}
@@ -186,21 +218,22 @@ export default function NalaWidget() {
                 </article>
               )}
             </div>
-          ) : (
-            <p className="nala-hint"></p>
-          )}
+          ) : null}
 
-          <form className="nala-search nala-search-bottom" onSubmit={onSubmit}>
+          <form className="genomin-search genomin-search-bottom" onSubmit={onSubmit}>
             <Search size={16} aria-hidden />
             <input
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setTyping(e.target.value.trim() !== "");
+              }}
               placeholder="Escribe tu pregunta..."
-              aria-label="Pregunta para Nala"
+              aria-label="Pregunta para Genomin"
             />
-            <button type="submit" className="nala-enter" aria-label="Buscar">
-              <CornerDownLeft size={14} />
+            <button type="submit" className="genomin-enter" aria-label="Buscar">
+              <CornerDownLeft size={18} aria-hidden />
             </button>
           </form>
         </div>

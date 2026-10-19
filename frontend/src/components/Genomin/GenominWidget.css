@@ -1,0 +1,312 @@
+/* Genomin lives on every postlogin page, so it carries GenomIA's own lilac and ink instead of borrowing a page's. */
+.genomin-shell {
+  --g-ink: #230462;
+  --g-ground: #fdfaff;
+  --g-tint: #efe2f6;
+  --g-tint-strong: #e2cdee;
+  --g-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: none;
+  color: var(--g-ink);
+}
+
+.genomin-shell button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.genomin-shell button:focus-visible {
+  outline: 2px solid var(--g-ink);
+  outline-offset: 2px;
+}
+
+/* ---- Closed: Genomin stands in the corner and says what he does ---- */
+.genomin-launcher {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.genomin-launcher-text {
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: var(--g-ink);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: transform 0.3s var(--g-ease);
+}
+
+.genomin-launcher:hover .genomin-launcher-text {
+  transform: translateX(-4px);
+}
+
+.genomin-launcher:active .genomin-launcher-text {
+  transform: scale(0.96);
+}
+
+/* ---- Open: a light card, Genomin peeking over its top edge ---- */
+.genomin-card {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - 24px));
+  /* never taller than the screen leaves: Genomin peeks 86px over the top and keeps 12px of air above him */
+  max-height: calc(100vh - 18px - 98px);
+  max-height: calc(100dvh - 18px - 98px);
+  margin-top: 84px;
+  padding: 52px 20px 20px;
+  border-radius: 28px;
+  background: var(--g-ground);
+  box-shadow: 0 24px 60px rgba(35, 4, 98, 0.22); /* taste-skill-ignore: the card is a floating dialog */
+  animation: genomin-pop 0.45s var(--g-ease);
+  transform-origin: bottom right;
+}
+
+@keyframes genomin-pop {
+  from { transform: translateY(16px) scale(0.96); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.genomin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.genomin-header .genomin-mascot {
+  position: absolute;
+  top: -86px;
+  left: 14px;
+}
+
+.genomin-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.genomin-close-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--g-tint);
+  transition: background-color 0.2s ease, transform 0.2s var(--g-ease);
+}
+
+.genomin-close-btn:hover {
+  background: var(--g-tint-strong);
+}
+
+.genomin-close-btn:active {
+  transform: scale(0.92);
+}
+
+.genomin-chips {
+  margin-bottom: 16px;
+}
+
+.genomin-chips-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  opacity: 0.72;
+}
+
+.genomin-chips-row,
+.genomin-related-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.genomin-chip,
+.genomin-related-chip {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--g-tint);
+  font-size: 15px;
+  font-weight: 500;
+  transition: background-color 0.2s ease, transform 0.2s var(--g-ease);
+}
+
+.genomin-chip:hover,
+.genomin-related-chip:hover {
+  background: var(--g-tint-strong);
+}
+
+.genomin-chip:active,
+.genomin-related-chip:active {
+  transform: scale(0.95);
+}
+
+.genomin-card > * {
+  flex-shrink: 0;
+}
+
+/* the answer is the one part that gives way on a short screen; it scrolls inside */
+.genomin-card > .genomin-response {
+  flex-shrink: 1;
+  min-height: 72px;
+}
+
+.genomin-response {
+  max-height: 260px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--g-tint);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--g-tint-strong) transparent;
+}
+
+.genomin-response .genomin-related-chip {
+  background: var(--g-ground);
+}
+
+.genomin-not-found {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.genomin-answer h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.genomin-answer-main,
+.genomin-answer-details {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.genomin-answer-details {
+  opacity: 0.8;
+}
+
+.genomin-related > span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  opacity: 0.72;
+}
+
+.genomin-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 999px;
+  background: var(--g-tint);
+}
+
+.genomin-search > svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.genomin-search:focus-within {
+  outline: 2px solid var(--g-ink);
+  outline-offset: 2px;
+}
+
+.genomin-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 16px; /* 16px keeps iOS from zooming into the field */
+}
+
+.genomin-search input::placeholder {
+  color: inherit;
+  opacity: 0.55;
+}
+
+.genomin-shell .genomin-enter {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--g-ink);
+  color: #fff;
+  transition: transform 0.2s var(--g-ease);
+}
+
+.genomin-enter:hover {
+  transform: scale(1.06);
+}
+
+.genomin-enter:active {
+  transform: scale(0.92);
+}
+
+/* on a phone only Genomin shows; the words stay the button's name for screen readers */
+@media (max-width: 860px) {
+  .genomin-launcher-text {
+    position: absolute;
+    width: 1px;
+    height: 1px; /* taste-skill-ignore: screen-reader-only box, not a line */
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 540px) {
+  .genomin-shell {
+    right: 10px;
+    bottom: 12px;
+  }
+}
+
+@keyframes genomin-fade {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .genomin-card {
+    animation-name: genomin-fade;
+  }
+
+  .genomin-shell * {
+    transition-duration: 0.01ms !important;
+  }
+}

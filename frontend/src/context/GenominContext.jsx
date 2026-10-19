@@ -1,15 +1,15 @@
 import { useCallback, useState } from "react";
-import { NalaContext } from "./use-nala";
+import { GenominContext } from "./use-genomin";
 
-export { useNala } from "./use-nala";
+export { useGenomin } from "./use-genomin";
 
-export function NalaProvider({ children }) {
+export function GenominProvider({ children }) {
   const [open, setOpen] = useState(false);
   const [pendingQuery, setPendingQuery] = useState("");
 
-  const openNala = useCallback(() => setOpen(true), []);
+  const openGenomin = useCallback(() => setOpen(true), []);
 
-  const askNala = useCallback((queryString) => {
+  const askGenomin = useCallback((queryString) => {
     setPendingQuery(queryString || "");
     setOpen(true);
   }, []);
@@ -21,17 +21,17 @@ export function NalaProvider({ children }) {
   }, [pendingQuery]);
 
   return (
-    <NalaContext.Provider
+    <GenominContext.Provider
       value={{
         open,
         setOpen,
         pendingQuery,
         consumePendingQuery,
-        openNala,
-        askNala,
+        openGenomin,
+        askGenomin,
       }}
     >
       {children}
-    </NalaContext.Provider>
+    </GenominContext.Provider>
   );
 }
