@@ -1,0 +1,379 @@
+/* Frente al promedio: the polygenic module on its peach paper. One sheet of conditions; a row opens into two
+   equal halves, the reader's place on the bell and what that number does not measure. Tokens from resultNav. */
+.pgs {
+  --paper: #fbe5d3;
+  --sheet: #fdf3ea;
+  --ink: #7a3410;
+  --soft: #8f4f2c;
+  --rung: #e5874a;
+  --pale: #f3cfb2;
+  --field: #f8dcc5;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter', /* taste-skill-ignore: GenomIA's brand face */ system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.pgs ::selection {
+  background: color-mix(in srgb, var(--rung) 35%, transparent);
+}
+
+.pgs .rbar::before {
+  background: linear-gradient(to bottom, var(--paper) 65%, rgb(251 229 211 / 0)); /* taste-skill-ignore: the bar's scroll edge fades into the page */
+}
+
+.pgs-main-content {
+  min-width: 0;
+}
+
+.pgs .pgx {
+  container-type: inline-size;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0.5rem 1.375rem calc(3.5rem + env(safe-area-inset-bottom));
+}
+
+.pgs-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px; /* taste-skill-ignore: screen-reader-only box, not a line */
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pgs button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* ---- opening ---- */
+.pgs-title {
+  margin: 0 0 1.25rem;
+  font-size: clamp(2.5rem, 7.5cqi, 4rem);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+}
+
+.pgs-lede {
+  max-width: 52ch;
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+/* ---- the sheet: rows apart by space, the open one a step darker ---- */
+.pgs-sheet {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: clamp(2.5rem, 6cqi, 3.5rem);
+  padding: 0.5rem;
+  border-radius: 1.25rem;
+  background: var(--sheet);
+}
+
+.pgs-row {
+  border-radius: 0.875rem;
+  transition: background-color 0.24s var(--ease);
+}
+
+.pgs-row.is-open {
+  background: color-mix(in srgb, var(--paper) 45%, var(--sheet));
+}
+
+.pgs-row__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+  padding: 1.25rem 1.125rem;
+  border: 0;
+  border-radius: 0.875rem;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease), transform 0.16s var(--ease);
+}
+
+.pgs-row:not(.is-open) .pgs-row__head:hover {
+  background: color-mix(in srgb, var(--paper) 35%, var(--sheet));
+}
+
+.pgs-row__head:active {
+  transform: scale(0.995);
+}
+
+.pgs-row__name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.pgs-row__place {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.pgs-row__place b {
+  font-size: 1.25rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pgs-row__cat {
+  margin-left: 0.75rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: var(--field);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.pgs-chev {
+  color: var(--soft);
+  transition: transform 0.25s var(--ease);
+}
+
+.pgs-row.is-open .pgs-chev {
+  transform: rotate(180deg);
+}
+
+/* ---- the two halves: same width, the second on its own field so it reads as a separate surface ---- */
+.pgs-halves {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0 0.5rem 0.5rem;
+  animation: pgs-open 0.32s var(--ease) both;
+}
+
+@keyframes pgs-open {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.pgs-half {
+  padding: 1.5rem 1.5rem 1.75rem;
+  border-radius: 0.875rem;
+  background: var(--sheet);
+}
+
+.pgs-half--not {
+  background: var(--field);
+  animation: pgs-open 0.32s var(--ease) 0.07s both;
+}
+
+.pgs-half h3 {
+  margin: 0 0 1rem;
+  color: var(--soft);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.pgs-half p {
+  max-width: 46ch;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.pgs-big {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.pgs-big b {
+  font-size: clamp(3rem, 8cqi, 4rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+}
+
+.pgs-bell {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  height: auto;
+  margin: 1.25rem 0;
+  overflow: visible;
+}
+
+.pgs-bell__all {
+  fill: var(--pale);
+}
+
+.pgs-bell__below {
+  fill: color-mix(in srgb, var(--rung) 70%, var(--pale));
+}
+
+.pgs-bell__mean {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  opacity: 0.6;
+}
+
+.pgs-bell__label {
+  fill: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.pgs-bell__stem {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.pgs-bell__you {
+  fill: var(--ink);
+  stroke: var(--sheet);
+  stroke-width: 2.5;
+}
+
+.pgs-not__lead {
+  font-weight: 700;
+}
+
+.pgs-not {
+  display: grid;
+  gap: 1.125rem;
+  margin: 1.25rem 0 0;
+}
+
+.pgs-not dt {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.pgs-not dd {
+  max-width: 46ch;
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+@container (max-width: 46rem) {
+  .pgs-halves {
+    grid-template-columns: 1fr;
+  }
+
+  .pgs-row__head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem 1rem;
+    padding: 1.125rem 0.875rem;
+  }
+
+  .pgs-row__place {
+    grid-row: 2;
+    grid-column: 1;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  .pgs-row__cat {
+    margin-left: 0.5rem;
+  }
+
+  .pgs-chev {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+
+  .pgs-half {
+    padding: 1.25rem 1.125rem 1.5rem;
+  }
+}
+
+/* ---- foot ---- */
+.pgs-foot {
+  margin-top: clamp(2.5rem, 6cqi, 3.5rem);
+  color: var(--soft);
+  font-size: 0.9375rem;
+}
+
+.pgs-foot p {
+  margin: 0;
+}
+
+/* ---- status ---- */
+.pgs-status {
+  display: grid;
+  justify-items: start;
+  gap: 1.25rem;
+  margin-top: 2.5rem;
+}
+
+.pgs-status p {
+  max-width: 58ch;
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+.pgs-retry {
+  min-height: 3rem;
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform 0.16s var(--ease);
+}
+
+.pgs-retry:active {
+  transform: scale(0.97);
+}
+
+/* ---- loading: the sheet's own shape, waiting ---- */
+.pgs-skel-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7rem;
+  gap: 1rem;
+  padding: 1.375rem 1.125rem;
+}
+
+.pgs-skel-row span,
+.pgs-skel-row b {
+  display: block;
+  height: 1.25rem;
+  border-radius: 0.5rem;
+  background: var(--field);
+}
+
+.pgs-skel-row span {
+  width: min(18rem, 60%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pgs-row,
+  .pgs-row__head,
+  .pgs-chev {
+    transition: none;
+  }
+
+  .pgs-halves,
+  .pgs-half--not {
+    animation: none;
+  }
+}

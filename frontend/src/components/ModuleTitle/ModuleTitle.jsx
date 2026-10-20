@@ -54,18 +54,26 @@ const body = (key, title, shares) => {
       const cut = title.lastIndexOf(' ') + 1;
       return <>{title.slice(0, cut)}<span className="mt__avg">{title.slice(cut)}<Curve /></span></>;
     }
-    case 'monogenic_risk':
-      // words stay whole when the line wraps; the middle letter of the middle word is the one being read
+    case 'monogenic_risk': {
+      // words stay whole when the line wraps; the cells light in reading order, then the middle letter of the
+      // middle word is marked as the one being read
+      let at = 0;
+      const total = title.replaceAll(' ', '').length;
       return title.split(' ').map((word, w) => (
         <React.Fragment key={w}>
           {w > 0 && ' '}
           <span className="mt__word">
-            {[...word].map((ch, i) => (
-              <span key={i} className={w === 1 && i === Math.floor(word.length / 2) ? 'mt__cell mt__cell--on' : 'mt__cell'}>{ch}</span>
-            ))}
+            {[...word].map((ch, i) => {
+              const on = w === 1 && i === Math.floor(word.length / 2);
+              return (
+                <span key={i} className={on ? 'mt__cell mt__cell--on' : 'mt__cell'}
+                  style={{ '--i': at++, '--n': total }}>{ch}</span>
+              );
+            })}
           </span>
         </React.Fragment>
       ));
+    }
     default:
       return title;
   }

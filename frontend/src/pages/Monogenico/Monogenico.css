@@ -1,0 +1,595 @@
+/* Gen por gen: the monogenic module on its green paper. One page with the three questions a pathogenic
+   variant can answer; each question is a sheet whose rows open in place. Tokens from the module's pastel (resultNav). */
+.mono {
+  --paper: #e0f0e4;
+  --sheet: #f3f9f4;
+  --ink: #2f4f33;
+  --brand: #3a5f3e;
+  --soft: #55705a;
+  --rung: #5aa874;
+  --line: #cfe3d4;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter', /* taste-skill-ignore: GenomIA's brand face */ system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.mono ::selection {
+  background: color-mix(in srgb, var(--rung) 35%, transparent);
+}
+
+.mono .rbar::before {
+  background: linear-gradient(to bottom, var(--paper) 65%, rgb(224 240 228 / 0)); /* taste-skill-ignore: the bar's scroll edge fades into the page */
+}
+
+.mono-main-content {
+  min-width: 0;
+}
+
+.mono .pgx {
+  container-type: inline-size;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0.5rem 1.375rem calc(3.5rem + env(safe-area-inset-bottom));
+}
+
+.mono-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px; /* taste-skill-ignore: screen-reader-only box, not a line */
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mono button:focus-visible,
+.mono summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* ---- opening ---- */
+.mono-title {
+  margin: 0 0 1.125rem;
+  font-size: clamp(2.5rem, 7.5cqi, 4rem);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+}
+
+.lede {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--soft);
+  font-size: 1.125rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.lede b {
+  color: var(--ink);
+}
+
+/* ---- the three questions ---- */
+.ask {
+  margin-top: clamp(3rem, 7cqi, 4.5rem);
+}
+
+.ask h2 {
+  max-width: 18ch;
+  margin: 0;
+  font-size: clamp(1.625rem, 1.2rem + 1.2vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.ask__intro {
+  max-width: 58ch;
+  margin: 1rem 0 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.tab {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto 1fr;
+  align-items: start;
+  gap: 0.75rem 1rem;
+  min-height: 8.25rem;
+  padding: 1.375rem 1.375rem 1.25rem;
+  border: 0;
+  background: var(--line);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.24s var(--ease), color 0.24s var(--ease), transform 0.16s var(--ease);
+}
+
+.tab:hover {
+  background: var(--sheet);
+}
+
+.tab:active {
+  transform: scale(0.98);
+}
+
+.tab[aria-selected="true"] {
+  background: var(--brand);
+  color: var(--paper);
+}
+
+.tab__q {
+  font-size: clamp(1.125rem, 1rem + 0.6vw, 1.375rem);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.tab__n {
+  font-size: 2.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.tab__sub {
+  grid-column: 1 / -1;
+  align-self: end;
+  max-width: 32ch;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  opacity: 0.85;
+}
+
+.tab:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.tab:disabled:hover {
+  background: var(--line);
+}
+
+/* ---- one question's list: a sheet whose rows open in place ---- */
+.list {
+  margin-top: 1.25rem;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  background: var(--sheet);
+}
+
+.list[hidden] {
+  display: none;
+}
+
+.notmean {
+  margin: 1rem;
+  padding: 1rem 1.125rem;
+  border-radius: 0.875rem;
+  background: color-mix(in srgb, var(--rung) 16%, var(--paper));
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.notmean h3 {
+  margin: 0 0 0.35rem;
+  color: var(--soft);
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.notmean p {
+  max-width: 78ch;
+  margin: 0;
+}
+
+.row {
+  border-top: 1px solid var(--line);
+}
+
+.row:first-of-type {
+  border-top: 0;
+}
+
+.row__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  padding: 1.125rem 1rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease);
+}
+
+.row__head:hover,
+.row.is-open .row__head {
+  background: rgb(47 79 51 / 0.04);
+}
+
+.row__gene {
+  display: block;
+  font-size: 1.0625rem;
+  font-weight: 750;
+  font-style: italic;
+  line-height: 1.2;
+}
+
+.row__cond {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--soft);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.copies {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.copies i {
+  width: 1.75rem;
+  height: 0.625rem;
+  border-radius: 3px;
+  background: var(--line);
+}
+
+.copies i.is-var {
+  background: var(--rung);
+}
+
+.copies span {
+  margin-left: 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chev {
+  color: var(--soft);
+  transition: transform 0.25s var(--ease);
+}
+
+.row.is-open .chev {
+  transform: rotate(180deg);
+}
+
+.detail {
+  display: grid;
+  gap: 1.5rem;
+  padding: 0.5rem 1rem 1.5rem;
+  background: rgb(47 79 51 / 0.04);
+  animation: mono-open 0.3s var(--ease) both;
+}
+
+@keyframes mono-open {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.detail__say {
+  max-width: 56ch;
+  margin: 0;
+  font-size: 1.1875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* Three plain facts: how it is inherited, your copies, how sure the call is. */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.facts > div {
+  padding: 1rem 1.125rem 1.125rem;
+  border-radius: 0.875rem;
+  background: var(--sheet);
+}
+
+.facts dt {
+  margin-bottom: 0.5rem;
+  color: var(--soft);
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.facts dd {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.facts b {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 1.0625rem;
+  font-weight: 750;
+}
+
+.facts .detail__cert {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.detail__cert::before {
+  content: '';
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--c, var(--rung));
+}
+
+/* The technical data stays folded: it is for the specialist, not for reading. */
+.techbox summary {
+  width: fit-content;
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-color: var(--rung);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.tech {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1.25rem;
+  margin: 1rem 0 0;
+  padding: 1rem 1.125rem;
+  border-radius: 0.875rem;
+  background: var(--sheet);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.tech dt {
+  color: var(--soft);
+}
+
+.tech dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.tech a {
+  color: var(--brand);
+  text-decoration-color: var(--rung);
+  text-underline-offset: 3px;
+}
+
+@container (max-width: 46rem) {
+  .facts {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 40rem) {
+  .tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .tab {
+    min-height: 0;
+    padding: 1rem 1.1rem;
+  }
+
+  .tab__n {
+    font-size: 1.75rem;
+  }
+
+  .row__head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .copies {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .chev {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+}
+
+/* ---- no findings ---- */
+.empty {
+  display: grid;
+  gap: 1rem;
+  max-width: 52rem;
+  margin-top: 2.5rem;
+  padding: 1.75rem;
+  border-radius: 1.25rem;
+  background: var(--sheet);
+}
+
+.empty h2 {
+  margin: 0;
+  font-size: 1.625rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.empty p {
+  max-width: 58ch;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+/* ---- foot: the safety note ---- */
+.foot {
+  max-width: 62ch;
+  margin-top: clamp(2.5rem, 6cqi, 3.5rem);
+  color: var(--soft);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.foot p {
+  margin: 0 0 0.65rem;
+  text-wrap: pretty;
+}
+
+.foot b {
+  color: var(--ink);
+}
+
+/* ---- status ---- */
+.mono-status {
+  display: grid;
+  justify-items: start;
+  gap: 1.25rem;
+  margin-top: 2.5rem;
+}
+
+.mono-status p {
+  max-width: 58ch;
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+.mono-retry {
+  min-height: 3rem;
+  padding: 0 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+/* ---- loading: the page's own shape, waiting ---- */
+.mono-loading {
+  margin-top: clamp(3rem, 7cqi, 4.5rem);
+}
+
+.mono-skel,
+.mono-skel-tab i,
+.mono-skel-tab b,
+.mono-skel-tab span,
+.mono-skel-row i,
+.mono-skel-row span,
+.mono-skel-row b {
+  display: block;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--line) 70%, var(--sheet));
+}
+
+.mono-skel {
+  height: 1rem;
+}
+
+.mono-skel--lede {
+  width: min(30rem, 80%);
+}
+
+.mono-skel-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.mono-skel-tab {
+  min-height: 8.25rem;
+  padding: 1.375rem;
+  background: var(--line);
+}
+
+.mono-skel-tab i,
+.mono-skel-tab b,
+.mono-skel-tab span {
+  height: 1rem;
+  background: color-mix(in srgb, var(--paper) 55%, var(--line));
+}
+
+.mono-skel-tab b {
+  width: 2.5rem;
+  height: 2.25rem;
+  margin-top: 1.5rem;
+}
+
+.mono-skel-tab span {
+  width: 70%;
+  margin-top: 0.6rem;
+}
+
+.mono-skel-row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 6rem;
+  gap: 1rem;
+  padding: 1rem 0.875rem;
+  border-top: 1px solid var(--line);
+}
+
+.mono-skel-row:first-child {
+  border-top: 0;
+}
+
+.mono-skel-row i {
+  width: 2.5rem;
+  height: 1.25rem;
+}
+
+.mono-skel-row span {
+  width: min(22rem, 60%);
+  height: 1.25rem;
+}
+
+.mono-skel-row b {
+  height: 0.75rem;
+  align-self: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .chev {
+    transition: none;
+  }
+
+  .detail {
+    animation: none;
+  }
+}

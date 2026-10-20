@@ -33,16 +33,11 @@ const makePolygenic = (percentile = 37.4) => ({
   condition: 'diabetes_tipo_2', label: 'Diabetes tipo 2', category: 'Promedio', percentile, score: 1.2,
   risk_loci: 12, simulated: true,
 });
-const makeMonogenic = () => ({
-  variant_id: 'v-1', position: 123456, clinical_significance: 'Likely_pathogenic', gene: 'BRCA2',
-  conditions: ['Hereditary breast cancer'], zygosity: 'heterocigoto', review_status: 'criteria_provided',
-  source: 'ClinVar',
-});
 const makeState = () => ({
   status: 'ready', loading: false, error: null, retry: vi.fn(),
   data: {
     disclaimer, sample_code: 'SEED-1',
-    modules: { polygenic_risk: [makePolygenic()], monogenic_risk: [makeMonogenic()] },
+    modules: { polygenic_risk: [makePolygenic()] },
   },
 });
 
@@ -80,10 +75,11 @@ const expectNeutralCopy = () => {
     /demo|demostraci[oó]n|sint[eé]tic[oa]s?|synthetic|no[\s_-]+evaluad[oa]s?|not[\s_-]+evaluated|no cl[ií]nic[oa]s?|non[\s_-]+clinical|sin revisi[oó]n cl[ií]nica|arbitrari[oa]s?/i
   );
 };
-const expectNoValues = () => expect(container.querySelector('dd')).toBeNull();
+const expectNoValues = () => expect(container.querySelector('.pgs-row')).toBeNull();
+const placeOf = (row = 0) => getPanel('polygenic_risk').querySelectorAll('.pgs-row__place b')[row].textContent;
 const expectShell = () => {
-  expect(container.querySelector('h1').textContent).toBe('ENFERMEDADES');
-  expect(container.querySelector('main.enfermedades-layout__main')).not.toBeNull();
+  expect(container.querySelector('h1').textContent).toBe('Frente al promedio');
+  expect(container.querySelector('main.pgs-main-content')).not.toBeNull();
   expect(container.querySelector('nav[aria-label="Dashboard navigation"]')).not.toBeNull();
   expectNeutralCopy();
 };
@@ -108,16 +104,30 @@ afterEach(async () => {
 });
 
 describe('risk results', () => {
-  it('shows polygenic percentiles, ClinVar variants and the backend disclaimer', async () => {
+  it('shows polygenic percentiles without the backend disclaimer', async () => {
     await renderPage();
     expectShell();
     expect(getStatus().textContent).toBe('Datos disponibles.');
     expect(getStatus().getAttribute('role')).toBe('status');
-    expect(getPanel('polygenic_risk').querySelector('dt').textContent).toBe('Diabetes tipo 2');
-    expect(getPanel('polygenic_risk').querySelector('dd').textContent).toBe('Promedio · percentil 37');
-    expect(getPanel('monogenic_risk').querySelector('dt').textContent).toBe('BRCA2 · Likely pathogenic');
-    expect(getPanel('monogenic_risk').querySelector('dd').textContent).toBe('Hereditary breast cancer · heterocigoto');
-    expect(container.textContent).toContain(disclaimer);
+    expect(getPanel('polygenic_risk').querySelector('.pgs-row__name').textContent).toBe('Diabetes tipo 2');
+    expect(placeOf()).toBe('37');
+    expect(container.textContent).not.toContain(disclaimer);
+  });
+
+  it('opens a condition into its place and what the number does not measure', async () => {
+    state.data.modules.polygenic_risk = [makePolygenic(), { ...makePolygenic(91.2), condition: 'alzheimer', label: 'Enfermedad de Alzheimer' }];
+    await renderPage();
+    const heads = getPanel('polygenic_risk').querySelectorAll('.pgs-row__head');
+    expect([...heads].map((head) => head.getAttribute('aria-expanded'))).toEqual(['true', 'false']);
+    await act(async () => heads[1].click());
+    expect([...heads].map((head) => head.getAttribute('aria-expanded'))).toEqual(['false', 'true']);
+    const open = document.getElementById(heads[1].getAttribute('aria-controls'));
+    expect(open.querySelector('.pgs-big b').textContent).toBe('91');
+    expect(open.textContent).toContain('Lo que este número no mide');
+    expect(open.textContent).toContain('no si vas a tener enfermedad de alzheimer');
+    expect(open.textContent).toContain('Se sumaron 12 variantes');
+    await act(async () => heads[1].click());
+    expect(getPanel('polygenic_risk').querySelector('.pgs-halves')).toBeNull();
   });
 
   it('reuses the StrictMode guard profile and retains it after the result page remounts', async () => {
@@ -128,12 +138,22 @@ describe('risk results', () => {
     expect(apiRequest).toHaveBeenCalledExactlyOnceWith(API_ENDPOINTS.ME, { method: 'GET' });
   });
 
-  it.each(['polygenic_risk', 'monogenic_risk'])('opens straight on the %s section linked from its dashboard card', async (module) => {
+  it('opens straight on the polygenic section linked from its dashboard card', async () => {
     const scrolled = [];
     Element.prototype.scrollIntoView = vi.fn(function scrollIntoView() { scrolled.push(this.id); });
-    await renderPage({ entry: `/dashboard/enfermedades#${module}` });
-    expect(getPanel(module).id).toBe(module);
-    expect(scrolled).toEqual([module]);
+    await renderPage({ entry: '/dashboard/enfermedades#polygenic_risk' });
+    expect(getPanel('polygenic_risk').id).toBe('polygenic_risk');
+    expect(scrolled).toEqual(['polygenic_risk']);
+    delete Element.prototype.scrollIntoView;
+  });
+
+  it('opens the monogenic page on its own hash', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    await renderPage({ entry: '/dashboard/enfermedades#monogenic_risk' });
+    expect(container.querySelector('main.mono-main-content')).not.toBeNull();
+    expect(container.querySelector('main h1').textContent).toBe('Gen por gen');
+    expect(getPanel('polygenic_risk')).toBeNull();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
     delete Element.prototype.scrollIntoView;
   });
 
@@ -148,23 +168,6 @@ describe('risk results', () => {
     await renderPage();
     expect(useLatestGenomicsResults).toHaveBeenCalled();
     expect(apiRequest.mock.calls.map(([url]) => url)).toEqual([API_ENDPOINTS.ME]);
-  });
-
-  it('says so when no pathogenic variants were found but polygenic results exist', async () => {
-    state.data.modules.monogenic_risk = [];
-    await renderPage();
-    expect(getPanel('polygenic_risk').querySelector('dd')).not.toBeNull();
-    expect(getPanel('monogenic_risk').textContent).toContain('No se encontraron variantes patogénicas.');
-  });
-
-  it('formats combined significance and missing gene or conditions', async () => {
-    Object.assign(state.data.modules.monogenic_risk[0], {
-      clinical_significance: 'Pathogenic/Likely_pathogenic', gene: null, conditions: [],
-    });
-    await renderPage();
-    expect(getPanel('monogenic_risk').querySelector('dt').textContent)
-      .toBe('Gen no informado · Pathogenic / Likely pathogenic');
-    expect(getPanel('monogenic_risk').querySelector('dd').textContent).toBe('Condición no informada · heterocigoto');
   });
 
   it('reports missing risk modules when the service only has other results', async () => {
@@ -194,8 +197,8 @@ describe('result states and independent page shell', () => {
     expect(getStatus().getAttribute('role')).toBe(role);
     expect(getStatus().getAttribute('aria-busy')).toBe(String(state.loading));
     if (state.loading) {
-      expect(getStatus().querySelectorAll('.enfermedades-loading .card-pro')).toHaveLength(2);
-      expect(getStatus().querySelector('.dashboard-page-skeleton__content')?.getAttribute('aria-hidden')).toBe('true');
+      expect(getStatus().querySelectorAll('.pgs-skel-row')).toHaveLength(5);
+      expect(getStatus().querySelector('.pgs-sheet').getAttribute('aria-hidden')).toBe('true');
     } else {
       expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
     }
@@ -216,9 +219,8 @@ describe('result states and independent page shell', () => {
 
   it('clears old display values during retry and renders only the next normalized response', async () => {
     await renderPage();
-    const retry = state.retry;
-    retry.mockImplementation(() => { state = { ...state, status: 'loading', loading: true, data: null, service: null }; });
-    await act(async () => getRetry().click());
+    // a ready page has no retry button; the hook's retry is what moves it back to loading
+    state = { ...state, status: 'loading', loading: true, data: null, service: null };
     await renderPage();
     expectNoValues();
     expectShell();
@@ -226,7 +228,7 @@ describe('result states and independent page shell', () => {
     state = makeState();
     state.data.modules.polygenic_risk = [makePolygenic(81.6)];
     await renderPage();
-    expect(getPanel('polygenic_risk').querySelector('dd').textContent).toBe('Promedio · percentil 82');
+    expect(placeOf()).toBe('82');
     expect(apiRequest).toHaveBeenCalledTimes(1);
   });
 
@@ -249,7 +251,7 @@ describe('result states and independent page shell', () => {
   it('does not turn a failed ME response into a result failure', async () => {
     apiRequest.mockResolvedValue({ ok: false, data: null });
     await renderPage();
-    expect(getPanel('polygenic_risk').querySelector('dd').textContent).toBe('Promedio · percentil 37');
+    expect(placeOf()).toBe('37');
     expect(getStatus().textContent).toContain('disponibles');
   });
 

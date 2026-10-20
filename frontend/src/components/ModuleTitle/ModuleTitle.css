@@ -68,19 +68,21 @@
   to { stroke-dashoffset: 0; }
 }
 
-/* Riesgo poligénico: the population curve lies under "promedio", its mean marked at the word's centre. */
+/* Riesgo poligénico: the population curve rises behind "promedio", its mean dashed at the word's centre.
+   Only the last word carries it, so a wrapped title keeps the curve whole. */
 .mt__avg {
   position: relative;
   display: inline-block;
-  padding-bottom: 0.36em; /* room for the curve, so it never crosses the letters */
+  isolation: isolate;
 }
 
 .mt__curve {
   position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 0.4em;
+  z-index: -1;
+  left: -0.1em;
+  bottom: -0.12em;
+  width: calc(100% + 0.2em);
+  height: 0.9em;
   overflow: visible;
   pointer-events: none;
 }
@@ -108,7 +110,8 @@
   animation-delay: 0.9s;
 }
 
-/* Riesgo monogénico: one cell per letter, like a read; one cell is the one being looked at. */
+/* Riesgo monogénico: one cell per letter, like a read; the cells arrive in reading order and then one
+   cell turns ink, the one being looked at. */
 .mt__word {
   display: inline-flex;
   gap: 0.06em;
@@ -125,16 +128,38 @@
   border-radius: 0.16em;
   background: color-mix(in srgb, var(--mt-tint) 40%, white);
   box-shadow: inset 0 0 0 0.05em color-mix(in srgb, var(--mt-rung) 55%, white);
+  animation: mt-read 0.55s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--i, 0) * 45ms) both;
 }
 
 .mt__cell--on {
   background: var(--mt-ink);
   color: var(--mt-tint);
   box-shadow: none;
+  animation:
+    mt-read 0.55s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--i, 0) * 45ms) both,
+    mt-mark 0.5s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--n, 10) * 45ms + 0.3s) both;
+}
+
+@keyframes mt-read {
+  from {
+    opacity: 0;
+    transform: translateY(0.22em);
+  }
+}
+
+@keyframes mt-mark {
+  from {
+    background: color-mix(in srgb, var(--mt-tint) 40%, white);
+    color: var(--mt-ink);
+    box-shadow: inset 0 0 0 0.05em color-mix(in srgb, var(--mt-rung) 55%, white);
+    transform: scale(1);
+  }
+  50% { transform: scale(1.12); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mt__pill { animation: none; }
+  .mt__pill,
+  .mt__cell { animation: none; }
   .mt__ring path,
   .mt__curve path,
   .mt__curve line,
