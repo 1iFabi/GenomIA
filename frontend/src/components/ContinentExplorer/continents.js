@@ -17,19 +17,31 @@ const FRAMES = {
   Oceania: [110, -48, 180, 2],
 };
 
-// Groups ancestry rows by the geographic continent of each reference country (not by genetic group).
-export const groupByContinent = (rows, continentOf) => {
+// One row per unit (Mesoamericano 9.6%) with the countries of its region on that continent underneath
+// (México, Guatemala). A unit whose region spans two continents shows up in both with its own countries.
+export const groupByContinent = (units, continentOf, countryName) => {
   const byKey = new Map();
-  for (const row of rows) {
-    const key = row.country_code && continentOf(row.country_code);
-    if (!key) continue;
-    const entry = byKey.get(key) || { key, label: CONTINENT_LABELS[key] || key, proportion: 0, rows: [] };
-    entry.proportion += row.proportion;
-    entry.rows.push(row);
-    byKey.set(key, entry);
+  for (const unit of units) {
+    for (const code of unit.region_countries) {
+      const key = continentOf(code);
+      if (!key) continue;
+      const entry = byKey.get(key) || { key, label: CONTINENT_LABELS[key] || key, rows: new Map() };
+      const row = entry.rows.get(unit.population) || { ...unit, places: [] };
+      row.places.push({ code, name: countryName(code) });
+      entry.rows.set(unit.population, row);
+      byKey.set(key, entry);
+    }
   }
   return [...byKey.values()]
-    .map((entry) => ({ ...entry, rows: entry.rows.sort((a, b) => b.proportion - a.proportion) }))
+    .map(({ rows, ...entry }) => {
+      const list = [...rows.values()].sort((a, b) => b.proportion - a.proportion);
+      return {
+        ...entry,
+        rows: list,
+        proportion: list.reduce((sum, row) => sum + row.proportion, 0),
+        countries: new Set(list.flatMap((row) => row.places.map((place) => place.code))).size,
+      };
+    })
     .sort((a, b) => b.proportion - a.proportion);
 };
 
@@ -67,7 +79,7 @@ export const buildContinentShapes = (geographies, getInfo, continents) => {
     if (!frame) continue;
     const [west, south, east, north] = frame;
     const squeeze = Math.cos((((south + north) / 2) * Math.PI) / 180);
-    const ancestry = new Set(continent.rows.map((row) => row.country_code));
+    const ancestry = new Set(continent.rows.flatMap((row) => row.region_countries || [row.country_code]));
     const layers = { context: [], land: [], ancestry: [] };
     for (const { geography, info: country } of info) {
       if (country?.continent !== continent.key) layers.context.push(geography.geometry);

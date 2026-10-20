@@ -4,15 +4,18 @@ import { buildContinentShapes, groupByContinent } from './continents';
 const continentOf = (code) => ({ CL: 'South America', BO: 'South America', ES: 'Europe' })[code];
 
 describe('groupByContinent', () => {
-  it('sums rows by geographic continent, largest first, and skips rows without a known country', () => {
+  it('lists each unit once per continent with its countries there underneath', () => {
     const groups = groupByContinent([
-      { country_code: 'ES', proportion: 0.3 },
-      { country_code: 'BO', proportion: 0.1 },
-      { country_code: 'CL', proportion: 0.4 },
-      { proportion: 0.2 },
-    ], continentOf);
-    expect(groups.map(({ key, label, proportion, rows }) => [key, label, proportion, rows.map((row) => row.country_code)]))
-      .toEqual([['South America', 'Sudamérica', 0.5, ['CL', 'BO']], ['Europe', 'Europa', 0.3, ['ES']]]);
+      { population: 'IBS', label: 'Ibérico', region_countries: ['ES'], proportion: 0.3 },
+      { population: 'AMR_ANDES', label: 'Andino', region_countries: ['CL', 'BO', 'XX'], proportion: 0.4 },
+      { population: 'AMR_AMAZON', label: 'Amazónico', region_countries: ['BO'], proportion: 0.1 },
+    ], continentOf, (code) => `país ${code}`);
+    expect(groups.map(({ key, proportion, countries, rows }) => [
+      key, proportion, countries, rows.map((row) => `${row.population}:${row.places.map((place) => place.name)}`)]))
+      .toEqual([
+        ['South America', 0.5, 2, ['AMR_ANDES:país CL,país BO', 'AMR_AMAZON:país BO']],
+        ['Europe', 0.3, 1, ['IBS:país ES']],
+      ]);
   });
 });
 

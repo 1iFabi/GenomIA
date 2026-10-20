@@ -2,22 +2,32 @@ import React, { useRef } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ancestorEquivalent } from './ancestorEquivalent';
+import RegionMark from '../ContinentExplorer/RegionMark';
 import './AncestorHook.css';
 
 gsap.registerPlugin(useGSAP);
 
-// Where each 1000 Genomes-style reference population lives; geography only, no lineage claim.
+// Where each reported unit of the population catalog lives; geography only, no lineage claim.
 const REGIONS = {
-  MAP: 'del sur de Chile',
-  AYM: 'del altiplano andino',
-  QUE: 'de los Andes centrales',
+  AMR_ANDES: 'de los Andes',
+  AMR_AMAZON: 'de la Amazonía y las tierras bajas',
+  AMR_MESO: 'de Mesoamérica',
   IBS: 'de la península ibérica',
-  TSI: 'de la Toscana, Italia',
+  TSI: 'de Italia',
   GBR: 'de Gran Bretaña',
+  CEU: 'del noroeste de Europa',
+  FIN: 'de Finlandia',
   YRI: 'de África occidental',
+  ESN: 'de África occidental',
+  GWD: 'de África occidental',
+  MSL: 'de África occidental',
   LWK: 'de África oriental',
+  MID_MAGHREB: 'del norte de África',
+  MID_LEVANT: 'del Levante mediterráneo',
   CHB: 'del norte de China',
   JPT: 'de Japón',
+  CSA: 'de Asia central y del sur',
+  OCE: 'de Oceanía',
 };
 const TREE_LIMIT = 5; // Beyond 32 ancestors a tree is unreadable, so the deeper ones become a grid.
 const W = 176;
@@ -123,7 +133,9 @@ const AncestorHook = ({ country, group, rank, full = false }) => {
   return (
     <div ref={rootRef} className={`hook${full ? ' hook--full' : ''}`} style={{ '--anc-color': group?.color }}>
       <div className="hook__text">
-        <h3 className="hook__title">Tu lado {country.label.toLowerCase()}</h3>
+        <h3 className="hook__title">
+          {country.placeName ? `Tu raíz en ${country.placeName}` : `Tu lado ${country.label.toLowerCase()}`}
+        </h3>
         {REGIONS[country.population] && <p className="hook__region">{REGIONS[country.population]}</p>}
         <p className="hook__figure">
           <span ref={valueRef} className="hook__value">{percent(country.proportion)}</span>
@@ -134,16 +146,9 @@ const AncestorHook = ({ country, group, rank, full = false }) => {
         {equivalent.generation <= TREE_LIMIT ? <Tree {...equivalent} /> : <Grid {...equivalent} />}
       </div>
       <p className="hook__meta">
-        <img
-          className="hook__flag"
-          src={`https://flagcdn.com/w40/${country.country_code.toLowerCase()}.png`}
-          srcSet={`https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png 2x`}
-          alt=""
-          width="20"
-          height="14"
-        />
+        <RegionMark row={country} color={group?.color} className="hook__flag" width="20" height="14" />
         <span className="country-info__name">{country.country}</span>
-        <span> · {group?.label}{rank ? ` · tu origen n.º ${rank}` : ''}</span>
+        <span> · {group?.label}{rank ? ` · ${rank === 1 ? 'tu origen más grande' : `tu ${rank}.º origen más grande`}` : ''}</span>
       </p>
       {full && (
         <p className="hook__note">

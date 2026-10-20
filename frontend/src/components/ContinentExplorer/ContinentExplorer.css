@@ -200,27 +200,62 @@
   aspect-ratio: 1;
 }
 
-.cx-countries {
-  margin: 1.25rem 0 0;
+/* A unit carries the share; its countries are where it lives, each one opens the unit seen from there. */
+.cx-units {
+  display: grid;
+  gap: 1.75rem;
+  margin: 1.5rem 0 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--cx-line);
 }
 
-.cx-countries li {
-  border-bottom: 1px solid var(--cx-line);
+.cx-unit__head {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 0 0 0.35rem;
+  padding: 0 0.25rem 0.9rem;
+  color: var(--cx-ink);
+  font-size: 1.15rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.cx-unit__value {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Share of the continent this unit carries. */
+.cx-unit__bar {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0;
+  left: 0.25rem;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(var(--cx-accent), var(--cx-accent)) 0 0 / var(--share) 100% no-repeat, #e4dcef; /* taste-skill-ignore: a filled bar, not a decoration */
+}
+
+.cx-countries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .cx-country {
-  position: relative;
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto 16px;
+  grid-template-columns: 28px minmax(0, 1fr) 16px;
   align-items: center;
   gap: 0.85rem;
   width: 100%;
-  min-height: 3.75rem;
-  padding: 0.65rem 0.25rem 0.85rem;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.25rem;
   border: 0;
+  border-radius: 6px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -236,7 +271,6 @@
 .cx-country:focus-visible {
   outline: 2px solid var(--cx-ink);
   outline-offset: -2px;
-  border-radius: 6px;
 }
 
 .cx-country__flag {
@@ -244,27 +278,14 @@
   height: 20px;
   border-radius: 3px;
   object-fit: cover;
-  box-shadow: 0 0 0 1px rgba(35, 4, 98, 0.12);
+  outline: 1px solid rgba(35, 4, 98, 0.12);
+  outline-offset: -1px;
 }
 
 .cx-country__name {
-  display: grid;
   min-width: 0;
-  color: var(--cx-ink);
-  font-weight: 700;
-}
-
-.cx-country__name span {
-  color: var(--cx-muted);
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.cx-country__value {
-  color: var(--cx-ink);
-  font-size: 1.1rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 750;
+  color: var(--cx-text);
+  font-weight: 600;
 }
 
 .cx-country__go {
@@ -274,17 +295,6 @@
 
 .cx-country:hover .cx-country__go {
   transform: translateX(3px);
-}
-
-/* Share of the continent this country carries. */
-.cx-country__bar {
-  position: absolute;
-  bottom: 0.35rem;
-  left: calc(28px + 1.1rem);
-  width: calc((100% - 28px - 1.35rem) * 0.6);
-  height: 3px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--cx-accent) var(--share), #e4dcef var(--share));
 }
 
 /* World view fits its column: the cards share whatever height is left and their maps shrink, never scroll. */

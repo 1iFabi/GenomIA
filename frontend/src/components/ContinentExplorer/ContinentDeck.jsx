@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import CountryInfoPanel from '../CountryInfoPanel/CountryInfoPanel';
+import RegionMark from './RegionMark';
 import './ContinentDeck.css';
 
 const percent = (proportion) => `${(proportion * 100).toFixed(1)}%`;
@@ -46,7 +47,7 @@ const ContinentDeck = ({
   if (selectedRow) {
     const continent = continents.find((item) => item.key === active);
     return (
-      <section className="cdeck-detail" aria-label={`Detalle de ${selectedRow.country}`}>
+      <section className="cdeck-detail" aria-label={`Detalle de ${selectedRow.placeName ?? selectedRow.label}`}>
         <button type="button" className="cdeck-detail__back" onClick={onBack}>
           <ChevronLeft size={18} aria-hidden="true" />
           {continent?.label || 'Continentes'}
@@ -71,7 +72,7 @@ const ContinentDeck = ({
           <li key={continent.key} className="cdeck__card" aria-current={i === at ? 'true' : undefined}>
             <div className="cdeck__head">
               <h2 className="cdeck__name">{continent.label}</h2>
-              <span className="cdeck__count">{countries(continent.rows.length)}</span>
+              <span className="cdeck__count">{countries(continent.countries)}</span>
               {shape && (
                 <svg className="cdeck__shape" viewBox={shape.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
                   <path className="cdeck__shape-land" d={shape.land} />
@@ -85,28 +86,26 @@ const ContinentDeck = ({
             </p>
             <ul className="cdeck__rows">
               {continent.rows.map((row) => (
-                <li key={row.population}>
-                  <button
-                    type="button"
-                    style={{ '--share': `${(row.proportion / continent.proportion) * 100}%` }}
-                    aria-label={`${row.country}, población ${row.label}: ${percent(row.proportion)} de tu genoma`}
-                    onClick={() => onOpenCountry(row)}
-                  >
-                    <img
-                      className="cdeck__flag"
-                      src={`https://flagcdn.com/w40/${row.country_code.toLowerCase()}.png`}
-                      srcSet={`https://flagcdn.com/w80/${row.country_code.toLowerCase()}.png 2x`}
-                      alt=""
-                      width="24"
-                      height="17"
-                    />
-                    <span className="cdeck__country">
-                      {row.country}
-                      <span>{row.label}</span>
-                    </span>
+                <li key={row.population} className="cdeck__unit">
+                  <h3 className="cdeck__unit-head" style={{ '--share': `${(row.proportion / continent.proportion) * 100}%` }}>
+                    <span className="cdeck__unit-name">{row.label}</span>
                     <span className="cdeck__value">{percent(row.proportion)}</span>
                     <span className="cdeck__bar" aria-hidden="true" />
-                  </button>
+                  </h3>
+                  <ul className="cdeck__places" aria-label={`Países de ${row.label}`}>
+                    {row.places.map((place) => (
+                      <li key={place.code}>
+                        <button
+                          type="button"
+                          aria-label={`${place.name}: ${row.label}, ${percent(row.proportion)} de tu genoma`}
+                          onClick={() => onOpenCountry({ ...row, country_code: place.code })}
+                        >
+                          <RegionMark row={{ flag: place.code }} className="cdeck__flag" width="24" height="17" />
+                          <span className="cdeck__country">{place.name}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
             </ul>

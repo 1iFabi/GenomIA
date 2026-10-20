@@ -4,8 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import ContinentDeck from './ContinentDeck';
 
 const continents = [
-  { key: 'Europe', label: 'Europa', proportion: 0.6, rows: [{ population: 'IBS', country_code: 'ES', country: 'España', label: 'Ibérico', group: 'EUR', proportion: 0.6 }] },
-  { key: 'South America', label: 'Sudamérica', proportion: 0.4, rows: [{ population: 'MAP', country_code: 'CL', country: 'Chile', label: 'Mapuche', group: 'NAT', proportion: 0.4 }] },
+  { key: 'Europe', label: 'Europa', proportion: 0.6, countries: 1, rows: [{ population: 'IBS', places: [{ code: 'ES', name: 'España' }], label: 'Ibérico', group: 'EUR', proportion: 0.6 }] },
+  { key: 'South America', label: 'Sudamérica', proportion: 0.4, countries: 2, rows: [{ population: 'AMR_ANDES', places: [{ code: 'CL', name: 'Chile' }, { code: 'AR', name: 'Argentina' }], label: 'Andino', group: 'AMR', proportion: 0.4 }] },
 ];
 let root;
 let container;
@@ -35,5 +35,5 @@ it('swiping to a card picks its continent, and a country row opens it', async ()
   expect(onPick).toHaveBeenCalledWith('South America');
 
   await act(async () => container.querySelector('.cdeck__rows button').click());
-  expect(onOpenCountry).toHaveBeenCalledWith(continents[0].rows[0]);
+  expect(onOpenCountry).toHaveBeenCalledWith({ ...continents[0].rows[0], country_code: 'ES' });
 });

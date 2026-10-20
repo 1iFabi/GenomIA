@@ -26,14 +26,9 @@
 }
 
 .guia-header p,
-.guia-disclaimer,
 .guia-status {
   max-width: 70ch;
   color: #475569;
-}
-
-.guia-disclaimer {
-  font-size: 0.875rem;
 }
 
 .guia-grid {

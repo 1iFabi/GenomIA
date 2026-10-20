@@ -129,6 +129,7 @@ const countryInfo = {
   "364": { continent: "Asia", code: "IR", name: "Iran" },
   "368": { continent: "Asia", code: "IQ", name: "Iraq" },
   "376": { continent: "Asia", code: "IL", name: "Israel" },
+  "275": { continent: "Asia", code: "PS", name: "Palestine" },
   "392": { continent: "Asia", code: "JP", name: "Japan" },
   "400": { continent: "Asia", code: "JO", name: "Jordan" },
   "398": { continent: "Asia", code: "KZ", name: "Kazakhstan" },
@@ -196,6 +197,7 @@ const countryInfo = {
   "478": { continent: "Africa", code: "MR", name: "Mauritania" },
   "480": { continent: "Africa", code: "MU", name: "Mauritius" },
   "504": { continent: "Africa", code: "MA", name: "Morocco" },
+  "732": { continent: "Africa", code: "EH", name: "Western Sahara" },
   "508": { continent: "Africa", code: "MZ", name: "Mozambique" },
   "516": { continent: "Africa", code: "NA", name: "Namibia" },
   "562": { continent: "Africa", code: "NE", name: "Niger" },
@@ -342,8 +344,24 @@ const getGeoCountryInfo = (geo) => {
 };
 
 // Paleta harmónica: púrpura → azules progresivos (coolors.co)
-const ANCESTRY_COLORS = { NAT: '#4A1C5F', EUR: '#230462', EAS: '#7D4FB0', AFR: '#B597D4' };
+const ANCESTRY_COLORS = {
+  AMR: '#4A1C5F', EUR: '#230462', EAS: '#7D4FB0', AFR: '#B597D4', MID: '#5E2E91', CSA: '#9C7CC0', OCE: '#D3C0E6',
+};
 const ancestryColor = (code) => ANCESTRY_COLORS[code] || '#8E7AA3';
+const countryName = new Intl.DisplayNames(['es'], { type: 'region' });
+const countryList = new Intl.ListFormat('es', { type: 'conjunction' });
+// A unit can span several countries (Andino: PE, BO, EC, CL, AR); the first anchors its continent and globe focus,
+// and only a single-country unit gets a flag, so a region never reads as a nationality.
+const withRegion = (row) => {
+  const regions = row.region_countries?.length ? row.region_countries : [row.country_code].filter(Boolean);
+  return {
+    ...row,
+    region_countries: regions,
+    country_code: regions[0],
+    country: countryList.format(regions.map((code) => countryName.of(code))),
+    flag: regions.length === 1 ? regions[0] : null,
+  };
+};
 // Mirrors the globe's continent-view fills so the legend always matches what is painted.
 const MAP_COLORS = { withAncestry: '#9B72C9', ancestry: '#4A1C5F', continent: '#CDB5E0', none: '#DCCFE2' };
 const PHONE_MAX = 860; // the phone's own composition (globe + continent deck), in step with the dashboard
@@ -359,7 +377,8 @@ const Ancestria = () => {
   const { user } = useSession();
   const [isMobile, setIsMobile] = useState(false);
   const [isPhone, setIsPhone] = useState(false);  const results = useLatestGenomicsResults();
-  const globalAncestry = moduleRows(results, 'global_ancestry');
+  const ancestryRows = moduleRows(results, 'global_ancestry');
+  const globalAncestry = useMemo(() => ancestryRows.map(withRegion), [ancestryRows]);
   const localAncestry = moduleRows(results, 'local_ancestry');
   const resultStatus = results.status === 'ready' && !globalAncestry.length && !localAncestry.length
     ? 'empty' : results.status;
@@ -368,38 +387,59 @@ const Ancestria = () => {
   const [isFullscreenMotionReady, setIsFullscreenMotionReady] = useState(false);
   const [fullscreenAnnouncement, setFullscreenAnnouncement] = useState('');
   const [hoveredCountryCode, setHoveredCountryCode] = useState(null);
-  const [selectedCountryCode, setSelectedCountryCode] = useState(null);
+  // The unit opened in the panel and the country of the globe it was opened from.
+  const [selection, setSelection] = useState(null);
+  const selectedCountryCode = selection?.country ?? null;
   const [focusRequest, setFocusRequest] = useState(null);
   const [activeContinent, setActiveContinent] = useState(null);
   const [hoveredContinent, setHoveredContinent] = useState(null);
   const [geographies, setGeographies] = useState([]);
-  const countryDataByIso = useMemo(() => new Map(globalAncestry.filter((row) => row.country_code).map((row) => [
-    row.country_code, {
-      name: row.country,
-      population: row.label,
-      group: row.group_label,
-      color: ancestryColor(row.group),
-      percentage: row.proportion * 100,
-    },
-  ])), [globalAncestry]);
+  const selectedUnit = globalAncestry.find((row) => row.population === selection?.population) || null;
+  // The detail is a unit seen from the country it was opened from: "Tu raíz en México · Mesoamericano".
+  const selectedRow = useMemo(() => selectedUnit && {
+    ...selectedUnit, flag: selection.country, country_code: selection.country, country: countryName.of(selection.country),
+    placeName: countryName.of(selection.country),
+  }, [selectedUnit, selection]);
+  // Inside a detail only its country is painted. Otherwise a country can belong to several units
+  // (Nigeria: Yoruba and Esan) and the largest one answers for it.
+  const countryDataByIso = useMemo(() => {
+    const byIso = new Map();
+    if (selectedUnit) byIso.set(selection.country, [selectedUnit]);
+    for (const row of selectedUnit ? [] : globalAncestry) {
+      for (const code of row.region_countries) byIso.set(code, [...(byIso.get(code) || []), row]);
+    }
+    return new Map([...byIso].map(([code, rows]) => {
+      const top = rows.reduce((best, row) => (row.proportion > best.proportion ? row : best));
+      return [code, {
+        name: countryName.of(code),
+        population: top.label,
+        populationCode: top.population,
+        group: top.group_label,
+        color: ancestryColor(top.group),
+        percentage: top.proportion * 100,
+      }];
+    }));
+  }, [globalAncestry, selectedUnit, selection]);
   const ancestryGroups = useMemo(() => {
     const groups = new Map();
-    for (const row of globalAncestry) {
+    for (const row of ancestryRows) {
       const code = row.group || row.population;
       const group = groups.get(code) || { code, label: row.group_label || row.label, color: ancestryColor(code), proportion: 0 };
       group.proportion += row.proportion;
       groups.set(code, group);
     }
     return [...groups.values()];
-  }, [globalAncestry]);
-  const continents = useMemo(() => groupByContinent(globalAncestry, continentOfCode), [globalAncestry]);
+  }, [ancestryRows]);
+  const continents = useMemo(
+    () => groupByContinent(globalAncestry, continentOfCode, (code) => countryName.of(code)),
+    [globalAncestry],
+  );
   const continentShapes = useMemo(
     () => buildContinentShapes(geographies, getGeoCountryInfo, continents),
     [geographies, continents],
   );
-  const selectedRow = globalAncestry.find((row) => row.country_code === selectedCountryCode) || null;
-  const selectedRank = selectedRow
-    ? [...globalAncestry].sort((a, b) => b.proportion - a.proportion).indexOf(selectedRow) + 1 : null;
+  const selectedRank = selectedUnit
+    ? [...globalAncestry].sort((a, b) => b.proportion - a.proportion).indexOf(selectedUnit) + 1 : null;
   const [cohort, setCohort] = useState(null);
   // Fetched only when the comparison tab is opened, so the default view makes one results request.
   const loadCohort = useCallback(() => {
@@ -413,26 +453,26 @@ const Ancestria = () => {
   // World > continent > country: each step turns the globe toward what was chosen.
   const openContinent = useCallback((key) => {
     setActiveContinent(key);
-    setSelectedCountryCode(null);
+    setSelection(null);
     setHoveredContinent(null);
     setIsInsightPanelOpen(true);
     setFocusRequest({ continent: key, requestId: Date.now() });
   }, []);
-  const openCountry = useCallback((row, withSheet = true) => {
-    setActiveContinent(continentOfCode(row.country_code));
-    setSelectedCountryCode(row.country_code);
+  const openCountry = useCallback((row, withSheet = true, countryCode = row.country_code) => {
+    setActiveContinent(continentOfCode(countryCode));
+    setSelection({ population: row.population, country: countryCode });
     if (withSheet) setIsInsightPanelOpen(true);
-    setFocusRequest({ countryCode: row.country_code, requestId: Date.now() });
+    setFocusRequest({ countryCode, requestId: Date.now() });
   }, []);
   // The phone's deck turns the globe without raising the sheet over it.
   const pickContinent = useCallback((key) => {
     setActiveContinent(key);
-    setSelectedCountryCode(null);
+    setSelection(null);
     setFocusRequest({ continent: key, requestId: Date.now() });
   }, []);
   const goToWorld = useCallback(() => {
     setActiveContinent(null);
-    setSelectedCountryCode(null);
+    setSelection(null);
   }, []);
   const continentView = useMemo(() => ({
     active: activeContinent,
@@ -628,9 +668,9 @@ const Ancestria = () => {
       selectedCountryCode={selectedCountryCode}
       hoveredCountryCode={hoveredCountryCode}
       onHoverCountry={setHoveredCountryCode}
-      onSelectCountry={(_data, info) => {
-        const row = globalAncestry.find((item) => item.country_code === info.code);
-        if (row) openCountry(row, !isPhone); // the phone opens the country in its deck
+      onSelectCountry={(data, info) => {
+        const row = globalAncestry.find((item) => item.population === data?.populationCode);
+        if (row) openCountry(row, !isPhone, info.code); // the phone opens the country in its deck
       }}
       focusRequest={focusRequest}
       onBackgroundClick={handleMapBackgroundClick}
@@ -643,7 +683,7 @@ const Ancestria = () => {
     <ul className="ancestria-map-legend" aria-label="Leyenda del mapa">
       {(activeContinent
         ? [
-          [MAP_COLORS.ancestry, 'Países con tu ancestría'],
+          [MAP_COLORS.ancestry, 'Región donde se encuentra tu ancestría'],
           [MAP_COLORS.continent, `Resto de ${CONTINENT_LABELS[activeContinent] || activeContinent}`],
           [MAP_COLORS.none, 'Otros continentes'],
         ]

@@ -4,12 +4,14 @@ import { Flip } from 'gsap/Flip';
 import { useGSAP } from '@gsap/react';
 import { ChevronRight } from 'lucide-react';
 import CountryInfoPanel from '../CountryInfoPanel/CountryInfoPanel';
+import RegionMark from './RegionMark';
 import { SkeletonBlock } from '../DashboardSkeleton/DashboardSkeleton';
 import './ContinentExplorer.css';
 
 gsap.registerPlugin(useGSAP, Flip);
 
 const percent = (proportion) => `${(proportion * 100).toFixed(1)}%`;
+const countries = (n) => `${n} ${n === 1 ? 'país' : 'países'}`;
 const reducedMotion = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
 // Flip moves the HTML wrapper, never the svg itself, so it measures boxes instead of SVG transforms.
@@ -38,7 +40,7 @@ const ContinentExplorer = ({
   const continent = continents.find((item) => item.key === activeContinent) || null;
   const depth = selectedRow ? 2 : continent ? 1 : 0;
   const previousDepth = useRef(depth);
-  const viewKey = `${depth}:${activeContinent}:${selectedRow?.country_code}`;
+  const viewKey = `${depth}:${activeContinent}:${selectedRow?.population}`;
 
   // The continent's own silhouette travels between the list and the header (Flip), so the step reads as one motion.
   const captureShapes = () => {
@@ -108,7 +110,7 @@ const ContinentExplorer = ({
             {depth > 1 && (
               <li>
                 <ChevronRight size={14} aria-hidden="true" />
-                <span aria-current="page">{selectedRow.country}</span>
+                <span aria-current="page">{selectedRow.placeName ?? selectedRow.label}</span>
               </li>
             )}
           </ol>
@@ -127,7 +129,7 @@ const ContinentExplorer = ({
                 <button
                   type="button"
                   className="cx-card"
-                  aria-label={`${item.label}: ${percent(item.proportion)} de tu genoma, ${item.rows.length} ${item.rows.length === 1 ? 'país' : 'países'}`}
+                  aria-label={`${item.label}: ${percent(item.proportion)} de tu genoma, ${countries(item.countries)}`}
                   onClick={() => open(item.key)}
                   onPointerEnter={() => onHoverContinent(item.key)}
                   onPointerLeave={() => onHoverContinent(null)}
@@ -137,7 +139,7 @@ const ContinentExplorer = ({
                   <Shape shape={shapes[item.key]} continentKey={item.key} className="cx-card__shape" />
                   <span className="cx-card__name">{item.label}</span>
                   <span className="cx-card__value">{percent(item.proportion)}</span>
-                  <span className="cx-card__count">{item.rows.length} {item.rows.length === 1 ? 'país' : 'países'}</span>
+                  <span className="cx-card__count">{countries(item.countries)}</span>
                 </button>
               </li>
             ))}
@@ -156,36 +158,34 @@ const ContinentExplorer = ({
               </p>
             </div>
           </header>
-          <ul className="cx-countries">
+          <ul className="cx-units">
             {continent.rows.map((row) => (
-              <li key={row.population} data-cx-in>
-                <button
-                  type="button"
-                  className="cx-country"
-                  style={{ '--share': `${(row.proportion / continent.proportion) * 100}%` }}
-                  aria-label={`${row.country}, población ${row.label}: ${percent(row.proportion)} de tu genoma`}
-                  onClick={() => onOpenCountry(row)}
-                  onPointerEnter={() => onHoverCountry(row.country_code)}
-                  onPointerLeave={() => onHoverCountry(null)}
-                  onFocus={() => onHoverCountry(row.country_code)}
-                  onBlur={() => onHoverCountry(null)}
-                >
-                  <img
-                    className="cx-country__flag"
-                    src={`https://flagcdn.com/w40/${row.country_code.toLowerCase()}.png`}
-                    srcSet={`https://flagcdn.com/w80/${row.country_code.toLowerCase()}.png 2x`}
-                    alt=""
-                    width="28"
-                    height="20"
-                  />
-                  <span className="cx-country__name">
-                    {row.country}
-                    <span>{row.label}</span>
-                  </span>
-                  <span className="cx-country__value">{percent(row.proportion)}</span>
-                  <ChevronRight className="cx-country__go" size={16} aria-hidden="true" />
-                  <span className="cx-country__bar" aria-hidden="true" />
-                </button>
+              <li key={row.population} className="cx-unit" data-cx-in>
+                <h3 className="cx-unit__head" style={{ '--share': `${(row.proportion / continent.proportion) * 100}%` }}>
+                  <span className="cx-unit__name">{row.label}</span>
+                  <span className="cx-unit__value">{percent(row.proportion)}</span>
+                  <span className="cx-unit__bar" aria-hidden="true" />
+                </h3>
+                <ul className="cx-countries" aria-label={`Países de ${row.label}`}>
+                  {row.places.map((place) => (
+                    <li key={place.code}>
+                      <button
+                        type="button"
+                        className="cx-country"
+                        aria-label={`${place.name}: ${row.label}, ${percent(row.proportion)} de tu genoma`}
+                        onClick={() => onOpenCountry({ ...row, country_code: place.code })}
+                        onPointerEnter={() => onHoverCountry(place.code)}
+                        onPointerLeave={() => onHoverCountry(null)}
+                        onFocus={() => onHoverCountry(place.code)}
+                        onBlur={() => onHoverCountry(null)}
+                      >
+                        <RegionMark row={{ flag: place.code }} className="cx-country__flag" width="28" height="20" />
+                        <span className="cx-country__name">{place.name}</span>
+                        <ChevronRight className="cx-country__go" size={16} aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>

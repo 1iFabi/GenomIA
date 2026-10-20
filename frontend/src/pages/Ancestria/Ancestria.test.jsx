@@ -154,12 +154,15 @@ const createResults = () => ({
   service_request_id: 'latest', sample_code: 'SEED-1', disclaimer,
   modules: {
     global_ancestry: [
-      { population: 'IBS', label: 'Ibérico', group: 'EUR', group_label: 'Europeo', country_code: 'ES', country: 'España', proportion: 0.6 },
-      { population: 'MAP', label: 'Mapuche', group: 'NAT', group_label: 'Amerindio', country_code: 'CL', country: 'Chile', proportion: 0.4 },
+      { population: 'IBS', label: 'Ibérico', group: 'EUR', group_label: 'Europeo', level: 'reference', region_countries: ['ES'], proportion: 0.6 },
+      {
+        population: 'AMR_ANDES', label: 'Andino', group: 'AMR', group_label: 'Nativo americano', level: 'cluster',
+        region_countries: ['CL', 'AR'], measured_against: ['Quechua'], note: 'Sin referencia del sur de Chile.', proportion: 0.4,
+      },
     ],
     local_ancestry: [
       { haplotype: 0, contig: '1', start: 1, end: 60_000_000, population: 'EUR', label: 'Europeo', confidence: 0.9 },
-      { haplotype: 1, contig: '1', start: 1, end: 40_000_000, population: 'NAT', label: 'Amerindio', confidence: 0.92 },
+      { haplotype: 1, contig: '1', start: 1, end: 40_000_000, population: 'AMR', label: 'Nativo americano', confidence: 0.92 },
     ],
   },
 });
@@ -470,7 +473,7 @@ describe('Ancestria insight rail', () => {
     expect(container.querySelector('#ancestria-global-title').textContent).toBe('Tus orígenes');
     // Rows group by the reference country's geographic continent, largest first.
     expect([...getGlobalSection().querySelectorAll('.cx-card')].map((card) => card.getAttribute('aria-label')))
-      .toEqual(['Europa: 60.0% de tu genoma, 1 país', 'Sudamérica: 40.0% de tu genoma, 1 país']);
+      .toEqual(['Europa: 60.0% de tu genoma, 1 país', 'Sudamérica: 40.0% de tu genoma, 2 países']);
     // The panel carries only global ancestry: no local section and no development note.
     expect(getLocalSection()).toBeNull();
     expect(container.textContent).not.toContain(disclaimer);
@@ -541,7 +544,7 @@ describe('Ancestria insight rail', () => {
 
     await act(async () => container.querySelector('[data-geography-id="152"]')
       .dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    expect(legend()).toEqual(['Países con tu ancestría', 'Resto de Sudamérica', 'Otros continentes']);
+    expect(legend()).toEqual(['Región donde se encuentra tu ancestría', 'Resto de Sudamérica', 'Otros continentes']);
     expect(container.querySelector('.ancestria-map-legend').getAttribute('aria-label')).toBe('Leyenda del mapa');
   });
 
@@ -643,12 +646,64 @@ describe('Ancestria insight rail', () => {
     expect(container.querySelector('[data-geography-id="724"]').getAttribute('aria-label'))
       .toBe('Europa, ver tu ancestría en este continente');
     expect([...container.querySelectorAll('[data-globe-pin]')].map((pin) => pin.getAttribute('data-globe-pin')))
-      .toEqual(['CL']);
+      .toEqual(['CL', 'AR']);
 
     await act(async () => chile().dispatchEvent(new MouseEvent('click', { bubbles: true })));
     expect(chile().getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('.country-info__name').textContent).toBe('Chile');
     expect(document.body.querySelector('.country-insight-popover')).toBeNull();
+  });
+
+  it('paints a trace under 1% like any other root and lists it in the panel', async () => {
+    const results = createResults();
+    results.modules.global_ancestry = [
+      results.modules.global_ancestry[0],
+      { ...results.modules.global_ancestry[1], region_countries: ['CL'], proportion: 0.395 },
+      { population: 'AMR_AMAZON', label: 'Amazónico', group: 'AMR', group_label: 'Nativo americano', level: 'cluster',
+        region_countries: ['AR'], proportion: 0.005 },
+    ];
+    mockApi({ results });
+    window.innerWidth = 1280;
+    await renderPage();
+    const chile = () => container.querySelector('[data-geography-id="152"]');
+    await act(async () => chile().dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(chile().getAttribute('fill')).toBe('#4A1C5F');
+    const argentina = container.querySelector('[data-geography-id="032"]');
+    expect(argentina.getAttribute('fill')).not.toBe('#CDB5E0');
+    expect(argentina.getAttribute('role')).toBe('button');
+    expect([...container.querySelectorAll('.cx-country')].map((row) => row.getAttribute('aria-label')))
+      .toEqual(['Chile: Andino, 39.5% de tu genoma', 'Argentina: Amazónico, 0.5% de tu genoma']);
+  });
+
+  it('lets a shared country open its largest unit and paints only that unit inside its detail', async () => {
+    const results = createResults();
+    results.modules.global_ancestry = [
+      results.modules.global_ancestry[0],
+      { ...results.modules.global_ancestry[1], proportion: 0.3 },
+      { population: 'AMR_AMAZON', label: 'Amazónico', group: 'AMR', group_label: 'Nativo americano', level: 'cluster',
+        region_countries: ['AR', 'PE'], proportion: 0.1 },
+    ];
+    mockApi({ results });
+    window.innerWidth = 1280;
+    await renderPage();
+    const country = (id) => container.querySelector(`[data-geography-id="${id}"]`);
+    await act(async () => country('032').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(['152', '032', '604'].map((id) => country(id).getAttribute('fill'))).toEqual(['#4A1C5F', '#4A1C5F', '#4A1C5F']);
+    await act(async () => country('032').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(country('032').getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-globe-label="AR"]').textContent).toContain('Argentina · 30.0%');
+    // Inside Argentina's detail only Argentina is painted; back at the continent the others return.
+    expect(['152', '604'].map((id) => country(id).getAttribute('fill'))).toEqual(['#CDB5E0', '#CDB5E0']);
+    expect([...container.querySelectorAll('.cx-crumbs li')].map((item) => item.textContent))
+      .toEqual(['Mundo', 'Sudamérica', 'Argentina']);
+    const info = container.querySelector('.country-info').textContent;
+    expect(info).toContain('se parece al grupo Andino');
+    expect(info).toContain('Medido contra Quechua.');
+    expect(info).toContain('Sin referencia del sur de Chile.');
+    expect(container.querySelector('.cx-country__flag')).toBeNull();
+    await act(async () => [...container.querySelectorAll('.cx-crumbs button')]
+      .find((button) => button.textContent === 'Sudamérica').click());
+    expect(country('604').getAttribute('fill')).toBe('#4A1C5F');
   });
 
   it('steps back to the world view on a click outside the open continent or country', async () => {
@@ -690,7 +745,7 @@ describe('Ancestria insight rail', () => {
     await act(async () => southAmerica.click());
     const countries = [...container.querySelectorAll('.cx-country')];
     expect(countries.map((row) => row.getAttribute('aria-label')))
-      .toEqual(['Chile, población Mapuche: 40.0% de tu genoma']);
+      .toEqual(['Chile: Andino, 40.0% de tu genoma', 'Argentina: Andino, 40.0% de tu genoma']);
     expect(container.querySelector('.cx-lede').textContent).toContain('40.0%');
 
     await act(async () => countries[0].click());
@@ -719,8 +774,8 @@ describe('Ancestria insight rail', () => {
     await clickChile();
     if (!container.querySelector('.cdeck-detail')) await clickChile(); // the first tap may only open its continent
     const panel = container.querySelector('.cdeck-detail');
-    expect(panel.querySelector('.hook__title').textContent).toBe('Tu lado mapuche');
-    expect(panel.querySelector('.hook__region').textContent).toBe('del sur de Chile');
+    expect(panel.querySelector('.hook__title').textContent).toBe('Tu raíz en Chile');
+    expect(panel.querySelector('.hook__region').textContent).toBe('de los Andes');
     expect(panel.querySelector('.hook__equiv').textContent).toBe('≈ 1½ de tus 4 abuelos');
     expect(panel.querySelectorAll('.hook-dot--lit, .hook-dot--half')).toHaveLength(2);
     expect(panel.querySelector('.country-info__lead').textContent).toContain('40.0%');

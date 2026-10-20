@@ -7,19 +7,11 @@ import './CountryInfoPanel.css';
 
 gsap.registerPlugin(useGSAP);
 
-// Reference panels come from 1000 Genomes-style populations; texts describe the population, not a nationality.
+// Units of the population catalog (genomia-ancestry); texts describe the population, not a nationality.
 const POPULATION_NOTES = {
-  MAP: {
-    summary: 'Los mapuche son el pueblo originario más numeroso de Chile: en el censo de 2017, cerca de 1,7 millones de personas se identificaron como mapuche.',
-    curiosity: 'Mapudungun significa «la lengua de la tierra». Muchos lugares de Chile llevan nombres en mapudungun, como Temuco o Curicó.',
-  },
-  AYM: {
-    summary: 'El pueblo aymara habita desde hace siglos el altiplano andino, alrededor del lago Titicaca, entre Bolivia, Perú y Chile.',
+  AMR_ANDES: {
+    summary: 'Los pueblos andinos, como quechuas y aymaras, habitan desde hace milenios la cordillera de los Andes, entre Perú, Bolivia, Ecuador, el norte de Chile y Argentina.',
     curiosity: 'Las poblaciones andinas de altura tienen adaptaciones genéticas que les ayudan a vivir con menos oxígeno disponible.',
-  },
-  QUE: {
-    summary: 'El quechua fue la lengua administrativa del Imperio inca y hoy lo hablan millones de personas en los Andes.',
-    curiosity: 'La papa fue domesticada en los Andes del sur de Perú hace entre 7.000 y 10.000 años.',
   },
   IBS: {
     summary: 'Muestra de referencia de la península ibérica. Por la colonización española, es la referencia europea más cercana a la mayoría de los genomas chilenos.',
@@ -75,7 +67,7 @@ const Comparison = ({ country, cohort }) => {
   return (
     <>
       <p className="country-info__lead">
-        Tu parecido con la población {country.label} es mayor que el de{' '}
+        Tu parecido con {country.level === 'reference' ? 'la población' : 'el grupo'} {country.label} es mayor que el de{' '}
         <strong>{Math.round(stats.percentile)} de cada 100</strong> personas secuenciadas en GenomIA.
       </p>
       <dl className="country-info__figures">
@@ -96,7 +88,7 @@ const CountryInfoPanel = ({ country, group, rank, cohort, onRequestCohort, onBac
   const indicatorRef = useRef(null);
   const tabRefs = useRef({});
   const note = POPULATION_NOTES[country.population];
-  const groupShare = group?.proportion ? country.proportion / group.proportion : 0;
+  const reference = country.level === 'reference' ? `a la población ${country.label}` : `al grupo ${country.label}`;
 
   useGSAP(() => {
     if (prefersReducedMotion()) return;
@@ -176,10 +168,13 @@ const CountryInfoPanel = ({ country, group, rank, cohort, onRequestCohort, onBac
         {activeTab === 'resumen' && (
           <>
             <p className="country-info__lead">
-              <strong>{percent(country.proportion)}</strong> de tu genoma se parece a la población {country.label},
-              el {Math.round(groupShare * 100)}% de tu componente {group?.label.toLowerCase()}.
+              <strong>{percent(country.proportion)}</strong> de tu genoma se parece {reference}.
             </p>
             {note && <p>{note.summary}</p>}
+            {country.measured_against?.length > 0 && (
+              <p>Medido contra {country.measured_against.join(', ')}.</p>
+            )}
+            {country.note && <p className="country-info__note">{country.note}</p>}
             <p className="country-info__footnote">
               Es una estimación de parecido genético con una población de referencia, no de nacionalidad.
             </p>

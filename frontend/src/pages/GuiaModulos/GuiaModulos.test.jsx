@@ -33,7 +33,7 @@ const readyState = () => ({
   data: {
     disclaimer: 'Resultados de desarrollo.',
     modules: {
-      global_ancestry: [{ population: 'MAP', label: 'Mapuche', country: 'Chile', country_code: 'CL', group_label: 'Amerindio', proportion: 0.3 }],
+      global_ancestry: [{ population: 'AMR_ANDES', label: 'Andino', group_label: 'Nativo americano', region_countries: ['PE', 'BO'], measured_against: ['Quechua'], proportion: 0.3 }],
       pharmacogenetics: [{ gene: 'CYP2D6', diplotype: '*1/*4', phenotype: 'Metabolizador intermedio', drugs: ['Codeína', 'Tramadol'] }],
       traits,
     },
@@ -76,15 +76,15 @@ describe('GuiaModulos', () => {
     ]);
     const ancestry = card('global_ancestry');
     expect([...ancestry.querySelectorAll('th')].map((th) => th.textContent))
-      .toEqual(['label', 'country', 'country_code', 'group_label', 'proportion']);
+      .toEqual(['label', 'group_label', 'region_countries', 'measured_against', 'proportion']);
     expect([...ancestry.querySelectorAll('td')].map((td) => td.textContent))
-      .toEqual(['Mapuche', 'Chile', 'CL', 'Amerindio', '0.3000']);
+      .toEqual(['Andino', 'Nativo americano', 'PE, BO', 'Quechua', '0.3000']);
     expect(card('pharmacogenetics').querySelector('tbody').textContent).toContain('Codeína, Tramadol');
     expect(card('local_ancestry').textContent).toContain('no tiene filas para este módulo');
     expect(card('traits').querySelectorAll('tbody tr')).toHaveLength(10);
     expect(card('traits').textContent).toContain('… y 2 filas más.');
     expect(card('traits').querySelector('a').getAttribute('href')).toBe('/dashboard/rasgos');
-    expect(container.textContent).toContain('Resultados de desarrollo.');
+    expect(container.textContent).not.toContain('Resultados de desarrollo.');
   });
 
   it('keeps reference text visible while only the personal module data is loading', async () => {

@@ -13,15 +13,15 @@ const MAX_ROWS = 10;
 const MODULE_GUIDE = [
   {
     key: 'global_ancestry', title: 'Ancestría global', page: '/dashboard/ancestria', pageLabel: 'Ancestría',
-    what: 'Qué proporción de tu genoma proviene de cada población de referencia. Cada población está asociada '
-      + 'a un país y pertenece a una región continental.',
-    source: 'Simulado. Se calcula sumando los segmentos de ancestría local.',
-    shownAs: 'Mapa con los países coloreados según su % y lista agrupada por región.',
+    what: 'Qué proporción de tu genoma se parece a cada población o grupo de referencia del catálogo '
+      + '(solo paneles abiertos). Cada uno pertenece a un grupo continental y cubre una región de uno o más países.',
+    source: 'Simulado. Se calcula sumando los segmentos de ancestría local; el catálogo viene de genomia-ancestry.',
+    shownAs: 'Mapa con la región de cada resultado coloreada y lista agrupada por continente.',
     fields: [
-      ['label', 'Población de referencia (ej. Mapuche, Ibérico).'],
-      ['country', 'País asociado a la población; se usa para marcar el mapa.'],
-      ['country_code', 'Código ISO del país (CL, ES…).'],
-      ['group_label', 'Región continental (Amerindio, Europeo, Africano, Asiático).'],
+      ['label', 'Población o grupo de referencia (ej. Andino, Ibérico).'],
+      ['group_label', 'Grupo continental (Nativo americano, Europeo, Africano…).'],
+      ['region_countries', 'Códigos ISO de los países donde se encuentra esa ancestría; se pintan en el mapa.'],
+      ['measured_against', 'Poblaciones de referencia con que se mide un grupo (ej. Quechua).'],
       ['proportion', 'Fracción del genoma, de 0 a 1 (0,30 = 30%).'],
     ],
   },
@@ -214,7 +214,6 @@ const GuiaModulos = () => {
             {statusMessages[results.status]}
           </p>
         )}
-        {results.data?.disclaimer && <p className="guia-disclaimer">{results.data.disclaimer}</p>}
         <div className="guia-grid">
           {MODULE_GUIDE.map((module) => (
             <ModuleCard key={module.key} module={module} data={results.data} ready={ready} loading={results.status === 'loading'} />
