@@ -144,8 +144,14 @@ describe('traits results', () => {
     expect(container.querySelector('.rasgos-bars figcaption').textContent)
       .toBe('Cómo se reparte Metabolismo de la cafeína en las personas');
     expect(container.querySelector('.rasgos-trait__explanation').textContent).toBe('Eliminas la cafeína rápido.');
-    expect(container.querySelector('.rasgos-trait__about').textContent).toBe('Qué hace CYP1A2CYP1A2 elimina la cafeína.');
-    expect(container.querySelector('.rasgos-trait__gene').textContent).toBe('Gen CYP1A2 · rs762551');
+    expect(container.querySelector('.rasgos-trait__about')).toBeNull();
+    expect(container.querySelector('.rasgos-trait__gene').textContent).toContain('Gen CYP1A2');
+    expect(container.querySelector('.rasgos-trait__gene').textContent).toContain('rs762551');
+    const geneName = container.querySelector('.rasgos-gene-tip__name');
+    const tip = document.getElementById(geneName.getAttribute('aria-describedby'));
+    expect(geneName.textContent).toBe('CYP1A2');
+    expect(tip.getAttribute('role')).toBe('tooltip');
+    expect(tip.textContent).toBe('Qué hace CYP1A2CYP1A2 elimina la cafeína.');
     expect(container.querySelector('.rasgos-detail__pager')).toBeNull();
     expect(container.querySelector('.rasgos-report__intro, .rasgos-disclaimer')).toBeNull();
   });

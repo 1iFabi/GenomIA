@@ -132,6 +132,24 @@ function PopulationBars({ trait, delay }) {
   );
 }
 
+// The gene's name carries what it does: hover, focus or tap opens it, Escape closes it.
+function GeneTip({ trait }) {
+  if (!trait.description) return <strong>{trait.gene}</strong>;
+  const id = `gene-tip-${trait.trait}`;
+  return (
+    <span className="rasgos-gene-tip">
+      <button type="button" className="rasgos-gene-tip__name" aria-describedby={id}
+        onKeyDown={(event) => { if (event.key === 'Escape') event.currentTarget.blur(); }}>
+        {trait.gene}
+      </button>
+      <span role="tooltip" id={id} className="rasgos-gene-tip__bubble">
+        <b>Qué hace {trait.gene}</b>
+        {trait.description}
+      </span>
+    </span>
+  );
+}
+
 function TraitRow({ trait, delay }) {
   const options = Array.isArray(trait.options) ? trait.options : [];
   const mine = options.find((option) => option.result === trait.result);
@@ -142,7 +160,7 @@ function TraitRow({ trait, delay }) {
         <h3 className="rasgos-trait__title" id={`trait-${trait.trait}`}>{trait.label}</h3>
         {(trait.gene || trait.rsid) && (
           <p className="rasgos-trait__gene">
-            {trait.gene && <>Gen <strong>{trait.gene}</strong></>}
+            {trait.gene && <>Gen <GeneTip trait={trait} /></>}
             {trait.gene && trait.rsid && ' · '}
             {trait.rsid}
           </p>
@@ -156,9 +174,9 @@ function TraitRow({ trait, delay }) {
         {options.length > 1 && <PopulationBars trait={{ ...trait, options }} delay={delay} />}
       </div>
       {trait.explanation && <p className="rasgos-trait__explanation">{trait.explanation}</p>}
-      {trait.description && (
+      {trait.description && !trait.gene && (
         <p className="rasgos-trait__about">
-          <span>{trait.gene ? `Qué hace ${trait.gene}` : 'Sobre este rasgo'}</span>
+          <span>Sobre este rasgo</span>
           {trait.description}
         </p>
       )}
