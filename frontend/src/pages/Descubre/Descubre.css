@@ -60,9 +60,110 @@
 .dcard--ancestria { grid-column: span 2; min-height: 360px; }
 .dcard--farmacogenetica { background: linear-gradient(160deg, #dcedfa 0%, #f5f9fe 70%); }
 .dcard--farmacogenetica .dcard__title { color: var(--d-blue-ink); }
-.dcard--monogenico { background: #12324f; box-shadow: 0 14px 34px rgba(18, 50, 79, 0.28); }
-.dcard--monogenico .dcard__title { color: #5cc8f5; }
-.dcard--monogenico .dcard__text { color: #b9cde3; }
+
+/* ====== Enfermedades: one navy card that tells its two risks in turn ====== */
+.dcard--enfermedades { grid-column: span 2; background: #12324f; color: #e8f1fb; }
+.dcard--enfermedades .dcard__title { color: #5cc8f5; }
+.dcard--enfermedades .dcard__text { color: #b9cde3; }
+.dcard--enfermedades .card-help { color: #5cc8f5; }
+.dcard--enfermedades .card-help:hover { color: #8fdcff; }
+/* both risks share one cell, so the card keeps the taller one's height and never jumps */
+.enf__stage { flex: 1; display: grid; margin-top: 24px; }
+.risk {
+  grid-area: 1 / 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 40px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .45s var(--d-ease), visibility 0s .45s;
+}
+.risk.is-active { opacity: 1; visibility: visible; transition: opacity .45s var(--d-ease) .1s, visibility 0s; }
+/* inside the step the copy arrives first and the picture follows, both from the right */
+.risk__copy, .risk__visual { transform: translateX(20px); transition: transform .6s var(--d-ease); }
+.risk.is-active .risk__copy { transform: none; transition-delay: .1s; }
+.risk.is-active .risk__visual { transform: none; transition-delay: .18s; }
+/* the name and its sentence at the top, the sample result resting on the foot */
+.risk__copy { display: flex; flex-direction: column; justify-content: space-between; gap: 28px; min-width: 0; }
+.risk .dcard__head { margin-bottom: 8px; }
+.risk__name { margin: 0; font-size: 16px; font-weight: 600; color: #5cc8f5; }
+.risk__how { margin: 0; font-size: clamp(24px, 2.2vw, 29px); font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; color: #fff; text-wrap: balance; }
+.risk__visual { min-width: 0; align-self: center; }
+.risk__label { margin: 0 0 6px; font-size: 13px; color: #9fb8d2; }
+.risk__lead { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; color: #fff; text-wrap: balance; }
+.risk__meaning { margin: 6px 0 0; font-size: 15px; line-height: 1.45; color: #d6e3f1; text-wrap: pretty; }
+.risk__meaning strong { font-weight: 600; color: #ffb4a3; }
+/* the polygenic bar: where you fall between lower and higher than average */
+.risk__scale { margin-top: 16px; }
+.risk__track { position: relative; display: block; height: 4px; border-radius: 2px; background: #2c4a69; }
+.risk__track i { position: absolute; top: 50%; width: 14px; height: 14px; margin: -10px 0 0 -10px; border-radius: 50%; border: 3px solid #12324f; background: #ffb4a3; box-sizing: content-box; }
+.risk__ticks { display: flex; justify-content: space-between; margin-top: 10px; font-size: 13px; color: #9fb8d2; }
+
+/* the control bar: a tone step at the card's foot holding the two steps */
+.enf__nav { margin: 28px -28px -24px; padding: 14px 28px; background: #0f2b45; }
+.enf__tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.enf__tab {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #8fa9c4;
+  transition: color .25s var(--d-ease);
+}
+.enf__tab:hover { color: #d6e3f1; }
+.enf__tab[aria-selected="true"] { color: #fff; }
+.enf__tab:focus-visible { outline: 2px solid #5cc8f5; outline-offset: 4px; border-radius: 4px; }
+.enf__bar { position: relative; display: block; height: 3px; border-radius: 2px; background: #24496c; overflow: hidden; }
+.enf__bar i { position: absolute; inset: 0; background: #5cc8f5; transform-origin: left; animation: enf-fill 8s linear forwards; }
+.dcard--enfermedades.is-held .enf__bar i { animation-play-state: paused; }
+/* chosen by hand: the active step keeps a full bar */
+.enf__tab[aria-selected="true"] .enf__bar:empty { background: #5cc8f5; }
+@keyframes enf-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* monogénico: rows of DNA letters, the same for everyone but one */
+.risk-letters { margin: 0; }
+.risk-letters__row {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  margin: 0;
+  font-size: clamp(20px, 2vw, 26px);
+  font-weight: 500;
+  line-height: 1.9;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: #5c7b9c;
+}
+.risk-letters__row:first-child, .risk-letters__row:last-child { opacity: .45; }
+.risk-letters__row:nth-child(2) { color: #9fb8d2; }
+.risk-letters__variant {
+  justify-self: center;
+  width: 1em;
+  line-height: 1;
+  padding: .1em 0;
+  align-self: center;
+  border-radius: 50%;
+  background: #5cc8f5;
+  color: #0d2a46;
+  font-weight: 700;
+}
+
+/* poligénico: the hairline field of pillars, drawn in the card's navy */
+/* the package sets its 5:4 stage inline; beside the letters the shorter 5:3 keeps both halves level */
+.risk__visual > [data-hairline] {
+  width: 100%;
+  aspect-ratio: 5 / 3 !important;
+  --hairline-stroke: 1;
+  --hairline-plate: #12324f;
+  --hairline-hi: #5cc8f5;
+  --hairline-edge: #9fb8d2;
+  --hairline-mid: #5c7b9c;
+  --hairline-lo: #2c4a69;
+}
+.dcard .risk__visual svg { width: 100%; height: 100%; }
 .dcard__copy { position: relative; z-index: 2; max-width: 300px; }
 /* the title row: the title, and on the health cards the "?" that explains the term.
    It sits above the figures, which are painted over the card's corners */
@@ -99,9 +200,7 @@
   cursor: help;
   transition: color .2s var(--d-ease), transform .2s var(--d-ease);
 }
-.dcard--monogenico .card-help { color: #5cc8f5; }
 .card-help:hover { color: var(--d-blue-ink); transform: scale(1.12); }
-.dcard--monogenico .card-help:hover { color: #8fdcff; }
 .card-help:focus-visible { outline: 2px solid var(--d-blue); outline-offset: 2px; }
 .card-help__label {
   position: absolute;
@@ -202,7 +301,7 @@
   max-width: 40%;
 }
 
-/* ====== Monogénico, poligénico, farmacogenética: the result as type, the figure placed per card ====== */
+/* ====== Farmacogenética: the result as type, the figure beside the title ====== */
 .example { flex: 1; display: flex; flex-direction: column; }
 .example__result { position: relative; z-index: 1; }
 .example__figure {
@@ -216,20 +315,12 @@
   --hairline-lo: #d4e1ec;
 }
 .dcard .example__figure svg { width: 100%; height: 100%; }
-/* the cards whose figure is anchored need room for it */
-.dcard--monogenico, .dcard--poligenico { min-height: 440px; }
-/* br: the result on top, the figure centered along the card's foot (monogénico: a loupe examining the one variant) */
-.example--br .example__figure { left: 50%; right: auto; bottom: -40px; width: 290px; transform: translateX(-50%); }
-/* band: the figure in the middle of the card, the result resting on its foot (poligénico: many small effects, one landscape) */
-.example--band .example__figure { position: relative; order: -1; left: auto; right: auto; bottom: auto; width: 100%; margin: 10px 0 16px; }
-.example--band .example__result { margin-top: auto; }
 /* tr: the figure beside the title, the rows resting on the card's foot (farmacogenética) */
 .example--tr .example__figure { top: -30px; right: -52px; width: 230px; }
 .example--tr .example__result { margin-top: auto; }
 .dcard--farmacogenetica .dcard__title,
 .dcard--farmacogenetica .dcard__text { position: relative; z-index: 1; max-width: 56%; }
 .example__label { margin: 0 0 6px; font-size: 12px; color: var(--d-muted); }
-.example__lead { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; color: var(--d-ink); }
 .example__line { margin: 4px 0 0; font-size: 15px; line-height: 1.4; color: var(--d-ink); }
 .example__line--muted { margin-top: 10px; font-size: 13px; color: var(--d-muted); }
 .example__flag { color: #b4471f; font-weight: 600; }
@@ -239,17 +330,8 @@
 .example__rows dt { font-size: 16px; font-weight: 600; color: var(--d-ink); }
 .example__rows dd { margin: 0; font-size: 14px; color: var(--d-muted); text-align: right; }
 .example__rows dd.example__flag { color: #b4471f; }
-.example__scale { margin-top: 14px; }
-.example__track { position: relative; display: block; height: 2px; border-radius: 1px; background: #cfdcea; }
-.example__track i { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--d-ink); }
-.example__ticks { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--d-muted); }
 /* the figure sits on its card's own colour */
 .dcard--farmacogenetica .example__figure { --hairline-plate: #e6f1fb; }
-.dcard--monogenico .example__figure { --hairline-plate: #12324f; --hairline-hi: #5cc8f5; --hairline-edge: #9fb8d2; --hairline-mid: #5c7b9c; --hairline-lo: #2c4a69; }
-.dcard--monogenico .example__label,
-.dcard--monogenico .example__line { color: #b9cde3; }
-.dcard--monogenico .example__lead { color: #fff; }
-.dcard--monogenico .example__flag { color: #ffb4a3; }
 
 /* ====== Rasgos: questions and the gene that answers each, set as type like the other cards ====== */
 /* the questions rest on the card's foot, the same foot the other cards' results stand on */
@@ -264,7 +346,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 23px 0;
+  padding: 17px 0;
   cursor: pointer;
   font-size: 15px;
   color: var(--d-muted);
@@ -284,14 +366,21 @@
 .traits__a > p { min-height: 0; margin: 0; overflow: hidden; }
 .traits__a span { display: block; padding: 0 0 12px; font-size: 13px; line-height: 1.45; color: var(--d-muted); }
 .traits__item--open .traits__a { grid-template-rows: 1fr; }
+/* the module raises the row; the questions take the extra height instead of leaving a hole under
+   the intro. On phone and tablet each card keeps its own height. */
+@media (min-width: 1025px) {
+  .dcard--rasgos .traits__q { padding: 33px 0; }
+}
 
 /* ====== Responsive ====== */
 @media (max-width: 1200px) {
   .descubre { padding: 32px 24px 110px; }
 }
 @media (max-width: 1024px) {
-  .descubre-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dcard--ancestria { grid-column: 1 / -1; }
+  /* one column: the module must stay a single field, and splitting the row would break the order */
+  .descubre-grid { grid-template-columns: 1fr; }
+  .dcard--ancestria { grid-column: auto; }
+  .dcard--enfermedades { grid-column: auto; }
 }
 @media (max-width: 768px) {
   .descubre { padding: 56px 16px 96px; }
@@ -303,17 +392,22 @@
   .dcard__copy { max-width: none; }
   .traits__q { padding: 16px 0; }
   .origins-globe__regions { left: 22px; right: 22px; top: 118px; bottom: auto; max-width: none; }
-  .dcard--monogenico { min-height: 360px; }
-  .dcard--poligenico { min-height: 400px; }
-  .example--br .example__figure { width: 250px; }
+  .enf__stage { margin-top: 20px; }
+  /* phone: the picture first, then the name, its sentence and the result */
+  .risk { grid-template-columns: 1fr; gap: 20px; align-content: start; }
+  .risk__visual { order: -1; }
+  .enf__nav { margin: 24px -22px -22px; padding: 10px 22px; }
   .example--tr .example__figure { width: 190px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .descubre *, .descubre *::before { transition: none !important; }
+  /* no fill, so nothing advances by itself; the risks still change by tab or arrow */
+  .enf__bar i { animation: none; }
+  .risk__copy, .risk__visual { transform: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
   .dcard { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .dcard--farmacogenetica { background: #e8f3fc; }
-  .dcard--monogenico { background: #12324f; }
+  .dcard--enfermedades { background: #12324f; }
 }

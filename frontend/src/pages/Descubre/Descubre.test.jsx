@@ -28,10 +28,40 @@ afterEach(async () => {
 });
 
 describe('Descubre', () => {
-  it('presents the five modules, and Biométricas is gone', () => {
+  it('presents every module, and Biométricas is gone', () => {
     const titles = [...container.querySelectorAll('.dcard__title')].map((h) => h.textContent);
-    expect(titles).toEqual(['Ancestría', 'Farmacogenética', 'Riesgo monogénico', 'Riesgo poligénico', 'Rasgos']);
+    expect(titles).toEqual(['Ancestría', 'Farmacogenética', 'Enfermedades', 'Rasgos']);
     expect(container.textContent).not.toMatch(/Biom[eé]tric/);
+  });
+
+  it('tells the two risks of Enfermedades in turn, chosen by their tabs', async () => {
+    const card = container.querySelector('.dcard--enfermedades');
+    expect(card.querySelector('h3').textContent).toBe('Enfermedades');
+    expect(card.parentElement.classList.contains('descubre-grid')).toBe(true);
+    const tabs = [...card.querySelectorAll('[role="tab"]')];
+    expect(tabs.map((t) => t.textContent)).toEqual(['Monogénico', 'Poligénico']);
+    expect([...card.querySelectorAll('.risk__name')].map((h) => h.textContent)).toEqual(['Riesgo monogénico', 'Riesgo poligénico']);
+    const panels = [...card.querySelectorAll('[role="tabpanel"]')];
+    const shown = () => panels.map((p) => p.getAttribute('aria-hidden'));
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+    expect(shown()).toEqual(['false', 'true']);
+    expect(panels[1].hasAttribute('inert')).toBe(true);
+
+    expect(card.querySelector('.enf__arrows')).toBeNull();
+    await act(async () => tabs[1].click());
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    expect(shown()).toEqual(['true', 'false']);
+    // choosing by hand ends the automatic tour
+    expect(card.querySelector('.enf__bar i')).toBeNull();
+    await act(async () => tabs[0].click());
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('advances to the next risk when the active bar finishes filling', async () => {
+    const card = container.querySelector('.dcard--enfermedades');
+    const fill = card.querySelector('.enf__tab[aria-selected="true"] .enf__bar i');
+    await act(async () => fill.dispatchEvent(new Event('animationend', { bubbles: true })));
+    expect(card.querySelectorAll('[role="tab"]')[1].getAttribute('aria-selected')).toBe('true');
   });
 
   it('has no call to action of its own: pricing follows right after', () => {
@@ -56,19 +86,24 @@ describe('Descubre', () => {
     expect(questions[0].getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('answers each health module with a figure and a sample result, labelled as an example', () => {
-    for (const id of ['farmacogenetica', 'monogenico', 'poligenico']) {
-      const card = container.querySelector(`.dcard--${id}`);
-      expect(card.querySelector('[data-hairline]').getAttribute('aria-label')).toBeTruthy();
-      expect(card.querySelector('.example__label').textContent).toBe('Ejemplo de resultado');
-    }
-    expect(container.querySelector('.dcard--monogenico .example__lead').textContent).toBe('BRCA2');
-    // Rasgos has no figure: its questions carry the card
-    expect(container.querySelector('.dcard--rasgos [data-hairline]')).toBeNull();
+  it('explains each risk in one line, with its picture and a sample result in plain words', () => {
+    const monogenic = container.querySelector('.risk--monogenico');
+    expect(monogenic.querySelector('.risk__how').textContent).toMatch(/^Un solo cambio que pesa mucho\./);
+    expect(monogenic.querySelectorAll('.risk-letters__variant')).toHaveLength(1);
+    expect(monogenic.querySelector('.risk__lead').textContent).toBe('Tienes una variante en BRCA2');
+    expect(monogenic.querySelector('.risk__meaning').textContent).toMatch(/más alto que el de la mayoría/);
+    expect(monogenic.querySelector('.risk__scale')).toBeNull();
+
+    const polygenic = container.querySelector('.risk--poligenico');
+    expect(polygenic.querySelector('.risk__how').textContent).toMatch(/^Muchos cambios pequeños que se suman\./);
+    expect(polygenic.querySelector('[data-hairline="terrain"]').getAttribute('aria-label')).toMatch(/muchas variantes pequeñas/i);
+    expect(polygenic.querySelector('.risk__lead').textContent).toBe('Enfermedad coronaria');
+    expect([...polygenic.querySelectorAll('.risk__ticks span')].map((t) => t.textContent)).toEqual(['Más bajo', 'Promedio', 'Más alto']);
+    expect(polygenic.querySelector('.risk__track i').style.left).toBe('80%');
   });
 
-  it('explains each risk term in plain words, from a "?" beside its title', async () => {
-    const helps = [...container.querySelectorAll('.dcard__head .card-help')];
+  it('explains each risk term in plain words, from a "?" beside its name', async () => {
+    const helps = [...container.querySelectorAll('.risk .dcard__head .card-help')];
     expect(helps).toHaveLength(2);
     expect(helps.map((b) => b.querySelector('.card-help__label').textContent)).toEqual([
       'Qué significa riesgo monogénico',
@@ -82,17 +117,16 @@ describe('Descubre', () => {
     expect(helps[0].getAttribute('aria-describedby')).toBe(panel.id);
   });
 
-  it('takes the tone of the card its "?" sits on: dark over the navy card, light over the white ones', async () => {
-    const helps = [...container.querySelectorAll('.dcard__head .card-help')];
-    // jsdom does not load the stylesheet, so the cards' own colours are set here as they are in the page
-    container.querySelector('.dcard--monogenico').style.background = 'rgb(18, 50, 79)';
-    container.querySelector('.dcard--poligenico').style.background = 'rgba(255, 255, 255, 0.78)';
+  it('takes the tone of the card its "?" sits on: dark over the navy Enfermedades card', async () => {
+    const helps = [...container.querySelectorAll('.risk .dcard__head .card-help')];
+    // jsdom does not load the stylesheet, so the rows' own colours are set here as they are in the page
+    container.querySelector('.dcard--enfermedades').style.background = 'rgb(18, 50, 79)';
 
     await act(async () => helps[0].dispatchEvent(new FocusEvent('focusin', { bubbles: true })));
     expect(document.body.querySelector('[role="tooltip"]').dataset.tone).toBe('dark');
 
     await act(async () => helps[0].dispatchEvent(new FocusEvent('focusout', { bubbles: true })));
     await act(async () => helps[1].dispatchEvent(new FocusEvent('focusin', { bubbles: true })));
-    expect(document.body.querySelector('[role="tooltip"]').dataset.tone).toBe('light');
+    expect(document.body.querySelector('[role="tooltip"]').dataset.tone).toBe('dark');
   });
 });
