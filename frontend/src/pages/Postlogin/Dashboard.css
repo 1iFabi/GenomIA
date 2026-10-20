@@ -131,6 +131,12 @@
   animation: hx-pulse 1.2s ease-in-out infinite alternate;
 }
 
+/* while loading, the line sits over the title (.hx__way is display: contents, so its line is a grid item here) */
+.hx__line[aria-busy='true'] {
+  order: -1;
+  min-height: 0;
+}
+
 @keyframes hx-pulse {
   to {
     opacity: 0.45;
