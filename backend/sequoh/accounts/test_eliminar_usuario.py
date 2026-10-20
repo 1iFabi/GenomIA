@@ -5,6 +5,8 @@ from accounts.management.commands.eliminar_usuario import delete_user_completely
 from accounts.roles import grant_analyst_role
 from genoma.client_results import populate_client_results
 from genoma.models import Analysis, AnalysisResult, Genotype, Variant, VariantAnnotation, VariantPlacement
+from genoma.population_catalog import load_catalog
+from genoma.test_population_catalog import CATALOG_FIXTURE
 from participants.models import Participant
 from profiles.models import Profile
 from services.models import Purchase, Sample, ServiceRequest, ServiceStatusLog
@@ -12,6 +14,7 @@ from services.models import Purchase, Sample, ServiceRequest, ServiceStatusLog
 
 class DeleteUserCompletelyTests(TestCase):
     def setUp(self):
+        load_catalog(CATALOG_FIXTURE)
         self.analyst = User.objects.create_user(username='delete-analyst')
         grant_analyst_role(self.analyst)
         self.user = User.objects.create_user(username='delete-client', email='delete@example.com')

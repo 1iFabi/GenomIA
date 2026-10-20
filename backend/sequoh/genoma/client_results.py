@@ -22,7 +22,9 @@ from rest_framework.views import APIView
 
 from accounts.authentication import JWTAuthentication
 from accounts.models import AppUser, Role
-from genoma.models import Analysis, AnalysisResult, DataRelease, Genotype, Population, VariantAnnotation, VariantPlacement
+from genoma.gene_inheritance import inheritance, mondo_ids
+from genoma.models import Analysis, AnalysisResult, DataRelease, Genotype, VariantAnnotation, VariantPlacement
+from genoma.population_catalog import Catalog
 from participants.codes import ensure_client_code
 from participants.models import Observation, Participant
 from profiles.models import Profile, normalize_rut
@@ -32,19 +34,18 @@ from services.views import STATUS_SEQUENCE, _sample_code_for
 
 CHR1_LENGTH = 248_956_422  # GRCh38; the loaded ClinVar catalog only covers chromosome 1.
 MEAN_SEGMENT_BP = 15_000_000  # Typical admixture tract length for ~10 generations of mixing.
-ANCESTRIES = {  # code: (label, typical Chilean proportion)
-    'NAT': ('Amerindio', 0.45), 'EUR': ('Europeo', 0.50), 'AFR': ('Africano', 0.03), 'EAS': ('Asiático', 0.02),
-}
-# Country-level reference panels (1000 Genomes style); each splits its continental group's share.
-REFERENCE_POPULATIONS = {  # code: (label, group, ISO 3166-1 alpha-2, country, typical weight in group)
-    'MAP': ('Mapuche', 'NAT', 'CL', 'Chile', .65), 'AYM': ('Aymara', 'NAT', 'BO', 'Bolivia', .2),
-    'QUE': ('Quechua', 'NAT', 'PE', 'Perú', .15),
-    'IBS': ('Ibérico', 'EUR', 'ES', 'España', .6), 'TSI': ('Toscano', 'EUR', 'IT', 'Italia', .25),
-    'GBR': ('Británico', 'EUR', 'GB', 'Reino Unido', .15),
-    'YRI': ('Yoruba', 'AFR', 'NG', 'Nigeria', .6), 'LWK': ('Luhya', 'AFR', 'KE', 'Kenia', .4),
-    'CHB': ('Han', 'EAS', 'CN', 'China', .6), 'JPT': ('Japonés', 'EAS', 'JP', 'Japón', .4),
-}
+# Simulated typical Chilean mix per continental group; the groups and units come from the population catalog.
+GROUP_SHARES = {'AMR': 0.45, 'EUR': 0.48, 'AFR': 0.03, 'MID': 0.02, 'EAS': 0.02}
+# Typical weight of each reported unit inside its group; units not listed weigh 1 / units in the group.
+UNIT_WEIGHTS = {'AMR_ANDES': .8, 'AMR_AMAZON': .15, 'AMR_MESO': .05, 'IBS': .7, 'TSI': .1, 'CEU': .08,
+                'GBR': .07, 'FIN': .05, 'YRI': .35, 'ESN': .2, 'MID_LEVANT': .8, 'MID_MAGHREB': .2,
+                'CHB': .6, 'JPT': .4}
 PATHOGENIC = {'Pathogenic', 'Likely_pathogenic', 'Pathogenic/Likely_pathogenic'}
+# ClinVar review status → stars (0–4), as the page shows them next to the classification.
+REVIEW_STARS = {'practice_guideline': 4, 'reviewed_by_expert_panel': 3,
+                'criteria_provided,_multiple_submitters,_no_conflicts': 2,
+                'criteria_provided,_single_submitter': 1,
+                'criteria_provided,_conflicting_classifications': 1}
 GENOTYPES = (('0|1', 0.4), ('1|0', 0.4), ('1|1', 0.2))  # Only carried variants are assigned.
 DOSAGE_MEAN, DOSAGE_VAR = 1.2, 0.16  # Mean/variance of alt dosage under GENOTYPES.
 POLYGENIC = (('diabetes_tipo_2', 'Diabetes tipo 2'), ('enfermedad_coronaria', 'Enfermedad coronaria'),
@@ -63,10 +64,40 @@ PGX = (
                  ('*5/*5', 'Función baja', .05)), ('Simvastatina', 'Atorvastatina')),
     ('VKORC1', (('G/G', 'Sensibilidad normal', .4), ('G/A', 'Sensibilidad intermedia', .4),
                 ('A/A', 'Sensibilidad alta', .2)), ('Warfarina',)),
+    # The rest of the CPIC level A/B genes, with rough population weights.
+    ('CYP2B6', (('*1/*1', 'Metabolizador normal', .45), ('*1/*6', 'Metabolizador intermedio', .4),
+                ('*6/*6', 'Metabolizador lento', .15)), ('Efavirenz', 'Sertralina')),
+    ('CYP3A5', (('*3/*3', 'Metabolizador lento', .75), ('*1/*3', 'Metabolizador intermedio', .2),
+                ('*1/*1', 'Metabolizador normal', .05)), ('Tacrolimus',)),
+    ('CYP4F2', (('*1/*1', 'Función normal', .55), ('*1/*3', 'Función disminuida', .38),
+                ('*3/*3', 'Función baja', .07)), ('Warfarina',)),
+    ('DPYD', (('Ref/Ref', 'Metabolizador normal', .95), ('c.1905+1G>A/Ref', 'Metabolizador intermedio', .04),
+              ('c.1905+1G>A/c.1905+1G>A', 'Metabolizador lento', .01)), ('Fluorouracilo', 'Capecitabina')),
+    ('TPMT', (('*1/*1', 'Metabolizador normal', .9), ('*1/*3A', 'Metabolizador intermedio', .09),
+              ('*3A/*3A', 'Metabolizador lento', .01)), ('Azatioprina', 'Mercaptopurina', 'Tioguanina')),
+    ('NUDT15', (('*1/*1', 'Metabolizador normal', .95), ('*1/*3', 'Metabolizador intermedio', .045),
+                ('*3/*3', 'Metabolizador lento', .005)), ('Azatioprina', 'Mercaptopurina', 'Tioguanina')),
+    ('UGT1A1', (('*1/*1', 'Metabolizador normal', .45), ('*1/*28', 'Metabolizador intermedio', .43),
+                ('*28/*28', 'Metabolizador lento', .12)), ('Atazanavir',)),
+    ('G6PD', (('B', 'Actividad normal', .97), ('A-', 'Deficiente', .03)),
+     ('Primaquina', 'Nitrofurantoína', 'Dapsona', 'Rasburicasa')),
+    ('HLA-B', (('*57:01, *58:01 y *15:02 negativos', 'No portador', .9), ('*58:01 positivo', 'Portador de HLA-B*58:01', .05),
+               ('*57:01 positivo', 'Portador de HLA-B*57:01', .04), ('*15:02 positivo', 'Portador de HLA-B*15:02', .01)),
+     ('Abacavir', 'Alopurinol', 'Carbamazepina', 'Oxcarbazepina', 'Fenitoína')),
+    ('HLA-A', (('*31:01 negativo', 'No portador', .94), ('*31:01 positivo', 'Portador de HLA-A*31:01', .06)),
+     ('Carbamazepina',)),
+    ('RYR1', (('Ref/Ref', 'Sin variante asociada', .995), ('c.7300G>A/Ref', 'Susceptible a hipertermia maligna', .005)),
+     ('Sevoflurano', 'Desflurano', 'Isoflurano', 'Succinilcolina')),
+    ('CACNA1S', (('Ref/Ref', 'Sin variante asociada', .998), ('c.520C>T/Ref', 'Susceptible a hipertermia maligna', .002)),
+     ('Sevoflurano', 'Desflurano', 'Isoflurano', 'Succinilcolina')),
+    ('MT-RNR1', (('m.1555A', 'Riesgo habitual', .998), ('m.1555A>G', 'Riesgo aumentado de sordera', .002)),
+     ('Gentamicina', 'Amikacina')),
+    ('ABCG2', (('C/C', 'Función normal', .8), ('C/A', 'Función disminuida', .18), ('A/A', 'Función baja', .02)),
+     ('Rosuvastatina',)),
 )
 TRAITS = (  # code, label, category, gene, rsid, description, ((result, explanation, weight), ...)
     ('color_ojos', 'Color de ojos', 'Apariencia Física', 'HERC2', 'rs12913832',
-     'Variantes cerca de HERC2/OCA2 regulan cuánta melanina se produce en el iris.',
+     'HERC2 contiene el interruptor de OCA2, el gen que decide cuánta melanina hay en tu iris.',
      (('Café', 'Tu variante favorece más melanina en el iris, lo que da ojos oscuros.', .8),
       ('Verde', 'Nivel intermedio de melanina en el iris; suele combinarse con otras variantes.', .12),
       ('Azul', 'Tu variante reduce la melanina del iris, lo que da ojos claros.', .08))),
@@ -76,7 +107,7 @@ TRAITS = (  # code, label, category, gene, rsid, description, ((result, explanat
       ('Ondulado', 'Tu combinación se asocia a cabello ondulado.', .3),
       ('Rizado', 'Tu combinación se asocia a cabello rizado.', .1))),
     ('lactosa', 'Tolerancia a la lactosa', 'Metabolismo', 'MCM6', 'rs4988235',
-     'Esta variante regula si el gen de la lactasa (LCT) sigue activo en la adultez.',
+     'MCM6 contiene el interruptor que mantiene encendido el gen de la lactasa (LCT) en la adultez.',
      (('Tolerante', 'Mantienes la producción de lactasa en la adultez y digieres bien la lactosa.', .45),
       ('Intolerante', 'La producción de lactasa baja con la edad; podrías tener molestias con lácteos.', .55))),
     ('cafeina', 'Metabolismo de la cafeína', 'Metabolismo', 'CYP1A2', 'rs762551',
@@ -103,6 +134,41 @@ TRAITS = (  # code, label, category, gene, rsid, description, ((result, explanat
      (('Matutino', 'Tiendes a despertar temprano y a rendir mejor en la mañana.', .4),
       ('Intermedio', 'Tu horario de sueño es flexible, sin una preferencia marcada.', .35),
       ('Vespertino', 'Tiendes a dormir tarde y a rendir mejor en la tarde y la noche.', .25))),
+    # Single-gene traits with strong evidence (GWAS Catalog, MedlinePlus Genetics). Weights are rough estimates
+    # for an admixed Chilean population.
+    ('cerumen', 'Tipo de cerumen', 'Apariencia Física', 'ABCC11', 'rs17822931',
+     'ABCC11 es una bomba que saca sustancias grasas en las glándulas del oído y de las axilas.',
+     (('Húmedo', 'Tu cerumen tiende a ser húmedo y pegajoso, y el olor de axilas es el habitual.', .7),
+      ('Seco', 'Tu cerumen tiende a ser seco y en escamas, y tus axilas producen poco olor.', .3))),
+    ('pelo_rojo', 'Pelo rojizo', 'Apariencia Física', 'MC1R', 'rs1805007, rs1805008',
+     'MC1R es el interruptor que decide si tus células del pelo y la piel producen pigmento oscuro o rojizo.',
+     (('Sin variantes rojas', 'Produces sobre todo pigmento oscuro; el pelo rojo es poco probable.', .9),
+      ('Una copia', 'Tienes una copia con variante roja: puedes tener reflejos o barba rojiza.', .09),
+      ('Dos copias', 'Tus dos copias favorecen el pigmento rojizo: es probable el pelo rojo o cobrizo.', .01))),
+    ('pecas', 'Tendencia a pecas', 'Apariencia Física', 'IRF4', 'rs12203592',
+     'IRF4 regula cuánta melanina producen las células de la piel y del pelo.',
+     (('Baja', 'Tu variante se asocia a pocas pecas.', .8),
+      ('Media', 'Tienes una copia que favorece que te salgan pecas con el sol.', .17),
+      ('Alta', 'Tus dos copias favorecen las pecas y una piel más sensible al sol.', .03))),
+    ('grupo_sanguineo', 'Grupo sanguíneo', 'Bienestar y Salud', 'ABO', 'rs8176719, rs8176746',
+     'ABO arma las marcas de azúcar que lleva cada glóbulo rojo; según cuáles tengas, tu sangre es A, B, AB u O.',
+     (('O', 'Tus glóbulos rojos no llevan marcas A ni B. Es una estimación: antes de una transfusión siempre se confirma con un examen de sangre.', .6),
+      ('A', 'Tus glóbulos rojos llevan la marca A. Es una estimación: antes de una transfusión siempre se confirma con un examen de sangre.', .28),
+      ('B', 'Tus glóbulos rojos llevan la marca B. Es una estimación: antes de una transfusión siempre se confirma con un examen de sangre.', .09),
+      ('AB', 'Tus glóbulos rojos llevan las marcas A y B. Es una estimación: antes de una transfusión siempre se confirma con un examen de sangre.', .03))),
+    ('alcohol', 'Rubor con el alcohol', 'Metabolismo', 'ALDH2', 'rs671',
+     'ALDH2 es la enzima que limpia el acetaldehído, la sustancia tóxica que deja el alcohol en el cuerpo.',
+     (('Habitual', 'Limpias el acetaldehído como la mayoría; esta variante no hace que el alcohol te enrojezca.', .98),
+      ('Rubor', 'Limpias el acetaldehído más lento: el alcohol puede enrojecerte la cara y acelerarte el pulso.', .02))),
+    ('vitamina_b12', 'Niveles de vitamina B12', 'Metabolismo', 'FUT2', 'rs601338',
+     'FUT2 decide si tus mucosas llevan ciertas marcas de azúcar, lo que cambia tu flora intestinal y cómo absorbes la vitamina B12.',
+     (('Habituales', 'Tu variante se asocia a niveles habituales de vitamina B12.', .8),
+      ('Algo más altos', 'Tu variante se asocia a niveles de vitamina B12 algo más altos en la sangre.', .2))),
+    ('vitamina_d', 'Niveles de vitamina D', 'Metabolismo', 'GC', 'rs2282679',
+     'GC produce la proteína que transporta la vitamina D por la sangre.',
+     (('Habituales', 'Tu variante se asocia a niveles habituales de vitamina D.', .5),
+      ('Algo más bajos', 'Tienes una copia que se asocia a niveles algo más bajos de vitamina D.', .4),
+      ('Más bajos', 'Tus dos copias se asocian a niveles más bajos de vitamina D.', .1))),
 )
 # Every possible result with its (simulated) population frequency, so the UI can show where the client falls.
 TRAIT_OPTIONS = {code: [{'result': value, 'frequency': weight} for value, _, weight in options]
@@ -275,6 +341,11 @@ def set_client_state(user, state, *, seed=None):
 
 def populate_client_results(user, variant_count, *, seed=None):
     """Assign `variant_count` ClinVar variants to a client and generate all module results."""
+    catalog = Catalog()
+    units = [(unit, catalog.group_of(unit)) for unit in catalog.units()]
+    populations = {group.code: group for _, group in units if group.code in GROUP_SHARES}
+    if not populations:
+        raise ValueError('No hay catálogo de poblaciones: corre manage.py load_populations.')
     rng = random.Random(seed)
     now = timezone.now()
     with transaction.atomic():
@@ -315,30 +386,29 @@ def populate_client_results(user, variant_count, *, seed=None):
             read_depth=rng.randint(20, 60), genotype_quality=Decimal(rng.randint(30, 99)), filters=['PASS'],
         ) for variant_id, call in calls.items()])
 
-        gammas = {code: rng.gammavariate(100 * share, 1) for code, (_, share) in ANCESTRIES.items()}
+        gammas = {code: rng.gammavariate(100 * GROUP_SHARES[code], 1) for code in sorted(populations)}
         segments = _local_ancestry_segments(rng, {code: g / sum(gammas.values()) for code, g in gammas.items()})
-        populations = {code: Population.objects.get_or_create(code=code, defaults={'name': label})[0]
-                       for code, (label, _) in ANCESTRIES.items()}
         rows = [result('local_ancestry', 'ancestry_segment', population=populations[s['code']],
                        reference_assembly='GRCh38', contig='1', start_pos=s['start'], end_pos=s['end'],
                        haplotype=s['haplotype'], confidence=Decimal(str(s['confidence'])),
                        value_code=s['code']) for s in segments]
-        lengths = {code: 0 for code in ANCESTRIES}
+        lengths = {code: 0 for code in populations}
         for s in segments:
             lengths[s['code']] += s['end'] - s['start'] + 1
-        reference = {code: Population.objects.get_or_create(code=code, defaults={
-            'name': label, 'geographic_region': country, 'parent_population': populations[group]})[0]
-            for code, (label, group, _iso, country, _weight) in REFERENCE_POPULATIONS.items()}
         for group, length in lengths.items():
-            members = [code for code, ref in REFERENCE_POPULATIONS.items() if ref[1] == group and length]
-            draws = {code: rng.gammavariate(20 * REFERENCE_POPULATIONS[code][4], 1) for code in members}
-            for code in members:
-                _label, _group, iso, country, _weight = REFERENCE_POPULATIONS[code]
-                share = length / (2 * CHR1_LENGTH) * draws[code] / sum(draws.values())
-                rows.append(result('global_ancestry', 'ancestry_proportion', population=reference[code],
-                                   value_code=code, value_numeric=Decimal(share).quantize(Decimal('1e-6')),
-                                   unit='proportion', payload={'group': group, 'group_label': ANCESTRIES[group][0],
-                                                               'country_code': iso, 'country': country}))
+            members = [unit for unit, unit_group in units if unit_group.code == group and length]
+            draws = {unit.code: rng.gammavariate(20 * UNIT_WEIGHTS.get(unit.code, 1 / len(members)), 1)
+                     for unit in members}
+            for unit in members:
+                # Results are per reference population, so they add up by unit (Andino) or by country (Perú).
+                leaves = catalog.leaves(unit)
+                splits = {leaf.code: rng.gammavariate(20 / len(leaves), 1) for leaf in leaves}
+                for leaf in leaves:
+                    share = (length / (2 * CHR1_LENGTH) * draws[unit.code] / sum(draws.values())
+                             * splits[leaf.code] / sum(splits.values()))
+                    rows.append(result('global_ancestry', 'ancestry_proportion', population=leaf,
+                                       value_code=leaf.code, value_numeric=Decimal(share).quantize(Decimal('1e-6')),
+                                       unit='proportion', payload={'group': group}))
 
         placements = {p.variant_id: p for p in VariantPlacement.objects.filter(
             variant_id__in=chosen, reference_assembly='GRCh38').order_by('variant_id', 'pk').distinct('variant_id')}
@@ -400,6 +470,20 @@ def _variant_label(annotation):
     return f"rs{info['RS']}" if info.get('RS') else None
 
 
+def _monogenic(row, annotation):
+    """One pathogenic variant read with what the page asks of it: mode, evidence, HGVS and ClinVar id."""
+    payload = row.payload or {}
+    info = ((annotation.payload or {}).get('info') or {}) if annotation else {}
+    return {
+        'variant_id': str(row.variant_id), 'position': row.start_pos, 'contig': row.contig,
+        'clinical_significance': row.value_code, **payload,
+        'inheritance': inheritance(payload.get('gene'), mondo_ids(info.get('CLNDISDB'))),
+        'review_stars': REVIEW_STARS.get(payload.get('review_status'), 0),
+        'hgvs': info.get('CLNHGVS'),
+        'clinvar_id': (annotation.payload or {}).get('variation_id') if annotation else None,
+    }
+
+
 def read_client_results(user):
     """The client's own newest COMPLETED service results; None when there are none to show."""
     projection = get_service_projection(user)
@@ -423,7 +507,7 @@ def read_client_results(user):
         row = segments[haplotype][index] if index >= 0 else None
         if row is None or row.end_pos < position:
             return None
-        return {'population': row.value_code, 'label': ANCESTRIES[row.value_code][0],
+        return {'population': row.value_code, 'label': row.population.name if row.population else row.value_code,
                 'confidence': float(row.confidence)}
 
     genotypes = list(Genotype.objects.filter(
@@ -452,6 +536,8 @@ def read_client_results(user):
                                     if g.genotype.split('|')[h] == '1' and haplotypes[h]]
             if g.phased and '|' in g.genotype else None,
         })
+    catalog = Catalog()
+    by_unit, by_country = _ancestry_views(by_module['global_ancestry'], catalog)
     return {
         'service_request_id': str(service_id),
         'sample_code': Sample.objects.filter(service_request_id=service_id).order_by('created_at', 'pk')
@@ -459,16 +545,13 @@ def read_client_results(user):
         'disclaimer': 'Resultados de desarrollo. Solo el riesgo monogénico usa datos reales de ClinVar; '
                       'el resto es simulado y no tiene valor clínico.',
         'modules': {
-            'global_ancestry': [{'population': r.value_code,
-                                 'label': r.population.name if r.population else r.value_code,
-                                 **(r.payload or {}), 'proportion': float(r.value_numeric)}
-                                for r in sorted(by_module['global_ancestry'], key=lambda r: -r.value_numeric)],
+            'global_ancestry': by_unit,
             'local_ancestry': [{'haplotype': r.haplotype, 'contig': r.contig, 'start': r.start_pos,
                                 'end': r.end_pos, 'population': r.value_code,
-                                'label': ANCESTRIES[r.value_code][0], 'confidence': float(r.confidence)}
+                                'label': r.population.name if r.population else r.value_code,
+                                'confidence': float(r.confidence)}
                                for r in by_module['local_ancestry']],
-            'monogenic_risk': [{'variant_id': str(r.variant_id), 'position': r.start_pos,
-                                'clinical_significance': r.value_code, **r.payload}
+            'monogenic_risk': [_monogenic(r, annotations.get(r.variant_id))
                                for r in by_module['monogenic_risk']],
             'polygenic_risk': [{'percentile': float(r.percentile), 'score': float(r.value_numeric), **r.payload}
                                for r in by_module['polygenic_risk']],
@@ -477,11 +560,54 @@ def read_client_results(user):
                        for r in by_module['traits']],
         },
         'variant_summary': {'total': len(variants), 'by_type': by_type},
+        # 'country' only once the catalog has an Indigenous Chilean reference (see population_catalog).
+        'ancestry_view': 'country' if catalog.country_view() else 'unit',
+        'ancestry_by_country': by_country,
         'variants': variants,
     }
 
 
 MIN_COHORT = 10  # Ley 21.719: below this, aggregates could single out a person, so nothing is returned.
+
+
+def _share_keys(population, code, catalog):
+    """Keys a reference result adds to: its unit and its country (the unit again when it has no country)."""
+    if population not in catalog:
+        return [code]  # Rows from before the catalog stand on their own.
+    unit = catalog.unit_of(population)
+    return list(dict.fromkeys((unit.code, population.metadata.get('country') or unit.code)))
+
+
+def _ancestry_views(rows, catalog):
+    """Reference results summed by reported unit (Andino) and by country (Perú), largest first."""
+    by_unit, by_country = {}, {}
+    for r in rows:
+        value = float(r.value_numeric)
+        if r.population not in catalog:
+            by_unit[r.value_code] = {'population': r.value_code, 'label': r.population.name if r.population
+                                     else r.value_code, **(r.payload or {}), 'proportion': value}
+            continue
+        unit, group = catalog.unit_of(r.population), catalog.group_of(r.population)
+        entry = by_unit.setdefault(unit.code, {'population': unit.code, 'label': unit.name,
+                                               **catalog.describe(unit), 'proportion': 0.0})
+        entry['proportion'] += value
+        country = r.population.metadata.get('country')
+        place = by_country.setdefault(country or unit.code, {
+            'key': country or unit.code, 'country_code': country, 'label': None if country else unit.name,
+            'region_countries': [country] if country else unit.metadata['region_countries'],
+            'proportion': 0.0, 'populations': []})
+        place['proportion'] += value
+        place['populations'].append({'population': r.value_code, 'label': r.population.name, 'unit': unit.code,
+                                     'group': group.code, 'group_label': group.name, 'proportion': value,
+                                     'note': group.metadata.get('client_note')})
+    for place in by_country.values():
+        place['populations'].sort(key=lambda p: -p['proportion'])
+        top = place['populations'][0]
+        place.update(group=top['group'], group_label=top['group_label'], note=top['note'])
+    for entry in [*by_unit.values(), *by_country.values()]:
+        entry['proportion'] = round(entry['proportion'], 6)
+    return (sorted(by_unit.values(), key=lambda e: -e['proportion']),
+            sorted(by_country.values(), key=lambda e: -e['proportion']))
 
 
 def read_ancestry_cohort(user):
@@ -490,18 +616,23 @@ def read_ancestry_cohort(user):
     if own is None:
         return None
     mine = {row['population']: row['proportion'] for row in own['modules']['global_ancestry']}
+    mine.update({row['key']: row['proportion'] for row in own['ancestry_by_country']})
+    catalog = Catalog()
     latest = (Analysis.objects.filter(module='global_ancestry', status='completed')
               .exclude(participant__user=user)
               .order_by('participant_id', '-created_at', '-pk').distinct('participant_id').values_list('pk', flat=True))
     others = {}
-    for analysis_id, code, value in AnalysisResult.objects.filter(
-            analysis_id__in=list(latest), module='global_ancestry').values_list('analysis_id', 'value_code', 'value_numeric'):
-        others.setdefault(analysis_id, {})[code] = float(value)
+    for analysis_id, population_id, code, value in AnalysisResult.objects.filter(
+            analysis_id__in=list(latest), module='global_ancestry',
+    ).values_list('analysis_id', 'population_id', 'value_code', 'value_numeric'):
+        shares = others.setdefault(analysis_id, {})
+        for key in _share_keys(catalog.by_pk.get(population_id), code, catalog):
+            shares[key] = shares.get(key, 0.0) + float(value)
     size = len(others)
     if size < MIN_COHORT:
         return {'cohort_size': size, 'min_cohort': MIN_COHORT, 'populations': {}}
     populations = {}
-    for code in REFERENCE_POPULATIONS:
+    for code in sorted(set(mine).union(*others.values())):
         values = [shares.get(code, 0.0) for shares in others.values()]
         value = mine.get(code, 0.0)
         below = sum(v < value for v in values) + sum(v == value for v in values) / 2

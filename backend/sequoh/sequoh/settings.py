@@ -282,3 +282,6 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 LOGIN_URL = '/login'
 LOGIN_REDIRECT_URL = '/dashboard'
 LOGOUT_REDIRECT_URL = '/login'
+
+# Checkout of the genomia-ancestry repo; its data/genomia_populations.tsv is the population catalog.
+GENOMIA_ANCESTRY_DIR = os.getenv('GENOMIA_ANCESTRY_DIR', '')

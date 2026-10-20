@@ -33,7 +33,7 @@ CLIENTS = (('cliente.sin_compra', None), ('cliente.esperando', 'WAITING_SAMPLE')
            ('cliente.muestra', 'SAMPLE_RECEIVED'), ('cliente.procesando', 'PROCESSING'),
            ('cliente.completo', 'COMPLETED'))
 POPULATIONS = (('AMR', 'Americas', None, False, False), ('CHL', 'Chile', 'AMR', True, False),
-               ('MAPUCHE_MASKED', 'Mapuche (masked)', 'CHL', True, True), ('EUR', 'Europe', None, False, False),
+               ('CHL_MASKED', 'Chile (masked)', 'CHL', True, True), ('EUR', 'Europe', None, False, False),
                ('AFR', 'Africa', None, False, False), ('EAS', 'East Asia', None, False, False))
 FREQUENCY_POPULATIONS = ('CHL', 'EUR', 'AFR', 'EAS')
 PGX = (('CYP2C19', '*1/*2', 'Intermediate metabolizer'), ('CYP2D6', '*1/*1', 'Normal metabolizer'),

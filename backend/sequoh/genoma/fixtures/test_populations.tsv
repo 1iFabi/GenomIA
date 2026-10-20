@@ -1,0 +1,19 @@
+code	level	parent	reported	label_es	sampled_countries	region_countries	region_status	panels	status	notes	client_note	country
+AMR	group		no	Nativo americano	BO,BR,CO,MX,PE,AR	AR,BO,BR,CL,CO,EC,GT,MX,PE,PY,VE	proposal	HO_public;HGDP;SGDP	open	AMR = nativo americano no mezclado; nunca 1000G PEL/MXL/CLM/PUR.	Aún no existe una referencia pública de los pueblos del sur de Chile (mapuche, huilliche, fueguinos); esa ancestría puede aparecer dentro de Andino.	
+AMR_ANDES	cluster	AMR	yes	Andino	PE,BO	PE,BO,CL	proposal	HO_public;SGDP	open	Unico proxy abierto cercano a Chile; absorbe ancestria del sur sin referencia. ISO pinta CL completo (no solo el norte).		
+AMR_AMAZON	cluster	AMR	yes	Amazónico	BR,CO,AR	BR,CO	proposal	HO_public;HGDP;SGDP	open	Incluye Chane (Chaco) como referencia de tierras bajas.		
+Quechua	reference	AMR_ANDES	no	Quechua	PE	PE,BO	proposal	HO_public:Quechua(5);SGDP:Quechua	open	N muy bajo. HO tambien tiene 2 Signed_Letter (excluidos). Verificar pais de muestreo de los 5 publicos (Coriell NA11197-NA11201).		PE
+Bolivian	reference	AMR_ANDES	no	Boliviano andino	BO	BO	measured	HO_public:Bolivian(7)	open			BO
+Karitiana	reference	AMR_AMAZON	no	Karitiana	BR	BR	measured	HO_public:Karitiana(12);HGDP:Karitiana;SGDP:Karitiana	open			BR
+EUR	group		no	Europeo	ES,IT,GB,FI,US	ES,PT,IT,GB,IE,FR,DE,NL,BE,FI	proposal	1000G;HO_public;HGDP;SGDP	open	Se reporta por poblacion de referencia.		
+IBS	reference	EUR	yes	Ibérico	ES	ES,PT	proposal	1000G:IBS;HO_public:Spanish(53),Basque(29);HGDP:Basque;SGDP:Spanish,Basque	open	Ancla principal del componente europeo chileno.		ES
+TSI	reference	EUR	yes	Italiano	IT	IT	measured	1000G:TSI;HO_public:Italian_North(20);HGDP:Tuscan,BergamoItalian	open			IT
+AFR	group		no	Africano	NG,GM,SL,KE	NG,BJ,TG,GH,GM,SN,SL,GN,KE,UG,CM,CD,AO	proposal	1000G;HO_public;HGDP;SGDP	open	Se reporta por poblacion. Excluir ACB/ASW (mezclados). Prioridad Chile: oeste/centro.		
+YRI	reference	AFR	yes	Yoruba	NG	NG	proposal	1000G:YRI;HO_public:Yoruba(70);HGDP:Yoruba;SGDP:Yoruba	open			NG
+EAS	group		no	Asiático oriental	CN,JP	CN,JP,KR	proposal	1000G;HO_public;HGDP	open	Trazas; se reporta por poblacion.		
+CHB	reference	EAS	yes	Han	CN	CN	measured	1000G:CHB;HO_public:Han(43);HGDP:Han	open			CN
+MID	group		no	Medio Oriente y norte de África	DZ,MA,TN,LY,EH,IL,JO,LB,SY	MA,DZ,TN,LY,EH,MR,IL,PS,JO,LB,SY	proposal	HO_public;HGDP;SGDP	open	Se reporta por cluster. Egyptian, Saudi y BedouinA quedan fuera (ver filas excluidas).		
+MID_LEVANT	cluster	MID	yes	Levante	IL,JO,LB,SY	LB,SY,PS	proposal	HO_public;HGDP;SGDP	open			
+Druze	reference	MID_LEVANT	no	Druso	IL	IL,LB,SY	proposal	HO_public:Druze(39);HGDP:Druze	open			IL
+OCE	group		yes	Oceánico	PG	PG	proposal	HO_public:Papuan(14),Australian(3);HGDP:Papuan,Bougainville	open	Trazas; se reporta solo a nivel de grupo.		
+MAPUCHE	reference	AMR	no	Mapuche				none	excluded	No existe referencia publica en HO, HGDP, SGDP, 1000G ni AADR.		

@@ -1,4 +1,6 @@
 import json
+import tempfile
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -7,10 +9,11 @@ from rest_framework.test import APITestCase
 from accounts.jwt_utils import encode_jwt
 from accounts.roles import grant_analyst_role
 from genoma.client_results import (
-    ANCESTRIES, CHR1_LENGTH, MIN_COHORT, PATHOGENIC, REFERENCE_POPULATIONS, TRAITS, populate_client_results,
-    set_client_state,
+    CHR1_LENGTH, MIN_COHORT, PATHOGENIC, PGX, TRAITS, populate_client_results, set_client_state,
 )
 from genoma.models import Analysis, Genotype, Variant, VariantAnnotation, VariantPlacement
+from genoma.population_catalog import load_catalog, reported_units
+from genoma.test_population_catalog import CATALOG_FIXTURE, catalog_with_chilean_reference
 from profiles.models import Profile, normalize_rut
 from services.models import Purchase, ServiceRequest, ServiceStatusLog
 from services.status import get_service_projection
@@ -18,6 +21,7 @@ from services.status import get_service_projection
 
 class ClientResultsTests(APITestCase):
     def setUp(self):
+        load_catalog(CATALOG_FIXTURE)
         grant_analyst_role(User.objects.create_user(username='results-analyst'))
         self.user = User.objects.create_user(username='results-client', email='results@example.com')
         self.pathogenic = set()
@@ -31,7 +35,12 @@ class ClientResultsTests(APITestCase):
             VariantAnnotation.objects.create(
                 variant=variant, source_name='ClinVar', source_version='1', annotation_type='clinvar',
                 clinical_significance=significance,
-                payload={'info': {'CLNDN': 'Some_disease|not_provided', 'GENEINFO': 'GENE1:1', 'RS': str(index)}},
+                evidence_level='reviewed_by_expert_panel' if significance == 'Pathogenic' else None,
+                payload={
+                    'variation_id': f'VCV{index:09d}',
+                    'info': {'CLNDN': 'Some_disease|not_provided', 'GENEINFO': 'GENE1:1', 'RS': str(index),
+                             'CLNHGVS': 'NM_000001.1:c.1A>T', 'CLNDISDB': 'MONDO:MONDO:0000001,MedGen:C0000'},
+                },
             )
             if significance == 'Pathogenic':
                 self.pathogenic.add(str(variant.pk))
@@ -58,9 +67,20 @@ class ClientResultsTests(APITestCase):
             for before, after in zip(segments, segments[1:]):
                 self.assertEqual(after['start'], before['end'] + 1)
         self.assertAlmostEqual(sum(g['proportion'] for g in modules['global_ancestry']), 1, places=4)
-        countries = {(g['population'], g['country_code']) for g in modules['global_ancestry']}
-        self.assertTrue(countries <= {(code, ref[2]) for code, ref in REFERENCE_POPULATIONS.items()})
-        self.assertTrue(all(g['group'] in ANCESTRIES for g in modules['global_ancestry']))
+        units = {unit.code: group.code for unit, group in reported_units()}
+        for row in modules['global_ancestry']:
+            self.assertEqual(row['group'], units[row['population']])
+            self.assertTrue(row['region_countries'])
+            self.assertEqual(bool(row['note']), row['group'] == 'AMR')
+        self.assertEqual(data['ancestry_view'], 'unit')
+        self.assertAlmostEqual(sum(c['proportion'] for c in data['ancestry_by_country']), 1, places=4)
+        for place in data['ancestry_by_country']:
+            self.assertAlmostEqual(sum(p['proportion'] for p in place['populations']), place['proportion'], places=5)
+        peru = next(c for c in data['ancestry_by_country'] if c['key'] == 'PE')
+        self.assertEqual(([p['population'] for p in peru['populations']], peru['group']), (['Quechua'], 'AMR'))
+        andes = next(row for row in modules['global_ancestry'] if row['population'] == 'AMR_ANDES')
+        self.assertEqual((andes['label'], andes['measured_against']), ('Andino', ['Boliviano andino', 'Quechua']))
+        self.assertTrue({s['population'] for s in modules['local_ancestry']} <= set(units.values()))
 
         for variant in data['variants']:
             alleles = variant['genotype'].split('|')
@@ -71,9 +91,14 @@ class ClientResultsTests(APITestCase):
         self.assertEqual({m['variant_id'] for m in modules['monogenic_risk']}, self.pathogenic)
         self.assertTrue(all(m['gene'] == 'GENE1' and m['conditions'] == ['Some disease']
                             and m['clinical_significance'] in PATHOGENIC for m in modules['monogenic_risk']))
+        for row in modules['monogenic_risk']:
+            self.assertEqual((row['contig'], row['review_stars'], row['hgvs']),
+                             ('1', 3, 'NM_000001.1:c.1A>T'))
+            self.assertTrue(row['clinvar_id'].startswith('VCV'))
+            self.assertIsNone(row['inheritance'])  # GENE1 is not in the curated catalog.
         self.assertEqual(len(modules['polygenic_risk']), 5)
         self.assertTrue(all(0 <= p['percentile'] <= 100 for p in modules['polygenic_risk']))
-        self.assertEqual((len(modules['pharmacogenetics']), len(modules['traits'])), (5, len(TRAITS)))
+        self.assertEqual((len(modules['pharmacogenetics']), len(modules['traits'])), (len(PGX), len(TRAITS)))
         self.assertTrue(all(t['category'] and t['explanation'] and t['description'] for t in modules['traits']))
         for trait in modules['traits']:
             self.assertIn(trait['result'], [option['result'] for option in trait['options']])
@@ -81,6 +106,14 @@ class ClientResultsTests(APITestCase):
 
         other = User.objects.create_user(username='results-other')
         self.assertEqual(self.read(other).status_code, 404)
+
+    def test_monogenic_rows_ask_the_catalog_for_the_variant_disease(self):
+        populate_client_results(self.user, 40, seed=1)
+        with patch('genoma.client_results.inheritance', return_value='AR') as inherit:
+            rows = json.loads(json.dumps(self.read(self.user).data))['modules']['monogenic_risk']
+        self.assertTrue(rows)
+        self.assertTrue(all(row['inheritance'] == 'AR' for row in rows))
+        inherit.assert_any_call('GENE1', {'MONDO:0000001'})
 
     def test_rerun_replaces_the_previous_generated_run(self):
         populate_client_results(self.user, 30, seed=1)
@@ -92,6 +125,18 @@ class ClientResultsTests(APITestCase):
         self.assertEqual(Analysis.objects.filter(participant__user=self.user).values('module').distinct().count(),
                          Analysis.objects.filter(participant__user=self.user).count())
         self.assertEqual(self.read(self.user).data['variant_summary']['total'], 20)
+
+    def test_the_chilean_reference_turns_results_into_country_percentages(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        load_catalog(catalog_with_chilean_reference(folder.name))
+        populate_client_results(self.user, 10, seed=3)
+        data = json.loads(json.dumps(self.read(self.user).data))
+        self.assertEqual(data['ancestry_view'], 'country')
+        chile = next(c for c in data['ancestry_by_country'] if c['key'] == 'CL')
+        self.assertEqual((chile['country_code'], chile['populations'][0]['unit']), ('CL', 'AMR_ANDES'))
+        andes = next(row for row in data['modules']['global_ancestry'] if row['population'] == 'AMR_ANDES')
+        self.assertIn('Referencia chilena', andes['measured_against'])
 
     def test_ancestry_cohort_returns_aggregates_only_above_the_minimum(self):
         url = '/api/genoma/v1/results/ancestry-cohort/'
@@ -105,7 +150,7 @@ class ClientResultsTests(APITestCase):
         populate_client_results(User.objects.create_user(username='cohort-last'), 5, seed=99)
         data = self.client.get(url).data
         self.assertEqual(data['cohort_size'], MIN_COHORT)
-        self.assertEqual(set(data['populations']), set(REFERENCE_POPULATIONS))
+        self.assertTrue({'AMR_ANDES', 'IBS', 'PE', 'ES'} <= set(data['populations']))
         for stats in data['populations'].values():
             self.assertEqual(set(stats), {'mean', 'carriers', 'percentile'})
             self.assertTrue(0 <= stats['percentile'] <= 100 and 0 <= stats['mean'] <= 1)
