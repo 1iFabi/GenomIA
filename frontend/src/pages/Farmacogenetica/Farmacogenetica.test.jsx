@@ -56,6 +56,12 @@ const renderPage = async ({ protectedRoute = false } = {}) => {
     </MemoryRouter>
   ));
 };
+const rowNames = () => [...container.querySelectorAll('.pgx-row')].map((row) => row.dataset.med);
+const search = async (text) => {
+  const input = container.querySelector('input[type="search"]');
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  await act(async () => { set.call(input, text); input.dispatchEvent(new Event('input', { bubbles: true })); });
+};
 const getStatus = () => container.querySelector('main [role="status"], main [role="alert"]');
 const getRetry = () => [...container.querySelectorAll('main button')]
   .find((button) => button.textContent === 'Reintentar');
@@ -101,56 +107,66 @@ afterEach(async () => {
 });
 
 describe('pharmacogenetics results', () => {
-  it('shows each medication with a plain sentence and its speed rule, and the backend disclaimer', async () => {
+  it('lists every medication its genes decide in one table, grouped by what the guideline says', async () => {
     await renderPage();
     expectShell();
     expect(container.querySelector('main h1').textContent).toBe('Tus remedios');
-    const cards = [...container.querySelectorAll('.pgx-card')];
-    expect(cards.map((c) => c.querySelector('.pgx-card__name').textContent)).toEqual(['Clopidogrel', 'Omeprazol']);
-    expect(cards[0].querySelector('.pgx-card__say').textContent).toContain('activa el clopidogrel más despacio');
-    expect(cards[0].querySelector('[role="img"]').getAttribute('aria-label')).toContain('CYP2C19: Metabolizador intermedio');
-    expect(container.querySelector('#pgx-talk').textContent).toBe('Para conversar con tu médico');
-    expect(container.textContent).toContain(disclaimer);
+    const names = rowNames();
+    expect(names.slice(0, 1)).toEqual(['Clopidogrel']);
+    expect(names).toContain('Omeprazol');
+    // the nine CYP2C19 drugs; amitriptyline also needs CYP2D6, which this profile lacks
+    expect(names).toHaveLength(9);
+    expect([...container.querySelectorAll('.pgx-group th')].map((th) => th.textContent))
+      .toEqual(['Conversar con tu médico', 'Habitual, con un matiz', 'Como la mayoría', 'No lo analizamos']);
+    expect(container.querySelector('.pgx-row[data-med="Clopidogrel"]').textContent).toContain('Metabolizador intermedio');
+    expect(container.textContent).not.toContain(disclaimer);
     expect(container.textContent).toContain('No cambies ni dejes un medicamento sin hablar con tu médico.');
     expect(getStatus().textContent).toBe('Datos disponibles.');
     expect(getStatus().getAttribute('role')).toBe('status');
     expect(getRetry()).toBeUndefined();
   });
 
-  it('opens a medication into the page with the technical detail, and comes back', async () => {
+  it('opens a row in place with the sentence and the gene that decides it, never the dosing guideline', async () => {
     await renderPage();
-    await act(async () => container.querySelector('.pgx-card[data-med="Clopidogrel"]').click());
-    expect(container.querySelector('.pgx-card')).toBeNull();
-    expect(container.querySelector('#pgx-detail-title').textContent).toBe('Clopidogrel');
-    expect(container.querySelector('dt').textContent).toBe('CYP2C19 *1/*2');
-    expect(container.querySelector('dd').textContent).toBe('Metabolizador intermedio');
-    expect(document.activeElement.textContent).toBe('Medicamentos');
-    await act(async () => document.activeElement.click());
-    expect(container.querySelector('.pgx-card[data-med="Clopidogrel"]')).not.toBeNull();
+    const toggle = container.querySelector('.pgx-row[data-med="Clopidogrel"] .pgx-row__name');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const detail = document.getElementById(toggle.getAttribute('aria-controls'));
+    expect(detail.querySelector('.pgx-detail__say').textContent).toContain('lo activa más despacio');
+    expect(detail.querySelector('.pgx-detail__guide')).toBeNull();
+    expect(detail.textContent).not.toContain('prasugrel o ticagrelor');
+    expect(detail.querySelector('.pgx-gene h4').textContent).toBe('Tu CYP2C19 *1/*2');
+    expect(detail.querySelector('[role="img"]').getAttribute('aria-label')).toContain('CYP2C19: Metabolizador intermedio');
+    await act(async () => toggle.click());
+    expect(container.querySelector('.pgx-detail')).toBeNull();
   });
 
-  it('keeps the medications you pick in your velador and dims the rest without moving them', async () => {
+  it('searches by name or use, and never lets an untested drug read as usual', async () => {
     await renderPage();
-    const input = container.querySelector('input[role="combobox"]');
-    await act(async () => { input.focus(); });
-    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-    await act(async () => { set.call(input, 'acidez'); input.dispatchEvent(new Event('input', { bubbles: true })); });
-    expect([...container.querySelectorAll('[role="option"]')].map((o) => o.firstChild.textContent)).toEqual(['Omeprazol']);
-    await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
-    expect(container.querySelector('.pgx-velador').textContent).toContain('Omeprazol');
-    expect(container.querySelector('.pgx-card.is-mine').dataset.med).toBe('Omeprazol');
-    expect(container.querySelector('.pgx-group').classList.contains('is-dim')).toBe(true);
-    expect([...container.querySelectorAll('.pgx-card')].map((c) => c.dataset.med)).toEqual(['Clopidogrel', 'Omeprazol']);
-    await act(async () => container.querySelector('[aria-label="Quitar Omeprazol"]').click());
-    expect(container.querySelector('.pgx-velador')).toBeNull();
+    await search('omeprazol');
+    expect(rowNames()).toEqual(['Omeprazol']);
+    await search('losec');
+    expect(container.querySelector('.pgx-none')).not.toBeNull();
+    await search('abacavir');
+    expect(rowNames()).toEqual(['Abacavir']);
+    expect(container.querySelector('.pgx-row').textContent).toContain('No lo analizamos');
+    await search('paracetamol');
+    expect(container.querySelector('.pgx-none').textContent).toContain('no cambian la indicación conocida');
   });
 
-  it('shows each gene with its medications in the gene lens', async () => {
+  it('filters the table from the partition bar and sorts by a column', async () => {
     await renderPage();
-    await act(async () => [...container.querySelectorAll('.pgx-lens button')].find((b) => b.textContent === 'Por gen').click());
-    const gene = container.querySelector('.pgx-card--gene');
-    expect(gene.querySelector('.pgx-card__name').textContent).toBe('CYP2C19');
-    expect([...gene.querySelectorAll('.pgx-chips button')].map((b) => b.textContent)).toEqual(['Clopidogrel', 'Omeprazol']);
+    const seg = (label) => [...container.querySelectorAll('.pgx-pbar__seg')].find((b) => b.textContent.includes(label));
+    expect(seg('Conversar').textContent).toContain('1');
+    await act(async () => seg('Como la mayoría').click());
+    expect(seg('Como la mayoría').getAttribute('aria-pressed')).toBe('true');
+    expect(rowNames()).not.toContain('Clopidogrel');
+    await act(async () => seg('Como la mayoría').click());
+    await act(async () => [...container.querySelectorAll('thead button')].find((b) => b.textContent === 'Remedio').click());
+    const names = rowNames();
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'es')));
+    expect(container.querySelector('.pgx-group')).toBeNull();
   });
 
   it('reuses the StrictMode guard profile and retains it after the result page remounts', async () => {
@@ -196,11 +212,11 @@ describe('accessible result states and preserved shell', () => {
     expect(getStatus().getAttribute('role')).toBe(role);
     expect(getStatus().getAttribute('aria-busy')).toBe(String(override.status === 'loading'));
     if (override.status === 'loading') {
-      // the page's own shape: the real title, the search and lens words, six medication cards waiting
+      // the page's own shape: the real title, the search and column words, eight rows waiting
       expect(container.querySelector('main h1').textContent).toBe('Tus remedios');
-      expect(getStatus().querySelectorAll('.pgx-cards .pgx-card--ghost')).toHaveLength(6);
-      expect(getStatus().querySelector('.pgx-search').textContent).toBe('Busca un medicamento');
-      expect(getStatus().querySelector('[aria-hidden="true"]').contains(getStatus().querySelector('.pgx-cards'))).toBe(true);
+      expect(getStatus().querySelectorAll('.pgx-row--ghost')).toHaveLength(8);
+      expect(getStatus().querySelector('.pgx-search').textContent).toBe('Buscar remedio');
+      expect(getStatus().querySelector('[aria-hidden="true"]').contains(getStatus().querySelector('table'))).toBe(true);
     } else {
       expect(getStatus().getAttribute('aria-label')).toBe('Estado de los resultados');
     }
@@ -234,7 +250,8 @@ describe('accessible result states and preserved shell', () => {
     state = makeState();
     state.data.modules.pharmacogenetics[0].phenotype = 'Metabolizador lento';
     await renderPage();
-    expect(container.querySelector('.pgx-card__say').textContent).toContain('casi no activa el clopidogrel');
+    await act(async () => container.querySelector('.pgx-row[data-med="Clopidogrel"]').click());
+    expect(container.querySelector('.pgx-detail__say').textContent).toContain('casi no lo activa');
     expect(apiRequest).toHaveBeenCalledTimes(1);
   });
 
@@ -257,14 +274,14 @@ describe('accessible result states and preserved shell', () => {
     if (mode === 'rejected') apiRequest.mockRejectedValueOnce(new Error('Profile unavailable'));
     else apiRequest.mockResolvedValueOnce({ ok: false, data: null });
     await renderPage();
-    expect(container.querySelector('.pgx-card__say').textContent).toContain('más despacio');
+    expect(rowNames()[0]).toBe('Clopidogrel');
     expect(getStatus().textContent).toContain('disponibles');
   });
 
   it('shows normalized results while the independent ME profile is still pending', async () => {
     apiRequest.mockImplementationOnce(() => new Promise(() => {}));
     await renderPage();
-    expect(container.querySelector('.pgx-card__say').textContent).toContain('más despacio');
+    expect(rowNames()[0]).toBe('Clopidogrel');
     expect(getStatus().textContent).toContain('disponibles');
     expectShell();
   });

@@ -60,7 +60,7 @@ describe('DashboardSkeleton', () => {
     expect(view.querySelector('main h1')?.textContent).toBe('Tus remedios');
     const loading = view.querySelector('.pgx-loading');
     expect(loading.getAttribute('aria-busy')).toBe('true');
-    expect(loading.querySelectorAll('.pgx-card--ghost')).toHaveLength(6);
+    expect(loading.querySelectorAll('.pgx-row--ghost')).toHaveLength(8);
   });
 
   it.each([

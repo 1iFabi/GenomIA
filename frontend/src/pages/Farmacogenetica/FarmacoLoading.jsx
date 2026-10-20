@@ -10,49 +10,44 @@ const Bar = ({ className = '', width }) => (
   <span className={`pgx-skel ${className}`.trim()} style={width ? { '--w': width } : undefined} />
 );
 
-// Placeholder widths follow real medication names and their uses, so the grid keeps its rhythm.
-const CARDS = [['38%', '30%'], ['44%', '18%'], ['40%', '36%'], ['34%', '28%'], ['42%', '34%'], ['46%', '24%']];
-
-const GhostCard = ({ name, use }) => (
-  <li>
-    <span className="pgx-card pgx-card--ghost">
-      <span className="pgx-card__head">
-        <Bar className="pgx-skel--name" width={name} />
-        <Bar className="pgx-skel--use" width={use} />
-      </span>
-      <span className="pgx-card__say"><Bar width="100%" /><Bar width="100%" /><Bar width="62%" /></span>
-      <span className="pgx-rule">
-        <span className="pgx-rule__caps" />
-        <span className="pgx-rule__track" style={{ '--n': 5 }}>{[0, 1, 2, 3, 4].map((k) => <span key={k} />)}</span>
-        <span className="pgx-rule__labels"><Bar width="2.5rem" /><Bar width="4rem" /></span>
-      </span>
-    </span>
-  </li>
-);
+// Placeholder widths follow real medication names, their uses and verdicts, so the table keeps its rhythm.
+const ROWS = [['46%', '30%', '62%'], ['40%', '38%', '62%'], ['52%', '30%', '62%'], ['44%', '46%', '70%'],
+  ['50%', '42%', '70%'], ['38%', '30%', '54%'], ['48%', '52%', '54%'], ['42%', '36%', '54%']];
 
 /**
  * The page while its results load, built from the page's own classes: the fixed words are real
- * text, only the data (the counts, the group, the medication cards) waits as shapes. It sits
- * exactly where the content lands, so nothing moves when the results arrive.
+ * text, only the data (the counts, the rows) waits as shapes. It sits exactly where the content
+ * lands, so nothing moves when the results arrive.
  */
 export const PgxLoadingContent = ({ label = 'Cargando datos…' }) => (
   <section className="pgx-loading" role="status" aria-live="polite" aria-busy="true">
     <span className="pgx-sr">{label}</span>
     <div aria-hidden="true">
-      <p className="pgx-hero__lede"><Bar width="100%" /><Bar width="100%" /><Bar width="40%" /></p>
-      <div className="pgx-kit">
-        <span className="pgx-kit__label">¿Cuáles tomas o te recetaron?</span>
-        <span className="pgx-search"><Search size={20} /><span className="pgx-search__ghost">Busca un medicamento</span></span>
-        <p className="pgx-kit__hint">Tu lista no se guarda ni se envía: vive solo en esta pantalla.</p>
+      <p className="pgx-hero__lede"><Bar width="100%" /><Bar width="55%" /></p>
+      <div className="pgx-pbar pgx-pbar--ghost">
+        {[7, 8, 20].map((n) => <span key={n} className="pgx-pbar__seg" style={{ flexGrow: n }}><i /><Bar width="2.5rem" /></span>)}
       </div>
-      <span className="pgx-lens">
-        <span className="pgx-lens__item is-on">Por medicamento</span>
-        <span className="pgx-lens__item">Por gen</span>
-      </span>
-      <div className="pgx-group">
-        <Bar className="pgx-skel--h2" width="17rem" />
-        <p><Bar width="100%" /><Bar width="100%" /><Bar className="pgx-skel--narrow" width="40%" /></p>
-        <ul className="pgx-cards">{CARDS.map(([name, use]) => <GhostCard key={name + use} name={name} use={use} />)}</ul>
+      <div className="pgx-table">
+        <div className="pgx-table__bar">
+          <span className="pgx-search"><Search size={17} /><span className="pgx-search__ghost">Buscar remedio</span></span>
+        </div>
+        <table>
+          <thead>
+            <tr><th><span className="pgx-th">Remedio</span></th><th className="pgx-wide"><span className="pgx-th">Gen</span></th>
+              <th className="pgx-wide"><span className="pgx-th">Tu gen</span></th><th><span className="pgx-th">Efecto en ti</span></th><th className="pgx-chev" /></tr>
+          </thead>
+          <tbody>
+            {ROWS.map(([name, use, verdict]) => (
+              <tr key={name + use + verdict} className="pgx-row pgx-row--ghost">
+                <td><Bar className="pgx-skel--name" width={name} /><Bar width={use} /></td>
+                <td className="pgx-wide"><Bar width="60%" /></td>
+                <td className="pgx-wide"><Bar width="80%" /></td>
+                <td><Bar width={verdict} /></td>
+                <td className="pgx-chev" />
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   </section>
