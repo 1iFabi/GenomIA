@@ -50,3 +50,15 @@ skills-lock.json
 
 # Claude Code project instructions: kept locally, not shared through the repo
 /CLAUDE.md
+
+# Local tooling, renders and session notes
+.mcp.json
+.claude/
+frontend/.claude/
+.taste-skill/
+.impeccable/
+blender/
+odd/
+frontend/h-*.png
+frontend/public/dna-login/
+HANDOFF_*.md
