@@ -88,6 +88,7 @@ from accounts.jwt_utils import encode_jwt
 from accounts.roles import grant_admin_role, grant_analyst_role, grant_reception_role
 from participants.models import Participant
 from profiles.models import Profile
+from reception.models import ReceptionAccessLog
 from services import models as domain
 from services.status import get_service_projection
 
@@ -787,8 +788,15 @@ class ServiceFlowTestCase(APITestCase):
         return self.client.post(path, data=json.dumps(data), content_type='application/json',
                                 HTTP_X_CSRFTOKEN=csrf)
 
+    def rut_checked(self, actor, user, outcome='match', ago=timedelta(0)):
+        ReceptionAccessLog.objects.create(
+            actor=actor.app_user, action=ReceptionAccessLog.Action.VERIFY_RUT, target_user=user, outcome=outcome,
+            created_at=timezone.now() - ago,
+        )
+
     def confirm(self, user_id=None):
         self.as_actor(self.reception)
+        self.rut_checked(self.reception, get_user_model().objects.filter(pk=user_id or self.owner.pk).first())
         return self.post_json('/api/services/payments/', {'userId': user_id or self.owner.pk})
 
     def advance(self, service_id, actor=None, data=None):
@@ -874,6 +882,23 @@ class ConfirmPaymentTests(ServiceFlowTestCase):
         self.assertEqual(self.counts(), (0, 0, 0))
         self.send_sample_email.assert_not_called()
         self.as_actor(self.admin)
+        self.rut_checked(self.admin, self.owner)
+        self.assertEqual(self.post_json('/api/services/payments/', {'userId': self.owner.pk}).status_code, 201)
+
+    def test_confirmation_needs_a_recent_matching_rut_check_by_the_same_actor(self):
+        self.as_actor(self.reception)
+        for setup in (
+            lambda: None,
+            lambda: self.rut_checked(self.reception, self.owner, outcome='no_match'),
+            lambda: self.rut_checked(self.reception, self.owner, ago=timedelta(minutes=31)),
+            lambda: self.rut_checked(self.admin, self.owner),
+            lambda: self.rut_checked(self.reception, self.analyst),
+        ):
+            setup()
+            response = self.post_json('/api/services/payments/', {'userId': self.owner.pk})
+            self.assertEqual(response.status_code, 409, response.data)
+        self.assertEqual(self.counts(), (0, 0, 0))
+        self.rut_checked(self.reception, self.owner, ago=timedelta(minutes=29))
         self.assertEqual(self.post_json('/api/services/payments/', {'userId': self.owner.pk}).status_code, 201)
 
     def test_rejects_bad_bodies_and_ineligible_targets_without_writes(self):

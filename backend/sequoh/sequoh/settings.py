@@ -27,7 +27,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # ENVIRONMENT is the only switch between local development and a deployment.
-DEBUG = os.environ.get('ENVIRONMENT', 'development') != 'production'
+# Debug only when asked for: a deployment that forgets ENVIRONMENT stays locked down.
+DEBUG = os.environ.get('ENVIRONMENT') == 'development'
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:

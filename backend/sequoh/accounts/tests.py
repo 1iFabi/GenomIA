@@ -205,9 +205,12 @@ class AuthHttpOnlyCookieTests(TestCase):
                 "token": str(token), "password": "ResetPassword789!", "confirmPassword": "ResetPassword789!",
             }), content_type="application/json")
 
+        older = PasswordResetToken.objects.create(user=self.user, expires_at=timezone.now() + timedelta(hours=1))
+        self.assertEqual(confirm("not-a-uuid").data, {"error": "Token inválido"})
         self.assertEqual(confirm(expired.token).status_code, 400)
         self.assertEqual(confirm(prt.token).status_code, 200)
         self.assertEqual(confirm(prt.token).status_code, 400)
+        self.assertEqual(confirm(older.token).status_code, 400)  # Every other pending link dies with the reset.
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("ResetPassword789!"))
         self.client.cookies[self.cookie_name] = old_session
@@ -700,7 +703,7 @@ class AccountReadProjectionTests(TestCase):
         rows = {row['id']: row for row in admin.data}
         self.assertEqual(set(rows[client.pk]), {
             'id', 'username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser',
-            'rut', 'service_status', 'roles', 'is_admin', 'is_analyst', 'is_reception',
+            'service_status', 'roles', 'is_admin', 'is_analyst', 'is_reception',
         })
         self.assertEqual(rows[client.pk]['service_status'], 'PENDING')
         self.assertEqual(rows[no_profile.pk]['service_status'], 'PENDING')

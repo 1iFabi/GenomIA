@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
@@ -11,9 +13,11 @@ from accounts.email_utils import send_sample_code_email
 from accounts.models import AppUser, Role
 from participants.codes import new_client_code
 from participants.models import Participant
+from reception.models import ReceptionAccessLog
 from services.models import Purchase, PurchaseStatus, Sample, ServiceRequest, ServiceStatus, ServiceStatusLog
 
 STATUS_SEQUENCE = ('WAITING_SAMPLE', 'SAMPLE_RECEIVED', 'PROCESSING', 'COMPLETED')
+RUT_CHECK_WINDOW = timedelta(minutes=30)
 
 
 def _lock_actor(user, roles):
@@ -52,6 +56,12 @@ class ConfirmPaymentAPIView(CSRFDoubleSubmitMixin, APIView):
             ).first()
             if owner is None:
                 return Response({'error': 'Client not found'}, status=status.HTTP_404_NOT_FOUND)
+            # The ID card check is what makes the sample this person's; the screen alone cannot enforce it.
+            if not ReceptionAccessLog.objects.filter(
+                actor=actor, action=ReceptionAccessLog.Action.VERIFY_RUT, target_user_id=user_id,
+                outcome='match', created_at__gte=timezone.now() - RUT_CHECK_WINDOW,
+            ).exists():
+                return Response({'error': 'Verify the client RUT first'}, status=status.HTTP_409_CONFLICT)
             if ServiceRequest.objects.filter(
                 purchase__owner=owner, purchase__status__code='PAID',
             ).exclude(status__code='COMPLETED').exists():

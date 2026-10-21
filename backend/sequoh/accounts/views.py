@@ -44,6 +44,8 @@ from .roles import (
 )
 import json
 import re
+import threading
+import uuid
 import logging
 from html import escape
 
@@ -737,8 +739,10 @@ class PasswordResetRequestAPIView(APIView):
             frontend_base = getattr(settings, 'FRONTEND_DOMAIN', 'http://localhost:5173').rstrip('/')
             reset_url = f"{frontend_base}/login?token={prt.token}"
 
-            # Enviar email
-            send_password_reset_email(user_email=user.email, user_name=user.first_name or user.username, reset_url=reset_url)
+            # Sent off the request: a slow send only for registered emails would reveal who has an account.
+            threading.Thread(target=send_password_reset_email, daemon=True, kwargs={
+                'user_email': user.email, 'user_name': user.first_name or user.username, 'reset_url': reset_url,
+            }).start()
 
             return Response(generic_ok)
         except Exception as e:
@@ -767,6 +771,10 @@ class PasswordResetConfirmAPIView(APIView):
                 return Response({"error": errors}, status=status.HTTP_400_BAD_REQUEST)
 
             from .models import PasswordResetToken
+            try:
+                token = uuid.UUID(token)
+            except ValueError:
+                return Response({"error": "Token inválido"}, status=status.HTTP_400_BAD_REQUEST)
             prt = PasswordResetToken.objects.select_related('user').filter(token=token).first()
             if not prt:
                 return Response({"error": "Token inválido"}, status=status.HTTP_400_BAD_REQUEST)
@@ -779,6 +787,8 @@ class PasswordResetConfirmAPIView(APIView):
             user = prt.user
             user.set_password(password)
             user.save()
+            # Any other link still in a mailbox must not reset the new password.
+            PasswordResetToken.objects.filter(user=user, used=False).update(used=True)
 
             return Response({"success": True})
         except Exception as e:
@@ -886,13 +896,10 @@ class GetUsersAPIView(APIView):
         roles_by_user = dict(AppUser.objects.filter(
             django_user_id__in=user_ids
         ).values_list('django_user_id', 'role__code'))
-        profiles = {profile.user_id: profile for profile in Profile.objects.filter(user_id__in=user_ids)}
         paid = get_service_projections(user_ids)
         users_list = []
         for user in users:
             user_dict = dict(user)
-            profile = profiles.get(user['id'])
-            user_dict["rut"] = getattr(profile, "rut", None)
             user_dict["service_status"] = (paid[user['id']].service_status
                                            if user['id'] in paid else ClientStatus.NO_PURCHASED)
 
