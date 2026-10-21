@@ -92,7 +92,7 @@ describe('Dashboard result navigation', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     // the modules live on the helix and its legend; the menu is the account
     expect([...menu.querySelectorAll('a, button')].map((el) => el.textContent))
-      .toEqual(['Guía de módulos', 'Mi cuenta', 'Ir al sitio de GenomIA', 'Cerrar sesión']);
+      .toEqual(['Mi cuenta', 'Ir al sitio de GenomIA', 'Cerrar sesión']);
 
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
     expect(toggle.getAttribute('aria-expanded')).toBe('false');

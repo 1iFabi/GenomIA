@@ -1,7 +1,6 @@
 import React, { useContext, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpenText, Globe, LogOut, Menu, MessageCircleQuestion, UserRound, X } from 'lucide-react';
-import { GUIDE_HREF } from '../../config/resultNav';
+import { Globe, LogOut, Menu, MessageCircleQuestion, UserRound, X } from 'lucide-react';
 import { GenominContext } from '../../context/use-genomin';
 import './AccountMenu.css';
 
@@ -56,7 +55,8 @@ const AccountMenu = ({ user, onLogout, className = '' }) => {
         <nav className="acct__pop" id={id} aria-label="Tu cuenta">
           <p className="acct__who"><b>{firstName}</b><span>Cliente GenomIA</span></p>
           <ul>
-            <li><Link className="acct__item" to={GUIDE_HREF} onClick={close}><BookOpenText aria-hidden="true" />Guía de módulos</Link></li>
+            <li><Link className="acct__item" to="/profile" onClick={close}><UserRound aria-hidden="true" />Mi cuenta</Link></li>
+            <li><Link className="acct__item" to="/" onClick={close}><Globe aria-hidden="true" />Ir al sitio de GenomIA</Link></li>
             {genomin && (
               <li>
                 <button type="button" className="acct__item" onClick={() => { close(); genomin.openGenomin(); }}>
@@ -64,8 +64,6 @@ const AccountMenu = ({ user, onLogout, className = '' }) => {
                 </button>
               </li>
             )}
-            <li><Link className="acct__item" to="/profile" onClick={close}><UserRound aria-hidden="true" />Mi cuenta</Link></li>
-            <li><Link className="acct__item" to="/" onClick={close}><Globe aria-hidden="true" />Ir al sitio de GenomIA</Link></li>
             {onLogout && (
               <>
                 <li className="acct__sep" aria-hidden="true" />
