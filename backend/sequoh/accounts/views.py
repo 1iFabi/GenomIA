@@ -29,7 +29,7 @@ from participants.models import Participant
 from profiles.models import Profile, normalize_rut
 from services.status import ClientStatus, get_service_projection, get_service_projections
 from services.models import ServiceRequest
-from .models import AppUser, RevokedToken, Role, WelcomeStatus
+from .models import AVATAR_COLORS, AVATAR_FIGURES, AppUser, RevokedToken, Role, WelcomeStatus
 from .email_validation import is_valid_registration_name, validate_registration_email
 from .username_validation import normalize_registration_username
 from .csrf import CSRFDoubleSubmitMixin
@@ -160,17 +160,69 @@ class LoginAPIView(APIView):
             return Response({"error": "Error interno del servidor"}, status=500)
 
 
-class MeAPIView(APIView):
-    """Retorna datos básicos del usuario autenticado (JWT)."""
+USERNAME_CHANGE_EVERY = timedelta(days=30)
+
+
+def _next_username_change(app_user):
+    return app_user.username_changed_at + USERNAME_CHANGE_EVERY if app_user.username_changed_at else None
+
+
+class MeAPIView(CSRFDoubleSubmitMixin, APIView):
+    """Retorna datos básicos del usuario autenticado (JWT); PATCH cambia su username o su avatar."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        if not isinstance(request.data, dict) or not request.data or not set(request.data) <= {'username', 'avatar'}:
+            return Response({"error": "Solo se puede cambiar username o avatar"}, status=status.HTTP_400_BAD_REQUEST)
+        u = request.user
+        app_user = AppUser.objects.filter(django_user=u).first()
+        avatar = request.data.get('avatar')
+        if avatar is not None:
+            if (
+                app_user is None or not isinstance(avatar, dict) or set(avatar) != {'color', 'figure'}
+                or avatar['color'] not in dict(AVATAR_COLORS) or avatar['figure'] not in dict(AVATAR_FIGURES)
+            ):
+                return Response({"error": "Avatar inválido"}, status=status.HTTP_400_BAD_REQUEST)
+        username = None
+        if 'username' in request.data:
+            if app_user is None:
+                return Response({"error": "Cuenta sin perfil"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                username = normalize_registration_username(request.data['username'])
+            except ValueError as exc:
+                return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with transaction.atomic():
+                if username is not None and username != u.username:
+                    next_change = _next_username_change(app_user)
+                    if next_change and next_change > timezone.now():
+                        return Response({
+                            "error": "Solo puedes cambiar tu nombre de usuario una vez cada 30 días",
+                            "username_next_change_at": next_change.isoformat().replace('+00:00', 'Z'),
+                        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+                    if User.objects.filter(username__iexact=username).exclude(pk=u.pk).exists():
+                        return Response({"error": "Ese nombre de usuario ya está en uso", "username_exists": True},
+                                        status=status.HTTP_409_CONFLICT)
+                    u.username = username
+                    u.save(update_fields=['username'])
+                    app_user.username_changed_at = timezone.now()
+                if avatar is not None:
+                    app_user.avatar_color, app_user.avatar_figure = avatar['color'], avatar['figure']
+                if app_user is not None:
+                    app_user.save(update_fields=['avatar_color', 'avatar_figure', 'username_changed_at'])
+        except IntegrityError:  # two requests raced for the same name
+            return Response({"error": "Ese nombre de usuario ya está en uso", "username_exists": True},
+                            status=status.HTTP_409_CONFLICT)
+        return self.get(request)
 
     def get(self, request):
         u = request.user
 
         projection = get_service_projection(u)
 
-        functional_role = AppUser.objects.filter(django_user=u).values_list('role__code', flat=True).first()
+        app_user = AppUser.objects.filter(django_user=u).select_related('role').first()
+        functional_role = app_user.role.code if app_user else None
         admin_flag = functional_role == Role.Code.ADMIN
         analyst_flag = functional_role == Role.Code.ANALISTA
         reception_flag = functional_role == Role.Code.RECEPCION
@@ -204,6 +256,10 @@ class MeAPIView(APIView):
             "has_password": u.has_usable_password(),
             # The client's own Sample ID (issued with the purchase data); shown on /no-purchased.
             "client_code": Participant.objects.filter(user=u).values_list('participant_code', flat=True).first(),
+            "avatar": {"color": app_user.avatar_color, "figure": app_user.avatar_figure} if app_user else None,
+            # When the client may rename again; None means now.
+            "username_next_change_at": next_change.isoformat().replace('+00:00', 'Z')
+            if app_user and (next_change := _next_username_change(app_user)) and next_change > timezone.now() else None,
         }
         # Evitar cacheo del perfil actual
         resp = Response({"user": data})

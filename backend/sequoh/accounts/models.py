@@ -88,6 +88,12 @@ class Role(models.Model):
         ]
 
 
+AVATAR_COLORS = [(k, k) for k in (
+    'global_ancestry', 'pharmacogenetics', 'traits', 'polygenic_risk', 'monogenic_risk',
+)]
+AVATAR_FIGURES = [('initial', 'initial'), ('helix', 'helix')]
+
+
 class AppUser(models.Model):
     """GenomIA role and optional external identity for a Django user.
 
@@ -104,6 +110,11 @@ class AppUser(models.Model):
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name='app_users')
     oidc_issuer = models.TextField(null=True, blank=True)
     oidc_subject = models.CharField(max_length=255, null=True, blank=True)
+    # A generated avatar, never an uploaded photo: one of the five result-module colours and a figure.
+    avatar_color = models.CharField(max_length=20, choices=AVATAR_COLORS, default='traits', db_default='traits')
+    avatar_figure = models.CharField(max_length=10, choices=AVATAR_FIGURES, default='initial', db_default='initial')
+    # Last self-service rename; the client may rename again USERNAME_CHANGE_EVERY after it.
+    username_changed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'app_user'

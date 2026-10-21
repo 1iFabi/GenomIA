@@ -48,8 +48,13 @@ export function AuthProvider({ children }) {
     })();
   }, [publish]);
 
+  // A PATCH to /me answers with the new user; publishing it spares a reload of the session.
+  const updateUser = useCallback((user) => {
+    if (sessionRef.current.user) publish({ user, loading: false });
+  }, [publish]);
+
   return (
-    <AuthContext.Provider value={{ ...session, ensureSession }}>
+    <AuthContext.Provider value={{ ...session, ensureSession, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

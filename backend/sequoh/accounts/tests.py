@@ -1200,7 +1200,7 @@ class AppUserMappingTests(TestCase):
         self.assertEqual(AppUser._meta.get_field('django_user').one_to_one, True)
         self.assertEqual(
             {field.name for field in AppUser._meta.local_fields},
-            {'user_id', 'django_user', 'role', 'oidc_issuer', 'oidc_subject'},
+            {'user_id', 'django_user', 'role', 'oidc_issuer', 'oidc_subject', 'avatar_color', 'avatar_figure', 'username_changed_at'},
         )
         with connection.cursor() as cursor:
             tables = connection.introspection.table_names(cursor)
@@ -1314,3 +1314,54 @@ class AppUserMappingTests(TestCase):
             oidc_issuer='https://other.example', oidc_subject='subject',
         )
         self.assertEqual(other.oidc_subject, 'subject')
+
+
+class MeUpdateTests(TestCase):
+    """PATCH auth/me/: the client renames itself or picks a generated avatar, nothing else."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.user = User.objects.create_user(username='ana', email='ana@example.com', password='HandleSecret123!')
+        self.client.cookies[getattr(settings, 'AUTH_COOKIE_NAME', 'access_token')] = encode_jwt(
+            {'sub': str(self.user.id), 'email': self.user.email})
+        self.client.get('/api/auth/csrf/')
+
+    def patch(self, payload):
+        return self.client.patch('/api/auth/me/', data=json.dumps(payload), content_type='application/json',
+                                 HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value)
+
+    def test_renames_and_sets_avatar_and_keeps_the_session(self):
+        self.assertEqual(self.client.get('/api/auth/me/').data['user']['avatar'], {'color': 'traits', 'figure': 'initial'})
+        response = self.patch({'username': ' Ana.Perez ', 'avatar': {'color': 'monogenic_risk', 'figure': 'helix'}})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['user']['username'], 'ana.perez')
+        self.assertEqual(response.data['user']['avatar'], {'color': 'monogenic_risk', 'figure': 'helix'})
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 200)
+
+    def test_rejects_taken_names_bad_input_and_missing_csrf(self):
+        User.objects.create_user(username='luis', email='luis@example.com', password='x')
+        self.assertEqual(self.patch({'username': 'LUIS'}).status_code, 409)
+        for payload in ({'username': 'a'}, {'email': 'x@example.com'}, {},
+                        {'avatar': {'color': 'red', 'figure': 'helix'}}, {'avatar': {'color': 'traits'}}):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.patch(payload).status_code, 400)
+        no_csrf = self.client.patch('/api/auth/me/', data=json.dumps({'username': 'otra'}), content_type='application/json')
+        self.assertEqual(no_csrf.status_code, 403)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, 'ana')
+
+    def test_username_changes_once_every_30_days(self):
+        self.assertIsNone(self.client.get('/api/auth/me/').data['user']['username_next_change_at'])
+        self.assertEqual(self.patch({'username': 'ana.uno'}).status_code, 200)
+        me = self.client.get('/api/auth/me/').data['user']
+        self.assertIsNotNone(me['username_next_change_at'])
+
+        blocked = self.patch({'username': 'ana.dos'})
+        self.assertEqual(blocked.status_code, 429)
+        self.assertEqual(blocked.data['username_next_change_at'], me['username_next_change_at'])
+        # Saving the same name or only the avatar is not a rename.
+        self.assertEqual(self.patch({'username': 'ana.uno', 'avatar': {'color': 'traits', 'figure': 'helix'}}).status_code, 200)
+
+        AppUser.objects.filter(django_user=self.user).update(username_changed_at=timezone.now() - timedelta(days=30, seconds=1))
+        self.assertEqual(self.patch({'username': 'ana.dos'}).status_code, 200)
