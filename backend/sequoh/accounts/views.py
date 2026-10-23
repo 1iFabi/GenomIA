@@ -76,8 +76,11 @@ def normalize_cl_phone(raw: str):
     return None
 
 
-def issue_auth_cookie(resp, user, *, remember=False):
-    """Emite el JWT en cookie HttpOnly y registra el login; compartido por login local y Google."""
+def issue_auth_cookie(resp, user):
+    """Emite el JWT en cookie HttpOnly y registra el login; compartido por login local y Google.
+
+    Es una cookie de sesión (muere al cerrar el navegador) y el token vence a las JWT_EXPIRATION_HOURS.
+    """
     token = encode_jwt({
         "sub": str(user.id),
         "email": user.email,
@@ -87,13 +90,7 @@ def issue_auth_cookie(resp, user, *, remember=False):
     cookie_name = getattr(settings, 'AUTH_COOKIE_NAME', 'access_token')
     samesite = getattr(settings, 'AUTH_COOKIE_SAMESITE', 'Lax')
     secure = bool(getattr(settings, 'AUTH_COOKIE_SECURE', False))
-    if remember:
-        # Cookie persistente: sobrevive al reinicio, acotada al TTL del token (8h).
-        max_age = int(getattr(settings, 'JWT_EXPIRATION_HOURS', 8)) * 3600
-        resp.set_cookie(cookie_name, token, httponly=True, samesite=samesite, secure=secure, path='/', max_age=max_age)
-    else:
-        # Cookie de sesión: muere al cerrar el navegador (acotada al TTL del token).
-        resp.set_cookie(cookie_name, token, httponly=True, samesite=samesite, secure=secure, path='/')
+    resp.set_cookie(cookie_name, token, httponly=True, samesite=samesite, secure=secure, path='/')
     resp["Cache-Control"] = "no-store"
     update_last_login(None, user)
     return resp
@@ -150,7 +147,7 @@ class LoginAPIView(APIView):
                         }, status=400)
 
                 resp = Response({"mensaje": "Inicio de sesión exitoso", "success": True})
-                return issue_auth_cookie(resp, user, remember=bool(data.get('remember', False)))
+                return issue_auth_cookie(resp, user)
             # Respuesta genérica: no revela si el correo existe ni si la contraseña es correcta
             return Response({"success": False, "error": "Credenciales inválidas"}, status=400)
         except json.JSONDecodeError:

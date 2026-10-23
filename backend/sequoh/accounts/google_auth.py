@@ -96,7 +96,7 @@ class GoogleLoginAPIView(APIView):
             if not mapping.django_user.is_active:
                 return Response(INVALID_GOOGLE, status=status.HTTP_400_BAD_REQUEST)
             resp = Response({"mensaje": "Inicio de sesión exitoso", "success": True})
-            return issue_auth_cookie(resp, mapping.django_user, remember=bool(data.get('remember', False)))
+            return issue_auth_cookie(resp, mapping.django_user)
 
         email = claims['email'].strip().lower()
         if User.objects.filter(email__iexact=email).exists():

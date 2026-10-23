@@ -218,7 +218,8 @@ JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
 JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 JWT_ISSUER = os.getenv('JWT_ISSUER', 'genomia')
 JWT_AUDIENCE = os.getenv('JWT_AUDIENCE', 'genomia-app')
-JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', '8'))
+# Absolute lifetime from login (no sliding renewal): after this the user signs in again.
+JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', '2'))
 
 # Cookie de autenticación (JWT en HttpOnly), same-origin: SameSite=Lax.
 AUTH_COOKIE_NAME = os.getenv('AUTH_COOKIE_NAME', 'access_token')
@@ -227,7 +228,9 @@ AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', '0' if DEBUG else '1') not 
 
 # Seguridad de sesión y cookies
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-# (Opcional) Forzar expiración más corta si lo deseas: SESSION_COOKIE_AGE = 60 * 60  # 1 hora
+# Django sessions only back /ciff/ (admin); keep them as short as the API token.
+SESSION_COOKIE_AGE = JWT_EXPIRATION_HOURS * 3600
+
 
 
 # EMAIL CONFIGURATION - Usar API de Gmail mediante adapter de allauth

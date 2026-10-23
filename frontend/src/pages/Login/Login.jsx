@@ -23,7 +23,6 @@ gsap.registerPlugin(useGSAP);
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPwd, setShowPwd] = useState(false);
-  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -160,7 +159,6 @@ export default function Login() {
         body: JSON.stringify({
           username: form.email,
           password: form.password,
-          remember
         }),
       });
       
@@ -348,16 +346,6 @@ export default function Login() {
                     </div>
                   )}
                 </div>
-
-                {/* Recordar cuenta */}
-                <label className="remember-row">
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                  />
-                  <span>Recordar mi cuenta</span>
-                </label>
 
                 {/* Botón de login */}
             <button className="login-button" type="submit" disabled={loading}>

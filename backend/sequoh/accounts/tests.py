@@ -57,13 +57,12 @@ class AuthHttpOnlyCookieTests(TestCase):
         )
         self.cookie_name = getattr(settings, 'AUTH_COOKIE_NAME', 'access_token')
 
-    def _login(self, username=None, password=None, remember=False):
+    def _login(self, username=None, password=None):
         return self.client.post(
             "/api/auth/login/",
             data=json.dumps({
                 "username": self.username if username is None else username,
                 "password": self.password if password is None else password,
-                "remember": remember,
             }),
             content_type="application/json",
         )
@@ -91,20 +90,16 @@ class AuthHttpOnlyCookieTests(TestCase):
         # El token no debe estar expuesto en el body JSON.
         self.assertNotIn('token', resp.data)
 
-    def test_remember_true_sets_max_age(self):
+    def test_login_cookie_is_a_session_cookie_even_if_a_client_asks_to_be_remembered(self):
         self.client.cookies.clear()
-        resp = self._login(remember=True)
+        resp = self.client.post(
+            "/api/auth/login/",
+            data=json.dumps({"username": self.username, "password": self.password, "remember": True}),
+            content_type="application/json",
+        )
         cookie = resp.cookies.get(self.cookie_name)
         self.assertIsNotNone(cookie)
-        self.assertIsNotNone(cookie.get('max-age'), "remember=true debe persistir (Max-Age)")
-        self.assertTrue(int(float(cookie['max-age'])) >= 8 * 3600)
-
-    def test_remember_false_session_cookie(self):
-        self.client.cookies.clear()
-        resp = self._login(remember=False)
-        cookie = resp.cookies.get(self.cookie_name)
-        self.assertIsNotNone(cookie)
-        self.assertIn(cookie.get('max-age'), (None, ''), "remember=false = cookie de sesión (sin Max-Age)")
+        self.assertIn(cookie.get('max-age'), (None, ''), "sin 'recordar cuenta': la cookie muere al cerrar el navegador")
 
     def test_inactive_user_is_rejected(self):
         self._login()
@@ -146,11 +141,11 @@ class AuthHttpOnlyCookieTests(TestCase):
             with self.assertRaises(Exception):
                 decode_jwt(token)
 
-    def test_token_ttl_about_8_hours(self):
+    def test_token_ttl_is_two_hours(self):
         token = encode_jwt({"sub": str(self.user.id), "email": self.username})
         payload = decode_jwt(token)
         delta = payload['exp'] - payload['iat']  # segundos (timestamps int)
-        self.assertAlmostEqual(delta, 8 * 3600, delta=120)
+        self.assertAlmostEqual(delta, 2 * 3600, delta=120)
 
     def test_csrf_endpoint_sets_cookie(self):
         resp = self.client.get("/api/auth/csrf/")
