@@ -35,6 +35,7 @@ from django.urls import NoReverseMatch, Resolver404, resolve, reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from accounts.csrf import csrf_token_for
 from accounts.jwt_utils import encode_jwt
 from accounts.models import AppUser, Role
 from accounts.roles import grant_admin_role, grant_analyst_role, grant_reception_role
@@ -480,13 +481,13 @@ class RetiredSNPCatalogAuthenticatedTests(APITestCase):
             if grant:
                 grant(user)
             self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
-            self.client.cookies['csrftoken'] = 'catalog-csrf'
             for method in ('get', 'head', 'post'):
                 with self.subTest(role=role, method=method), self.assertNumQueries(0):
                     response = getattr(self.client, method)(
                         RetiredSNPCatalogRouteTests.url,
                         **({'data': {'rsid': 'rs-new-catalog', 'genotipo': 'AA', 'fenotipo': 'Not stored'},
-                            'format': 'json', 'HTTP_X_CSRFTOKEN': 'catalog-csrf'} if method == 'post' else {}),
+                            'format': 'json', 'HTTP_X_CSRFTOKEN': csrf_token_for(
+                                self.client.cookies[settings.AUTH_COOKIE_NAME].value)} if method == 'post' else {}),
                     )
                     self.assertEqual(response.status_code, 404)
         self.assertEqual(list(domain.Variant.objects.values()), before)

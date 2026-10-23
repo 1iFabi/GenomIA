@@ -17,14 +17,23 @@ class NoCacheMiddleware:
         return response
 
 
-class PermissionsPolicyMiddleware:
-    """Turns off browser features nothing in GenomIA uses (pages the backend serves, e.g. admin)."""
-    POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+class SecurityHeadersMiddleware:
+    """Browser policies for what the backend serves: the JSON API and the admin (/ciff/).
+
+    The SPA gets its own CSP from the frontend build (frontend/vite.config.js).
+    """
+    PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    # The admin only loads its own static files; JSON responses load nothing at all.
+    CONTENT_SECURITY_POLICY = (
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    )
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         response = self.get_response(request)
-        response.headers.setdefault("Permissions-Policy", self.POLICY)
+        response.headers.setdefault("Permissions-Policy", self.PERMISSIONS_POLICY)
+        response.headers.setdefault("Content-Security-Policy", self.CONTENT_SECURITY_POLICY)
         return response

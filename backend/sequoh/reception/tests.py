@@ -8,6 +8,7 @@ from django.contrib.auth.models import Group, User
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
+from accounts.csrf import csrf_token_for
 from accounts.jwt_utils import encode_jwt
 from accounts.models import AppUser, Role
 from accounts.roles import grant_admin_role, grant_reception_role
@@ -288,10 +289,9 @@ class ReceptionVerifyRutTests(APITestCase):
 
     def as_actor(self, user):
         self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
-        self.client.cookies['csrftoken'] = 'matching-csrf'
 
-    def verify(self, rut, user_id=None, csrf='matching-csrf'):
-        self.client.cookies['csrftoken'] = 'matching-csrf'
+    def verify(self, rut, user_id=None, csrf=None):
+        csrf = csrf or csrf_token_for(self.client.cookies[settings.AUTH_COOKIE_NAME].value)
         return self.client.post('/api/reception/verify-rut/', data=json.dumps({'userId': user_id or self.owner.pk,
                                                                              'rut': rut}),
                                 content_type='application/json', HTTP_X_CSRFTOKEN=csrf)

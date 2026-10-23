@@ -56,17 +56,18 @@ export const clearToken = async () => {
   }
 };
 // El token vive en una cookie HttpOnly (ilegible por JS). No se usa localStorage.
-// Helper para el patrón CSRF double-submit.
+// Helper para el patrón CSRF double-submit firmado: el backend firma el token para la sesión actual.
+const CSRF_COOKIE = 'genomia_csrf=';
 export const getCsrfToken = () => {
   if (typeof document === 'undefined') return '';
 
   const cookie = document.cookie
     .split(';')
     .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith('csrftoken='));
+    .find((entry) => entry.startsWith(CSRF_COOKIE));
   if (!cookie) return '';
 
-  const rawValue = cookie.slice('csrftoken='.length);
+  const rawValue = cookie.slice(CSRF_COOKIE.length);
   try {
     return decodeURIComponent(rawValue);
   } catch {

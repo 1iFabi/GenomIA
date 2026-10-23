@@ -9,6 +9,7 @@ from profiles.models import Profile, normalize_rut
 from accounts.models import AppUser, Role
 from accounts.roles import is_admin, is_reception
 from participants.models import Participant
+from accounts.audit import audit
 from reception.models import ReceptionAccessLog
 from services.models import Sample
 from services.status import ClientStatus, get_service_projections
@@ -24,6 +25,7 @@ def _log(request, action, *, query='', target_user_id=None, outcome):
         actor=AppUser.objects.get(django_user_id=request.user.pk), action=action, query=query[:96],
         target_user_id=target_user_id, outcome=outcome,
     )
+    audit('reception_access', request, actor=request.user.pk, action=action, subject=target_user_id, outcome=outcome)
 
 
 def serialize_reception_profile(profile: Profile, projection, client_code=None) -> dict:

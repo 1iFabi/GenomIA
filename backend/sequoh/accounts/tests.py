@@ -30,9 +30,10 @@ from rest_framework.response import Response
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework.views import APIView
 
+from .csrf import CSRF_COOKIE_NAME, _mac, csrf_token_for
 from .authentication import JWTAuthentication
 from .jwt_utils import encode_jwt, decode_jwt
-from .models import AppUser, RevokedToken, Role
+from .models import AppUser, GeneticDataAccessLog, RevokedToken, Role
 from .signals import assign_new_user_client_role
 from .roles import (
     grant_admin_role, grant_analyst_role, grant_reception_role,
@@ -123,7 +124,7 @@ class AuthHttpOnlyCookieTests(TestCase):
 
         self.client.cookies[self.cookie_name] = token
         self.client.get("/api/auth/csrf/")
-        csrf_cookie = self.client.cookies.get('csrftoken')
+        csrf_cookie = self.client.cookies.get(CSRF_COOKIE_NAME)
         self.assertIsNotNone(csrf_cookie)
         logout = self.client.post(
             "/api/auth/logout/",
@@ -147,10 +148,28 @@ class AuthHttpOnlyCookieTests(TestCase):
         delta = payload['exp'] - payload['iat']  # segundos (timestamps int)
         self.assertAlmostEqual(delta, 2 * 3600, delta=120)
 
-    def test_csrf_endpoint_sets_cookie(self):
+    def test_csrf_endpoint_signs_a_cookie_only_for_a_session(self):
         resp = self.client.get("/api/auth/csrf/")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('csrftoken', resp.cookies)
+        self.assertNotIn(CSRF_COOKIE_NAME, resp.cookies)  # Nothing to bind a token to.
+
+        token = encode_jwt({'sub': str(self.user.pk)})
+        self.client.cookies[self.cookie_name] = token
+        cookie = self.client.get("/api/auth/csrf/").cookies[CSRF_COOKIE_NAME]
+        self.assertFalse(cookie['httponly'])  # The SPA reads it to echo it as X-CSRFToken.
+        mac, nonce = cookie.value.split('.')
+        self.assertEqual(cookie.value, f"{_mac(decode_jwt(token)['jti'], nonce)}.{nonce}")
+
+    def test_login_sets_the_signed_csrf_cookie_and_logout_clears_it(self):
+        resp = self._login()
+        csrf = resp.cookies[CSRF_COOKIE_NAME]
+        self.assertFalse(csrf['httponly'])
+        session_jti = decode_jwt(resp.cookies[self.cookie_name].value)['jti']
+        mac, nonce = csrf.value.split('.')
+        self.assertEqual(mac, _mac(session_jti, nonce))
+        logout = self.client.post("/api/auth/logout/", HTTP_X_CSRFTOKEN=csrf.value)
+        self.assertEqual(logout.status_code, 200)
+        self.assertEqual(logout.cookies[CSRF_COOKIE_NAME].value, '')
 
     def test_change_password_requires_csrf(self):
         self._login()
@@ -166,9 +185,9 @@ class AuthHttpOnlyCookieTests(TestCase):
         )
         self.assertEqual(no_csrf.status_code, 403)
 
-        # Obtener el csrftoken vía /csrf/ y enviarlo en X-CSRFToken -> 200
+        # Obtener el token firmado vía /csrf/ y enviarlo en X-CSRFToken -> 200
         self.client.get("/api/auth/csrf/")
-        csrf_cookie = self.client.cookies.get('csrftoken')
+        csrf_cookie = self.client.cookies.get(CSRF_COOKIE_NAME)
         self.assertIsNotNone(csrf_cookie)
         ok = self.client.post(
             "/api/auth/me/change-password/",
@@ -195,7 +214,7 @@ class AuthHttpOnlyCookieTests(TestCase):
                 "confirm_password": "NewPassword456!",
             }),
             content_type="application/json",
-            HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value,
+            HTTP_X_CSRFTOKEN=self.client.cookies[CSRF_COOKIE_NAME].value,
         )
         self.assertEqual(changed.status_code, 200)
         self.assertIn(other.get("/api/auth/me/").status_code, (401, 403))
@@ -233,7 +252,7 @@ class AuthHttpOnlyCookieTests(TestCase):
         RevokedToken.objects.create(jti='expired-jti', expires_at=timezone.now() - timedelta(seconds=1))
         self.client.cookies[self.cookie_name] = self._login().cookies[self.cookie_name].value
         self.client.get("/api/auth/csrf/")
-        self.client.post("/api/auth/logout/", HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value)
+        self.client.post("/api/auth/logout/", HTTP_X_CSRFTOKEN=self.client.cookies[CSRF_COOKIE_NAME].value)
         self.assertFalse(RevokedToken.objects.filter(jti='expired-jti').exists())
         self.assertEqual(RevokedToken.objects.count(), 1)
 
@@ -379,11 +398,10 @@ class FunctionalRoleAuthorizationTests(TestCase):
 
     def request_as(self, user, method, path, payload):
         client = APIClient()
-        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
-        client.cookies['csrftoken'] = 'valid-test-csrf'
+        client.cookies[settings.AUTH_COOKIE_NAME] = token = encode_jwt({'sub': str(user.pk)})
         if method == 'POST':
             return client.post(path, data=json.dumps(payload), content_type='application/json',
-                               HTTP_X_CSRFTOKEN='valid-test-csrf')
+                               HTTP_X_CSRFTOKEN=csrf_token_for(token))
         return client.get(path)
 
     def test_flags_legacy_groups_cliente_and_unmapped_never_elevate(self):
@@ -1033,8 +1051,7 @@ class ManageAnalystRoleAtomicResponseTests(TransactionTestCase):
         target = User.objects.create_user(username='atomic-target')
         grant_admin_role(admin)
         client = APIClient()
-        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(admin.pk)})
-        client.cookies['csrftoken'] = 'valid-test-csrf'
+        client.cookies[settings.AUTH_COOKIE_NAME] = token = encode_jwt({'sub': str(admin.pk)})
         original_grant = grant_analyst_role
         original_select_related = AppUser.objects.select_related
         observed = []
@@ -1053,7 +1070,7 @@ class ManageAnalystRoleAtomicResponseTests(TransactionTestCase):
                 '/api/admin/analysts/',
                 data=json.dumps({'userId': target.pk, 'grant': True, 'role': 'analyst'}),
                 content_type='application/json',
-                HTTP_X_CSRFTOKEN='valid-test-csrf',
+                HTTP_X_CSRFTOKEN=csrf_token_for(token),
             )
 
         self.assertEqual(response.status_code, 200, response.data)
@@ -1340,7 +1357,7 @@ class MeUpdateTests(TestCase):
 
     def patch(self, payload):
         return self.client.patch('/api/auth/me/', data=json.dumps(payload), content_type='application/json',
-                                 HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value)
+                                 HTTP_X_CSRFTOKEN=self.client.cookies[CSRF_COOKIE_NAME].value)
 
     def test_renames_and_sets_avatar_and_keeps_the_session(self):
         self.assertEqual(self.client.get('/api/auth/me/').data['user']['avatar'], {'color': 'traits', 'figure': 'initial'})
@@ -1441,7 +1458,7 @@ class ProductionSettingsTests(SimpleTestCase):
         self.assertEqual(s['ACCOUNT_DEFAULT_HTTP_PROTOCOL'], 'https')
         for name in ('CSRF_COOKIE_SECURE', 'SESSION_COOKIE_SECURE', 'AUTH_COOKIE_SECURE'):
             self.assertTrue(s[name], name)
-        self.assertFalse(s['CSRF_COOKIE_HTTPONLY'])  # The SPA reads csrftoken for the double submit.
+        self.assertTrue(s['CSRF_COOKIE_HTTPONLY'])  # Only the admin uses Django's csrftoken; the SPA has its own.
 
     def test_production_csrf_origins_come_from_the_environment_over_https(self):
         s = load_settings()
@@ -1766,7 +1783,7 @@ class _CookieAuthedProbe(APIView):
 
 
 class GlobalCsrfEnforcementTests(TestCase):
-    """Cookie-authenticated unsafe requests need the double-submit token on every JWT view."""
+    """Cookie-authenticated unsafe requests need a CSRF token signed for that session on every JWT view."""
 
     def setUp(self):
         self.user = User.objects.create_user(username='csrf-user', email='csrf@example.com', password='x')
@@ -1779,6 +1796,7 @@ class GlobalCsrfEnforcementTests(TestCase):
             factory.cookies[settings.AUTH_COOKIE_NAME] = self.token
         if cookie_csrf is not None:
             factory.cookies['csrftoken'] = cookie_csrf
+            factory.cookies[CSRF_COOKIE_NAME] = cookie_csrf
         extra = {}
         if header_csrf is not None:
             extra['HTTP_X_CSRFTOKEN'] = header_csrf
@@ -1796,10 +1814,26 @@ class GlobalCsrfEnforcementTests(TestCase):
     def test_mismatched_token_is_forbidden(self):
         self.assertEqual(self.call('post', cookie_csrf='abc', header_csrf='abd').status_code, 403)
 
-    def test_matching_token_is_accepted(self):
+    def test_an_unsigned_cookie_and_header_pair_is_forbidden(self):
+        # A planted cookie (e.g. from a sibling subdomain) echoed in the header no longer passes.
+        self.assertEqual(self.call('post', cookie_csrf='abc', header_csrf='abc').status_code, 403)
+        forged = f"{'0' * 64}.nonce"
+        self.assertEqual(self.call('post', cookie_csrf=forged, header_csrf=forged).status_code, 403)
+
+    def test_a_token_signed_for_another_session_is_forbidden(self):
+        other_session = encode_jwt({'sub': str(self.user.pk)})
+        self.assertEqual(self.call('post', header_csrf=csrf_token_for(other_session)).status_code, 403)
+
+    def test_a_token_signed_for_this_session_is_accepted(self):
         for method in ('post', 'put', 'patch', 'delete'):
             with self.subTest(method=method):
-                self.assertEqual(self.call(method, cookie_csrf='abc', header_csrf='abc').status_code, 200)
+                self.assertEqual(self.call(method, header_csrf=csrf_token_for(self.token)).status_code, 200)
+
+    def test_a_rejection_is_audited(self):
+        with self.assertLogs('genomia.audit', 'INFO') as logs:
+            self.call('post', header_csrf='abc')
+        self.assertIn('csrf_rejected', logs.output[0])
+        self.assertIn('path=/probe/', logs.output[0])
 
     def test_safe_methods_need_no_token(self):
         self.assertEqual(self.call('get').status_code, 200)
@@ -1892,6 +1926,11 @@ class SecurityHeaderTests(SimpleTestCase):
         self.assertEqual(response['Referrer-Policy'], 'same-origin')
         for feature in ('camera=()', 'microphone=()', 'geolocation=()'):
             self.assertIn(feature, response['Permissions-Policy'])
+        csp = response['Content-Security-Policy']
+        for directive in ("default-src 'self'", "script-src 'self'", "object-src 'none'", "frame-ancestors 'none'"):
+            self.assertIn(directive, csp)
+        self.assertNotIn('unsafe-inline', csp)
+        self.assertNotIn('unsafe-eval', csp)
 
 
 class AdminUserDeletionTests(TestCase):
@@ -1982,3 +2021,97 @@ class ExpiredSessionResponseTests(TestCase):
     def test_missing_csrf_token_is_still_403_not_a_session_end(self):
         self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(self.user.pk)})
         self.assertEqual(self.client.delete('/api/auth/me/delete-account/').status_code, 403)
+
+
+class GeneticResultsAccessTests(TestCase):
+    """Every read of genetic results leaves a trail, and the endpoints are rate limited per user."""
+
+    URLS = ('/api/genoma/v1/results/', '/api/genoma/v1/results/ancestry-cohort/')
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='audited', email='audited@example.com')
+        self.client = APIClient()
+        self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(self.user.pk)})
+
+    def test_each_read_is_recorded_with_who_read_whose_data(self):
+        with self.assertLogs('genomia.audit', 'INFO') as logs:
+            for url in self.URLS:
+                self.assertEqual(self.client.get(url).status_code, 404)  # No results yet; the read still counts.
+        pk = self.user.pk
+        self.assertEqual(
+            list(GeneticDataAccessLog.objects.order_by('pk').values_list(
+                'actor_user_id', 'subject_user_id', 'resource', 'outcome', 'ip')),
+            [(pk, pk, 'results', 'not_found', '127.0.0.1'), (pk, pk, 'ancestry_cohort', 'not_found', '127.0.0.1')],
+        )
+        self.assertEqual(len(logs.output), 2)
+        for line in logs.output:
+            self.assertIn(f'genetic_data_access actor={pk} subject={pk}', line)
+            self.assertNotIn('audited', line)  # Ids only, never the username or email.
+
+    def test_anonymous_reads_are_refused_and_leave_no_access_row(self):
+        anonymous = APIClient()
+        for url in self.URLS:
+            self.assertIn(anonymous.get(url).status_code, (401, 403))
+        self.assertFalse(GeneticDataAccessLog.objects.exists())
+
+    def test_the_trail_survives_the_deletion_of_the_account(self):
+        self.client.get(self.URLS[0])
+        pk = self.user.pk
+        self.user.delete()  # Not blocked by the trail (plain ids, no foreign key)...
+        self.assertEqual(GeneticDataAccessLog.objects.get().subject_user_id, pk)  # ...and the trail stays.
+
+    def test_results_are_rate_limited_per_user(self):
+        for _ in range(30):
+            self.assertEqual(self.client.get(self.URLS[0]).status_code, 404)
+        self.assertEqual(self.client.get(self.URLS[0]).status_code, 429)
+        self.assertEqual(self.client.get(self.URLS[1]).status_code, 429)  # One budget for both endpoints.
+        other = User.objects.create_user(username='other-reader')
+        other_client = APIClient()
+        other_client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(other.pk)})
+        self.assertEqual(other_client.get(self.URLS[0]).status_code, 404)  # Counted per user, not globally.
+
+    def test_throttle_counters_live_in_a_cache_shared_by_every_worker(self):
+        self.assertEqual(settings.CACHES['default']['BACKEND'], 'django.core.cache.backends.db.DatabaseCache')
+        cache.set('shared-probe', 1)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT COUNT(*) FROM django_cache')
+            self.assertEqual(cursor.fetchone()[0], 1)
+
+    def test_a_full_cache_does_not_reset_a_login_counter_mid_window(self):
+        attempt = lambda: self.client.post('/api/auth/login/', {'username': 'nobody@example.com', 'password': 'x'},
+                                           content_type='application/json')
+        for _ in range(10):  # The whole 'login' budget (10/min).
+            self.assertEqual(attempt().status_code, 400)
+        # Many other users' counters; culling deletes the alphabetically first keys, the login counter among them.
+        cache.set_many({f'zz-other-client-{n}': n for n in range(400)})
+        self.assertEqual(attempt().status_code, 429)
+
+
+class SecurityEventAuditTests(TestCase):
+    """Sessions, failures and role changes reach the audit log without personal data."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='events', email='events@example.com', password='EventsPass123!')
+        EmailAddress.objects.create(user=self.user, email=self.user.email, verified=True, primary=True)
+
+    def login(self, password):
+        return self.client.post('/api/auth/login/', {'username': 'events@example.com', 'password': password},
+                                content_type='application/json')
+
+    def test_login_failure_success_and_logout_are_logged(self):
+        with self.assertLogs('genomia.audit', 'INFO') as logs:
+            self.assertEqual(self.login('wrong').status_code, 400)
+            response = self.login('EventsPass123!')
+            self.assertEqual(response.status_code, 200)
+            self.client.post('/api/auth/logout/', HTTP_X_CSRFTOKEN=response.cookies[CSRF_COOKIE_NAME].value)
+        events = [line.split(':', 2)[2].split(' ')[0] for line in logs.output]
+        self.assertEqual(events, ['login_failed', 'session_opened', 'session_revoked'])
+        self.assertTrue(all('events@example.com' not in line for line in logs.output))
+
+    def test_role_change_is_logged(self):
+        with self.assertLogs('genomia.audit', 'INFO') as logs:
+            grant_analyst_role(self.user)
+        self.assertIn(f'role_changed user={self.user.pk} role=ANALISTA', logs.output[0])
+

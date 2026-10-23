@@ -84,6 +84,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from accounts.csrf import csrf_token_for
 from accounts.jwt_utils import encode_jwt
 from accounts.roles import grant_admin_role, grant_analyst_role, grant_reception_role
 from participants.models import Participant
@@ -783,8 +784,8 @@ class ServiceFlowTestCase(APITestCase):
     def as_actor(self, user):
         self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
 
-    def post_json(self, path, data, *, csrf='matching-csrf'):
-        self.client.cookies['csrftoken'] = 'matching-csrf'
+    def post_json(self, path, data, *, csrf=None):
+        csrf = csrf or csrf_token_for(self.client.cookies[settings.AUTH_COOKIE_NAME].value)
         return self.client.post(path, data=json.dumps(data), content_type='application/json',
                                 HTTP_X_CSRFTOKEN=csrf)
 

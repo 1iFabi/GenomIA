@@ -1,5 +1,6 @@
 from django.db import transaction
 
+from .audit import audit
 from .models import AppUser, Role
 
 
@@ -30,6 +31,7 @@ def _set_role(mapping, role):
     mapping.role = role
     mapping.token_version += 1
     mapping.save(update_fields=["role", "token_version"])
+    audit("role_changed", user=mapping.django_user_id, role=role.code)
 
 
 def _grant_role(user, code):

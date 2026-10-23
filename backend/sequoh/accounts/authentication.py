@@ -74,5 +74,5 @@ class JWTAuthentication(BaseAuthentication):
         if tv is not None and tv != getattr(getattr(user, "app_user", None), "token_version", 0):
             raise exceptions.AuthenticationFailed("Session ended by role change")
         if from_cookie:
-            enforce_csrf_double_submit(request)
+            enforce_csrf_double_submit(request, payload.get("jti"))
         return (user, token)

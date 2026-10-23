@@ -21,7 +21,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.authentication import JWTAuthentication
-from accounts.models import AppUser, Role
+from accounts.audit import record_genetic_access
+from accounts.models import AppUser, GeneticDataAccessLog, Role
 from genoma.gene_inheritance import inheritance, mondo_ids
 from genoma.models import Analysis, AnalysisResult, DataRelease, Genotype, VariantAnnotation, VariantPlacement
 from genoma.population_catalog import Catalog
@@ -646,9 +647,12 @@ class AncestryCohortAPIView(APIView):
     """GET /api/genoma/v1/results/ancestry-cohort/: aggregate comparison, never other clients' rows."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'results'
 
     def get(self, request):
         data = read_ancestry_cohort(request.user)
+        record_genetic_access(request, GeneticDataAccessLog.Resource.ANCESTRY_COHORT, request.user.pk,
+                              'not_found' if data is None else 'ok')
         if data is None:
             return Response({'error': 'No hay resultados disponibles'}, status=status.HTTP_404_NOT_FOUND)
         return Response(data)
@@ -658,9 +662,12 @@ class ClientResultsAPIView(APIView):
     """GET /api/genoma/v1/results/: only the logged-in client's own results (Ley 21.719)."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'results'
 
     def get(self, request):
         data = read_client_results(request.user)
+        record_genetic_access(request, GeneticDataAccessLog.Resource.RESULTS, request.user.pk,
+                              'not_found' if data is None else 'ok')
         if data is None:
             return Response({'error': 'No hay resultados disponibles'}, status=status.HTTP_404_NOT_FOUND)
         return Response(data)

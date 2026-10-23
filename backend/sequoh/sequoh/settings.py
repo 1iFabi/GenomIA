@@ -90,6 +90,20 @@ REST_FRAMEWORK = {
         'contact': '5/min',
         'register_email_validation': '20/min',
         'reception_rut': '30/min',
+        # Per user: the results page reads each endpoint once per visit.
+        'results': '30/min',
+    },
+}
+
+# Shared by every worker, so a throttle counts all of a client's requests (the default LocMemCache is
+# per process). The table is created by migration accounts.0010.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache',
+        # Past MAX_ENTRIES (default 300) Django culls a third of the keys, live throttle counters included,
+        # which would reset a brute-force counter mid-window.
+        'OPTIONS': {'MAX_ENTRIES': 100_000},
     },
 }
 
@@ -103,7 +117,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'sequoh.security.NoCacheMiddleware',
-    'sequoh.security.PermissionsPolicyMiddleware',
+    'sequoh.security.SecurityHeadersMiddleware',
 ]
 
 ROOT_URLCONF = 'sequoh.urls'
@@ -209,8 +223,8 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Seguridad tras reverse proxy: el proxy termina TLS y SOBRESCRIBE X-Forwarded-Proto.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 CSRF_COOKIE_SECURE = not DEBUG
-# The SPA reads csrftoken to send it back as X-CSRFToken (double submit).
-CSRF_COOKIE_HTTPONLY = False
+# Django's csrftoken only serves the admin forms; the SPA uses the signed genomia_csrf cookie (accounts.csrf).
+CSRF_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG
 # HTTPS only outside development. Django answers 301; the proxy should redirect 80 -> 443 with 308 so POSTs survive.
 SECURE_SSL_REDIRECT = not DEBUG
@@ -345,3 +359,20 @@ LOGOUT_REDIRECT_URL = '/login'
 
 # Checkout of the genomia-ancestry repo; its data/genomia_populations.tsv is the population catalog.
 GENOMIA_ANCESTRY_DIR = os.getenv('GENOMIA_ANCESTRY_DIR', '')
+
+# One line per event on stdout; the host's collector keeps and protects it (NIST SP 800-92).
+# genomia.audit carries security events (sessions, CSRF, roles, access to genetic data); see accounts.audit.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'line': {'format': '%(asctime)s %(levelname)s %(name)s %(message)s'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'line'},
+    },
+    'root': {'handlers': ['console'], 'level': 'WARNING'},
+    'loggers': {
+        'genomia.audit': {'handlers': ['console'], 'level': os.getenv('AUDIT_LOG_LEVEL', 'INFO'), 'propagate': False},
+    },
+}

@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User, update_last_login
 from django.db import IntegrityError, transaction
-from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -33,7 +33,8 @@ from services.models import ServiceRequest
 from .models import AVATAR_COLORS, AVATAR_FIGURES, AppUser, RevokedToken, Role, WelcomeStatus
 from .email_validation import is_valid_registration_name, validate_registration_email
 from .username_validation import normalize_registration_username
-from .csrf import CSRFDoubleSubmitMixin
+from .audit import audit
+from .csrf import CSRF_COOKIE_NAME, CSRFDoubleSubmitMixin, cookie_session_jti, set_csrf_cookie
 from .roles import (
     is_admin,
     is_analyst,
@@ -81,35 +82,41 @@ def issue_auth_cookie(resp, user):
 
     Es una cookie de sesión (muere al cerrar el navegador) y el token vence a las JWT_EXPIRATION_HOURS.
     """
-    token = encode_jwt({
+    payload = {
         "sub": str(user.id),
         "email": user.email,
         # Changes with the password hash, so a password change ends every older session.
         "sah": user.get_session_auth_hash(),
         # Changes with the functional role, so a role change ends every older session.
         "tv": AppUser.objects.filter(django_user=user).values_list("token_version", flat=True).first() or 0,
-    })
+    }
+    token = encode_jwt(payload)  # Fills in payload["jti"], which the CSRF token is bound to.
     cookie_name = getattr(settings, 'AUTH_COOKIE_NAME', 'access_token')
     samesite = getattr(settings, 'AUTH_COOKIE_SAMESITE', 'Lax')
     secure = bool(getattr(settings, 'AUTH_COOKIE_SECURE', False))
     resp.set_cookie(cookie_name, token, httponly=True, samesite=samesite, secure=secure, path='/')
+    set_csrf_cookie(resp, payload["jti"])
     resp["Cache-Control"] = "no-store"
     update_last_login(None, user)
+    audit('session_opened', user=user.pk)
     return resp
 
 
 class CsrfCookieAPIView(APIView):
-    """Establece la cookie `csrftoken` (no HttpOnly) para el uso del frontend.
+    """Vuelve a emitir la cookie CSRF de la sesión actual (p. ej. sesiones abiertas antes de que existiera).
 
-    Es el patrón double-submit: el SPA lee la cookie y la envía como
-    `X-CSRFToken` en las peticiones mutables (POST/DELETE).
+    Es el patrón double-submit firmado: el SPA lee la cookie y la envía como
+    `X-CSRFToken` en las peticiones mutables. Sin sesión no hay nada que firmar.
     """
     authentication_classes = []
     permission_classes = []
 
-    @method_decorator(ensure_csrf_cookie)
     def get(self, request):
-        return Response({"success": True})
+        resp = Response({"success": True})
+        jti = cookie_session_jti(request)
+        if jti:
+            set_csrf_cookie(resp, jti)
+        return resp
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -151,6 +158,7 @@ class LoginAPIView(APIView):
                 resp = Response({"mensaje": "Inicio de sesión exitoso", "success": True})
                 return issue_auth_cookie(resp, user)
             # Respuesta genérica: no revela si el correo existe ni si la contraseña es correcta
+            audit('login_failed', request)
             return Response({"success": False, "error": "Credenciales inválidas"}, status=400)
         except json.JSONDecodeError:
             # Maneja el error si el formato JSON es incorrecto
@@ -473,12 +481,14 @@ class LogoutAPIView(CSRFDoubleSubmitMixin, APIView):
                 if jti:
                     exp_dt = datetime.fromtimestamp(payload['exp'], tz=dt_timezone.utc)
                     RevokedToken.objects.get_or_create(jti=jti, defaults={'expires_at': exp_dt, 'user_id': payload.get('sub')})
+                    audit('session_revoked', request, user=payload.get('sub'))
                 # An expired token is rejected by its signature check, so its blacklist row is dead weight.
                 RevokedToken.objects.filter(expires_at__lt=timezone.now()).delete()
             except Exception as e:
                 logger.warning("LogoutAPIView.decode_jwt failed: %s", repr(e))
         resp = Response({"success": True})
         resp.delete_cookie(cookie_name, path='/', samesite=getattr(settings, 'AUTH_COOKIE_SAMESITE', 'Lax'))
+        resp.delete_cookie(CSRF_COOKIE_NAME, path='/', samesite=getattr(settings, 'AUTH_COOKIE_SAMESITE', 'Lax'))
         resp["Cache-Control"] = "no-store"
         return resp
 

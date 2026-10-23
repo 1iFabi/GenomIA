@@ -32,12 +32,12 @@ describe('legacy SNP API retirement', () => {
 describe('apiRequest (auth via cookie HttpOnly)', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
-    document.cookie = 'csrftoken=abc123; Path=/';
+    document.cookie = 'genomia_csrf=abc123; Path=/';
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    document.cookie = 'csrftoken=; Path=/';
+    document.cookie = 'genomia_csrf=; Path=/';
   });
 
   const mockJson = (body = { ok: true }) =>
@@ -77,7 +77,7 @@ describe('apiRequest (auth via cookie HttpOnly)', () => {
   });
 
   it('obtiene la cookie CSRF antes de un método mutable si falta', async () => {
-    document.cookie = 'csrftoken=; Max-Age=0; Path=/';
+    document.cookie = 'genomia_csrf=; Max-Age=0; Path=/';
     globalThis.fetch.mockResolvedValue(mockJson());
 
     await apiRequest('/api/auth/logout/', { method: 'POST' });
@@ -144,7 +144,7 @@ describe('apiRequest (auth via cookie HttpOnly)', () => {
   );
 
   it('ignora cookies CSRF malformadas sin lanzar una excepción', () => {
-    document.cookie = 'csrftoken=%E0%A4%A; Path=/';
+    document.cookie = 'genomia_csrf=%E0%A4%A; Path=/';
     expect(getCsrfToken()).toBe('');
   });
 });

@@ -32,7 +32,7 @@ const meCalls = () => fetch.mock.calls.filter(([url]) => url === API_ENDPOINTS.M
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   vi.stubGlobal('fetch', vi.fn(async () => reply({ user: { name: 'Ada', roles: ['ANALISTA'] } })));
-  document.cookie = 'csrftoken=abc123; Path=/';
+  document.cookie = 'genomia_csrf=abc123; Path=/';
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -40,7 +40,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
-  document.cookie = 'csrftoken=; Max-Age=0; Path=/';
+  document.cookie = 'genomia_csrf=; Max-Age=0; Path=/';
   vi.unstubAllGlobals();
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });

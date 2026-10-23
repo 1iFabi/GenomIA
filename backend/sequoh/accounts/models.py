@@ -138,3 +138,26 @@ class AppUser(models.Model):
                 name='app_user_oidc_identity_unique',
             ),
         ]
+
+
+class GeneticDataAccessLog(models.Model):
+    """Who read whose genetic results and when (Ley 21.719 accountability, OWASP/NIST audit trail).
+
+    Plain user ids, not foreign keys: deleting an account must neither be blocked by its trail nor erase it.
+    """
+
+    class Resource(models.TextChoices):
+        RESULTS = 'results', 'Results'
+        ANCESTRY_COHORT = 'ancestry_cohort', 'Ancestry cohort'
+
+    actor_user_id = models.PositiveBigIntegerField()
+    subject_user_id = models.PositiveBigIntegerField()
+    resource = models.CharField(max_length=32, choices=Resource.choices)
+    outcome = models.CharField(max_length=16)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'genetic_data_access_log'
+        ordering = ['-created_at', '-pk']
+        indexes = [models.Index(fields=['subject_user_id', '-created_at'], name='genetic_log_subject_idx')]

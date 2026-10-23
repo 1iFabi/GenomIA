@@ -14,6 +14,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from accounts.csrf import csrf_token_for
 from accounts.jwt_utils import encode_jwt
 from participants import models as domain
 from participants.models import Participant
@@ -580,14 +581,14 @@ class ParticipantMetadataTests(TestCase):
         link = domain.ParticipantMetadataLink.objects.create(idm=metadata, idp=self.participant, answer={'synthetic': False})
         before = Participant.objects.values().get(pk=self.participant.pk)
         client = APIClient()
-        client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(self.user.pk)})
+        client.cookies[settings.AUTH_COOKIE_NAME] = token = encode_jwt({'sub': str(self.user.pk)})
         payload = {'metadata': {'synthetic': 'injected'}, 'questionary': {'synthetic': 'injected'},
                    'answer': {'synthetic': True}, 'consent_status': 'withdrawn'}
         # PATCH exists for username/avatar only, so it rejects these fields instead of answering 405.
         for method, expected in (('post', 405), ('put', 405), ('patch', 400)):
             with self.subTest(method=method):
-                client.cookies['csrftoken'] = 'matching-csrf'  # Django rotates a malformed token after each response.
-                response = getattr(client, method)('/api/auth/me/', payload, format='json', HTTP_X_CSRFTOKEN='matching-csrf')
+                response = getattr(client, method)('/api/auth/me/', payload, format='json',
+                                                   HTTP_X_CSRFTOKEN=csrf_token_for(token))
                 self.assertEqual(response.status_code, expected)
         response = client.get('/api/auth/me/')
         self.assertEqual(response.status_code, 200)

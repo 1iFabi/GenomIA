@@ -10,6 +10,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
+from accounts.csrf import CSRF_COOKIE_NAME, csrf_token_for
 from accounts.jwt_utils import encode_jwt
 from accounts.models import AppUser
 from accounts.roles import grant_reception_role
@@ -120,14 +121,13 @@ class GoogleSignInTests(TestCase):
     def test_google_only_user_deletes_account_with_fresh_google_reauth(self, _welcome):
         self.complete(self.google()[0].data['pending'])
         user = User.objects.get(username='ana.g')
-        self.client.cookies['csrftoken'] = 'csrf'
+        csrf = self.client.cookies[CSRF_COOKIE_NAME].value  # Set by the signup completion with the session.
 
         def delete(claims):
-            self.client.cookies['csrftoken'] = 'csrf'
             with patch('accounts.google_auth.google_id_token.verify_oauth2_token', return_value=claims):
                 return self.client.delete('/api/auth/me/delete-account/',
                                           data=json.dumps({'confirmation': 'ELIMINAR', 'googleCredential': 't'}),
-                                          content_type='application/json', HTTP_X_CSRFTOKEN='csrf')
+                                          content_type='application/json', HTTP_X_CSRFTOKEN=csrf)
 
         now = int(time.time())
         for claims in ({**CLAIMS, 'iat': now - 600}, {**CLAIMS, 'sub': 'someone-else', 'iat': now}):
@@ -160,13 +160,12 @@ class PurchaseProfileTests(TestCase):
 
     def login(self, user):
         self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(user.pk)})
-        self.client.cookies['csrftoken'] = 'csrf'
 
     def post(self, **changes):
         cache.clear()  # Each call counts against the 'register' throttle.
-        self.client.cookies['csrftoken'] = 'csrf'  # Responses may rotate the CSRF cookie.
+        csrf = csrf_token_for(self.client.cookies[settings.AUTH_COOKIE_NAME].value)
         return self.client.post(self.URL, data=json.dumps({**self.PAYLOAD, **changes}),
-                                content_type='application/json', HTTP_X_CSRFTOKEN='csrf')
+                                content_type='application/json', HTTP_X_CSRFTOKEN=csrf)
 
     def test_rut_check_digit(self, _send_code):
         self.assertEqual(normalize_rut('12.345.678-5'), '12345678-5')
