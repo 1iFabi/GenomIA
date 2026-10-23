@@ -68,6 +68,38 @@ class GoogleSignInTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.complete('tampered').status_code, 400)
 
+    def test_no_user_and_no_session_exist_before_username_and_terms(self, _welcome):
+        response, _ = self.google()
+        self.assertNotIn(settings.AUTH_COOKIE_NAME, response.cookies)
+        pending = response.data['pending']
+
+        for attempt in ({'terminos': False}, {'terminos': 'true'}, {'terminos': None}, {'username': 'a!'}, {'username': ''}):
+            with self.subTest(attempt=attempt):
+                cache.clear()  # Six attempts would trip the 'register' throttle.
+                response = self.complete(pending, **attempt)
+                self.assertEqual(response.status_code, 400)
+                self.assertNotIn(settings.AUTH_COOKIE_NAME, response.cookies)
+        cache.clear()
+        response = self.complete('')
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn(settings.AUTH_COOKIE_NAME, response.cookies)
+        self.assertFalse(User.objects.exists())
+        self.assertFalse(EmailAddress.objects.exists())
+
+    def test_email_verified_must_be_the_boolean_true(self, _welcome):
+        for value in ('true', 1, None):
+            with self.subTest(email_verified=value):
+                response, _ = self.google({**CLAIMS, 'email_verified': value})
+                self.assertEqual(response.status_code, 400)
+                self.assertNotIn('pending', response.data)
+
+    def test_google_signup_sends_no_second_verification_mail(self, _welcome):
+        with patch('accounts.adapters.send_verification_email') as verification:
+            response = self.complete(self.google()[0].data['pending'])
+        self.assertEqual(response.status_code, 201)
+        verification.assert_not_called()
+        self.assertTrue(EmailAddress.objects.get(user__username='ana.g').verified)
+
     def test_existing_password_account_is_not_merged(self, _welcome):
         User.objects.create_user(username='local', email='ana@gmail.com', password='Secret-pass-1!')
         response, _ = self.google()
