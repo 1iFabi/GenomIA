@@ -1664,6 +1664,59 @@ class PurgeRevokedTokensTests(TestCase):
         self.assertTrue(RevokedToken._meta.get_field('expires_at').db_index)
 
 
+class AdminUserDeletionTests(TestCase):
+    """The read-only admin of AppUser must not stop a superuser from deleting the User that owns it."""
+
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(username='django-super', password='test-only')
+        self.client.force_login(self.superuser)
+
+    def delete_url(self, user):
+        return reverse('admin:auth_user_delete', args=[user.pk])
+
+    def test_superuser_deletes_a_plain_account_together_with_its_role_mapping(self):
+        target = User.objects.create_user(username='plain', email='plain@example.com')
+        page = self.client.get(self.delete_url(target))
+        self.assertEqual(page.status_code, 200)
+        self.assertFalse(page.context['perms_lacking'])
+
+        response = self.client.post(self.delete_url(target), {'post': 'yes'})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(User.objects.filter(pk=target.pk).exists())
+        self.assertFalse(AppUser.objects.filter(django_user_id=target.pk).exists())
+
+    def test_the_bulk_delete_action_works_too(self):
+        target = User.objects.create_user(username='bulk', email='bulk@example.com')
+
+        response = self.client.post(reverse('admin:auth_user_changelist'), {
+            'action': 'delete_selected', '_selected_action': [target.pk], 'post': 'yes',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(User.objects.filter(pk=target.pk).exists())
+
+    def test_a_role_mapping_still_cannot_be_deleted_on_its_own(self):
+        target = User.objects.create_user(username='keeps-role', email='keeps@example.com')
+        mapping_pk = target.app_user.pk
+
+        response = self.client.post(reverse('admin:accounts_appuser_delete', args=[mapping_pk]), {'post': 'yes'})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(AppUser.objects.filter(pk=mapping_pk).exists())
+
+    def test_an_account_with_participant_records_stays_protected(self):
+        target = User.objects.create_user(username='buyer', email='buyer@example.com')
+        Participant.objects.create(user=target, participant_code='buyer-1')
+
+        page = self.client.get(self.delete_url(target))
+        self.assertTrue(page.context['perms_lacking'] or page.context['protected'])
+        self.client.post(self.delete_url(target), {'post': 'yes'})
+
+        self.assertTrue(User.objects.filter(pk=target.pk).exists())
+        self.assertTrue(Participant.objects.filter(user=target).exists())
+
+
 @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
 class ExpiredSessionResponseTests(TestCase):
     """The SPA only treats 401 as 'session over', so a failed credential must answer 401."""

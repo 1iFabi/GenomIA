@@ -63,6 +63,13 @@ class CustomUserAdmin(BaseUserAdmin):
         ('Fechas importantes', {'fields': ('last_login', 'date_joined')}),
     )
 
+    def get_deleted_objects(self, objs, request):
+        to_delete, model_count, perms_needed, protected = super().get_deleted_objects(objs, request)
+        # AppUser has a read-only admin, but its row only ever disappears with its User (cascade):
+        # that must not block deleting the account. Participants, purchases and the like still do.
+        perms_needed.discard(AppUser._meta.verbose_name)
+        return to_delete, model_count, perms_needed, protected
+
     def save_formset(self, request, form, formset, change):
         super().save_formset(request, form, formset, change)
         # A role changed from the admin ends the user's open sessions, like the API does.
