@@ -43,12 +43,6 @@ ALLOWED_HOSTS = [h for h in [
     "127.0.0.1",
 ] if h]
 
-# The SPA reaches the API same-origin through the Vite proxy, so no CORS is needed.
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
 
 # Application definition
 
@@ -109,6 +103,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'sequoh.security.NoCacheMiddleware',
+    'sequoh.security.PermissionsPolicyMiddleware',
 ]
 
 ROOT_URLCONF = 'sequoh.urls'
@@ -158,10 +153,20 @@ else:
             'PORT': os.getenv('DB_PORT', '5432'),
             'OPTIONS': {
                 'connect_timeout': 10,
+                'sslmode': os.getenv('DB_SSLMODE', 'prefer' if DEBUG else 'verify-full'),
             },
             'CONN_MAX_AGE': 600,
         }
     }
+    if os.getenv('DB_SSLROOTCERT'):
+        DATABASES['default']['OPTIONS']['sslrootcert'] = os.environ['DB_SSLROOTCERT']
+
+# The database port may be reachable from the internet: in production the link must be TLS and
+# must verify the server certificate (set sslmode in DATABASE_URL or DB_SSLMODE, CA in sslrootcert).
+if not DEBUG and DATABASES['default'].get('OPTIONS', {}).get('sslmode') not in ('verify-ca', 'verify-full'):
+    raise ImproperlyConfigured(
+        'The database connection needs sslmode=verify-full (or verify-ca) when ENVIRONMENT=production.'
+    )
 
 
 # Password validation
@@ -201,10 +206,21 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Seguridad tras reverse proxy
+# Seguridad tras reverse proxy: el proxy termina TLS y SOBRESCRIBE X-Forwarded-Proto.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 CSRF_COOKIE_SECURE = not DEBUG
+# The SPA reads csrftoken to send it back as X-CSRFToken (double submit).
+CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SECURE = not DEBUG
+# HTTPS only outside development. Django answers 301; the proxy should redirect 80 -> 443 with 308 so POSTs survive.
+SECURE_SSL_REDIRECT = not DEBUG
+# Health check of the load balancer over plain HTTP; never exempt /api/* wholesale.
+SECURE_REDIRECT_EXEMPT = [r'^api/status/$']
+# For a gradual rollout start with SECURE_HSTS_SECONDS=3600. PRELOAD is hard to undo: opt in by env only
+# after every subdomain serves HTTPS.
+SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', '0' if DEBUG else '1') == '1'
+SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', '0') == '1'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -214,23 +230,43 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # JWT (PyJWT) - configuración de emisión/validación
 # Clave DEDICADA de firma de tokens, separada del SECRET_KEY maestro del framework.
 # Permite rotar tokens sin invalidar sesiones Django y viceversa.
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '')
 JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
+if not JWT_SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured('JWT_SECRET_KEY must be set when ENVIRONMENT=production.')
+    JWT_SECRET_KEY = SECRET_KEY
+elif not DEBUG:
+    if JWT_SECRET_KEY == SECRET_KEY:
+        raise ImproperlyConfigured('JWT_SECRET_KEY must differ from SECRET_KEY when ENVIRONMENT=production.')
+    if JWT_ALGORITHM.startswith('HS') and len(JWT_SECRET_KEY) < 32:
+        raise ImproperlyConfigured('JWT_SECRET_KEY needs at least 256 bits (32+ characters) for HMAC signing.')
 JWT_ISSUER = os.getenv('JWT_ISSUER', 'genomia')
 JWT_AUDIENCE = os.getenv('JWT_AUDIENCE', 'genomia-app')
 # Absolute lifetime from login (no sliding renewal): after this the user signs in again.
 JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', '2'))
 
 # Cookie de autenticación (JWT en HttpOnly), same-origin: SameSite=Lax.
-AUTH_COOKIE_NAME = os.getenv('AUTH_COOKIE_NAME', 'access_token')
+# In production the __Host- prefix makes browsers refuse a cookie that is not Secure, Path=/ and Domain-less.
+AUTH_COOKIE_NAME = os.getenv('AUTH_COOKIE_NAME', 'access_token' if DEBUG else '__Host-access_token')
 AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'Lax')
 AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', '0' if DEBUG else '1') not in ('0', 'False', 'false')
+if not AUTH_COOKIE_SECURE and (
+    not DEBUG or AUTH_COOKIE_SAMESITE.lower() == 'none' or AUTH_COOKIE_NAME.startswith('__Host-')
+):
+    raise ImproperlyConfigured(
+        'AUTH_COOKIE_SECURE must be on in production, for SameSite=None and for __Host- cookie names.'
+    )
 
 # Seguridad de sesión y cookies
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 # Django sessions only back /ciff/ (admin); keep them as short as the API token.
 SESSION_COOKIE_AGE = JWT_EXPIRATION_HOURS * 3600
 
+# Headers that Django already sends by default, pinned so a Django upgrade cannot loosen them.
+X_FRAME_OPTIONS = 'DENY'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
 
 
 # EMAIL CONFIGURATION - Usar API de Gmail mediante adapter de allauth
@@ -267,6 +303,24 @@ ALLOWED_EMAIL_DOMAINS = os.getenv(
 
 # Dominio del FRONTEND (enlaces en correos)
 FRONTEND_DOMAIN = os.environ.get('FRONTEND_DOMAIN', 'http://localhost:5173')
+if not DEBUG and not FRONTEND_DOMAIN.startswith('https://'):
+    raise ImproperlyConfigured('FRONTEND_DOMAIN must be an https:// URL when ENVIRONMENT=production.')
+# Email links (allauth activate_url) must not fall back to http behind the TLS-terminating proxy.
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = 'http' if DEBUG else 'https'
+
+
+def _origin(value):
+    value = (value or '').strip().rstrip('/')
+    if not value:
+        return ''
+    return value if '://' in value else f'https://{value}'
+
+
+# The SPA reaches the API same-origin through the Vite proxy, so no CORS is needed.
+_csrf_origins = {_origin(os.getenv('APP_DOMAIN', '')), _origin(FRONTEND_DOMAIN)}
+if DEBUG:
+    _csrf_origins |= {'http://localhost:5173', 'http://127.0.0.1:5173'}
+CSRF_TRUSTED_ORIGINS = sorted(origin for origin in _csrf_origins if origin)
 # URL absoluta de redirección al login del FRONTEND
 FRONTEND_LOGIN_REDIRECT = os.environ.get(
     'FRONTEND_LOGIN_URL', f"{FRONTEND_DOMAIN.rstrip('/')}/login?verified=1"

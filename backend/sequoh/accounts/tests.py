@@ -1376,6 +1376,226 @@ class MeUpdateTests(TestCase):
 
         AppUser.objects.filter(django_user=self.user).update(username_changed_at=timezone.now() - timedelta(days=30, seconds=1))
         self.assertEqual(self.patch({'username': 'ana.dos'}).status_code, 200)
+
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+# Throwaway values: the settings module only reads them, nothing is signed or sent.
+PRODUCTION_ENV = {
+    'ENVIRONMENT': 'production',
+    'SECRET_KEY': 'unit-test-secret-' + 'a1b2c3d4e5' * 6,
+    'JWT_SECRET_KEY': 'unit-test-jwt-' + 'f6g7h8i9j0' * 6,
+    'FRONTEND_DOMAIN': 'https://app.example.com',
+    'APP_DOMAIN': 'api.example.com',
+    'DATABASE_URL': 'postgres://app:dummy@db.example.com:5432/genomia?sslmode=verify-full',
+    'DB_SSLMODE': None,
+    'DB_SSLROOTCERT': None,
+    'AUTH_COOKIE_NAME': None,
+    'AUTH_COOKIE_SAMESITE': None,
+    'AUTH_COOKIE_SECURE': None,
+    'SECURE_HSTS_SECONDS': None,
+    'SECURE_HSTS_INCLUDE_SUBDOMAINS': None,
+    'SECURE_HSTS_PRELOAD': None,
+}
+SETTINGS_PROBE = (
+    'import json, sequoh.settings as s;'
+    'print(json.dumps({k: getattr(s, k, None) for k in dir(s) if k.isupper()}, default=str))'
+)
+
+
+def _child_env(**overrides):
+    env = dict(os.environ)
+    for key, value in {**PRODUCTION_ENV, **overrides}.items():
+        if value is None:
+            env.pop(key, None)
+        else:
+            env[key] = value
+    return env
+
+
+def run_settings_probe(**overrides):
+    """Import sequoh.settings in a fresh interpreter: its env switches run at import time."""
+    return subprocess.run(
+        [sys.executable, '-c', SETTINGS_PROBE], cwd=BACKEND_DIR, env=_child_env(**overrides),
+        capture_output=True, text=True, timeout=60,
+    )
+
+
+def load_settings(**overrides):
+    done = run_settings_probe(**overrides)
+    if done.returncode != 0:
+        raise AssertionError(done.stderr[-800:])
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+class ProductionSettingsTests(SimpleTestCase):
+    """The module-level environment switches, checked the way a deployment imports them."""
+
+    def test_production_is_https_only(self):
+        s = load_settings()
+        self.assertTrue(s['SECURE_SSL_REDIRECT'])
+        self.assertEqual(s['SECURE_HSTS_SECONDS'], 31536000)
+        self.assertTrue(s['SECURE_HSTS_INCLUDE_SUBDOMAINS'])
+        self.assertFalse(s['SECURE_HSTS_PRELOAD'])
+        self.assertEqual(s['SECURE_PROXY_SSL_HEADER'], ['HTTP_X_FORWARDED_PROTO', 'https'])
+        self.assertEqual(s['SECURE_REDIRECT_EXEMPT'], [r'^api/status/$'])
+        self.assertEqual(s['ACCOUNT_DEFAULT_HTTP_PROTOCOL'], 'https')
+        for name in ('CSRF_COOKIE_SECURE', 'SESSION_COOKIE_SECURE', 'AUTH_COOKIE_SECURE'):
+            self.assertTrue(s[name], name)
+        self.assertFalse(s['CSRF_COOKIE_HTTPONLY'])  # The SPA reads csrftoken for the double submit.
+
+    def test_production_csrf_origins_come_from_the_environment_over_https(self):
+        s = load_settings()
+        self.assertCountEqual(
+            s['CSRF_TRUSTED_ORIGINS'], ['https://app.example.com', 'https://api.example.com'],
+        )
+
+    def test_development_stays_on_http_without_hsts(self):
+        s = load_settings(ENVIRONMENT='development', FRONTEND_DOMAIN='http://localhost:5173', APP_DOMAIN='')
+        self.assertFalse(s['SECURE_SSL_REDIRECT'])
+        self.assertEqual(s['SECURE_HSTS_SECONDS'], 0)
+        self.assertFalse(s['SECURE_HSTS_INCLUDE_SUBDOMAINS'])
+        self.assertEqual(s['ACCOUNT_DEFAULT_HTTP_PROTOCOL'], 'http')
+        for name in ('CSRF_COOKIE_SECURE', 'SESSION_COOKIE_SECURE', 'AUTH_COOKIE_SECURE'):
+            self.assertFalse(s[name], name)
+        self.assertCountEqual(
+            s['CSRF_TRUSTED_ORIGINS'], ['http://localhost:5173', 'http://127.0.0.1:5173'],
+        )
+        self.assertEqual(s['AUTH_COOKIE_NAME'], 'access_token')
+
+    def test_hsts_rollout_is_tunable_from_the_environment(self):
+        s = load_settings(
+            SECURE_HSTS_SECONDS='3600', SECURE_HSTS_INCLUDE_SUBDOMAINS='0', SECURE_HSTS_PRELOAD='1',
+        )
+        self.assertEqual(s['SECURE_HSTS_SECONDS'], 3600)
+        self.assertFalse(s['SECURE_HSTS_INCLUDE_SUBDOMAINS'])
+        self.assertTrue(s['SECURE_HSTS_PRELOAD'])
+
+    def test_production_refuses_a_plain_http_frontend(self):
+        done = run_settings_probe(FRONTEND_DOMAIN='http://app.example.com')
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn('FRONTEND_DOMAIN', done.stderr)
+
+    def test_production_refuses_missing_or_shared_jwt_key(self):
+        for jwt_key in ('', PRODUCTION_ENV['SECRET_KEY']):
+            with self.subTest(jwt_key=jwt_key[:6]):
+                done = run_settings_probe(JWT_SECRET_KEY=jwt_key)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn('JWT_SECRET_KEY', done.stderr)
+
+    def test_production_requires_a_256_bit_jwt_key(self):
+        short = run_settings_probe(JWT_SECRET_KEY='j' * 31)
+        self.assertNotEqual(short.returncode, 0)
+        self.assertIn('256 bits', short.stderr)
+        self.assertEqual(run_settings_probe(JWT_SECRET_KEY='j' * 32).returncode, 0)
+
+    def test_development_may_fall_back_to_the_framework_key(self):
+        s = load_settings(ENVIRONMENT='development', JWT_SECRET_KEY='', FRONTEND_DOMAIN='http://localhost:5173')
+        self.assertEqual(s['JWT_SECRET_KEY'], s['SECRET_KEY'])
+
+    def test_production_auth_cookie_uses_the_host_prefix(self):
+        self.assertEqual(load_settings()['AUTH_COOKIE_NAME'], '__Host-access_token')
+
+    def test_production_refuses_an_auth_cookie_without_secure(self):
+        done = run_settings_probe(AUTH_COOKIE_SECURE='0')
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn('AUTH_COOKIE_SECURE', done.stderr)
+
+    def test_samesite_none_requires_a_secure_cookie(self):
+        done = run_settings_probe(
+            ENVIRONMENT='development', FRONTEND_DOMAIN='http://localhost:5173',
+            AUTH_COOKIE_SAMESITE='None', AUTH_COOKIE_SECURE='0',
+        )
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn('SameSite', done.stderr)
+
+    def test_production_database_connection_verifies_the_server_certificate(self):
+        self.assertEqual(load_settings()['DATABASES']['default']['OPTIONS']['sslmode'], 'verify-full')
+
+    def test_production_refuses_a_database_url_that_skips_verification(self):
+        base = 'postgres://app:dummy@db.example.com:5432/genomia'
+        for url in (f'{base}?sslmode=disable', f'{base}?sslmode=prefer', f'{base}?sslmode=require', base):
+            with self.subTest(url=url.rsplit('/', 1)[-1]):
+                done = run_settings_probe(DATABASE_URL=url)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn('sslmode', done.stderr)
+
+    def test_production_discrete_database_settings_default_to_verification(self):
+        s = load_settings(DATABASE_URL='')  # Empty means unset: dotenv would refill a popped variable.
+        self.assertEqual(s['DATABASES']['default']['OPTIONS']['sslmode'], 'verify-full')
+        done = run_settings_probe(DATABASE_URL='', DB_SSLMODE='require')
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn('sslmode', done.stderr)
+        s = load_settings(DATABASE_URL='', DB_SSLROOTCERT='/etc/ssl/db-ca.pem')
+        self.assertEqual(s['DATABASES']['default']['OPTIONS']['sslrootcert'], '/etc/ssl/db-ca.pem')
+
+    def test_development_database_settings_do_not_require_tls(self):
+        s = load_settings(ENVIRONMENT='development', FRONTEND_DOMAIN='http://localhost:5173', DATABASE_URL='')
+        self.assertEqual(s['DATABASES']['default']['OPTIONS']['sslmode'], 'prefer')
+
+    def test_verification_link_and_email_text_share_one_lifetime(self):
+        s = load_settings()
+        self.assertEqual(s['ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS'], 1)
+        self.assertEqual(s['EMAIL_VERIFICATION_EXPIRE_HOURS'], 24)
+        self.assertEqual(
+            settings.EMAIL_VERIFICATION_EXPIRE_HOURS, settings.ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS * 24,
+        )
+
+    def test_check_deploy_has_no_https_or_debug_warnings(self):
+        done = subprocess.run(
+            [sys.executable, 'manage.py', 'check', '--deploy'], cwd=BACKEND_DIR, env=_child_env(),
+            capture_output=True, text=True, timeout=120,
+        )
+        output = done.stdout + done.stderr
+        for warning in ('security.W004', 'security.W008', 'security.W012', 'security.W016', 'security.W018'):
+            self.assertNotIn(warning, output)
+
+
+@override_settings(SECURE_SSL_REDIRECT=True, SECURE_HSTS_SECONDS=31536000, SECURE_HSTS_INCLUDE_SUBDOMAINS=True)
+class HttpsEnforcementTests(SimpleTestCase):
+    """Django's SecurityMiddleware wired the way production settings configure it."""
+
+    def test_plain_http_is_redirected_to_https(self):
+        response = self.client.get('/api/auth/me/')
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response['Location'], 'https://testserver/api/auth/me/')
+
+    def test_proxy_forwarded_https_is_not_redirected_again(self):
+        response = self.client.get('/api/status/', HTTP_X_FORWARDED_PROTO='https')
+        self.assertEqual(response.status_code, 200)
+
+    def test_secure_request_is_not_redirected_and_carries_hsts(self):
+        response = self.client.get('/api/status/', secure=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Strict-Transport-Security'], 'max-age=31536000; includeSubDomains')
+
+    def test_health_check_answers_plain_http_without_hsts(self):
+        response = self.client.get('/api/status/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('Strict-Transport-Security', response)
+
+    def test_only_the_health_check_is_exempt(self):
+        for path in ('/api/auth/login/', '/api/status/extra', '/api/'):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 301)
+
+
+class AuthCookieFlagTests(TestCase):
+    @override_settings(
+        REQUIRE_EMAIL_VERIFICATION=False, AUTH_COOKIE_NAME='__Host-access_token',
+        AUTH_COOKIE_SECURE=True, AUTH_COOKIE_SAMESITE='Lax',
+    )
+    def test_login_cookie_meets_the_host_prefix_rules(self):
+        cache.clear()
+        User.objects.create_user(username='flags', email='flags@example.com', password='FlagsSecret123!')
+        response = APIClient().post('/api/auth/login/', {'username': 'flags', 'password': 'FlagsSecret123!'}, format='json')
+        cookie = response.cookies['__Host-access_token']
+        self.assertTrue(cookie['secure'])
+        self.assertTrue(cookie['httponly'])
+        self.assertEqual(cookie['samesite'], 'Lax')
+        self.assertEqual(cookie['path'], '/')
+        self.assertEqual(cookie['domain'], '')  # __Host- cookies cannot carry a Domain.
+
+
 def _unverified_user(username='pending', email='pending@example.com', password='PendingSecret123!'):
     user = User.objects.create_user(username=username, email=email, password=password)
     address = EmailAddress.objects.create(user=user, email=email, primary=True, verified=False)
@@ -1662,6 +1882,16 @@ class PurgeRevokedTokensTests(TestCase):
 
     def test_expiry_column_is_indexed_for_the_purge(self):
         self.assertTrue(RevokedToken._meta.get_field('expires_at').db_index)
+
+
+class SecurityHeaderTests(SimpleTestCase):
+    def test_responses_carry_the_hardening_headers(self):
+        response = self.client.get('/api/status/')
+        self.assertEqual(response['X-Frame-Options'], 'DENY')
+        self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')
+        for feature in ('camera=()', 'microphone=()', 'geolocation=()'):
+            self.assertIn(feature, response['Permissions-Policy'])
 
 
 class AdminUserDeletionTests(TestCase):
