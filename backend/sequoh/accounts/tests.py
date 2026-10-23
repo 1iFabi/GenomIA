@@ -1590,3 +1590,18 @@ class TokenVersionTests(TestCase):
         self.assertIn(self.me_status(), (401, 403))
 
 
+class PurgeRevokedTokensTests(TestCase):
+    def test_removes_only_the_expired_rows(self):
+        RevokedToken.objects.create(jti='expired', expires_at=timezone.now() - timedelta(seconds=1))
+        RevokedToken.objects.create(jti='live', expires_at=timezone.now() + timedelta(hours=1))
+        out = StringIO()
+
+        call_command('purge_revoked_tokens', stdout=out)
+
+        self.assertEqual(list(RevokedToken.objects.values_list('jti', flat=True)), ['live'])
+        self.assertIn('1', out.getvalue())
+
+    def test_expiry_column_is_indexed_for_the_purge(self):
+        self.assertTrue(RevokedToken._meta.get_field('expires_at').db_index)
+
+
