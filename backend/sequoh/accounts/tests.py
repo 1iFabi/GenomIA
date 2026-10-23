@@ -1533,6 +1533,65 @@ class RegistrationLinkTests(TestCase):
         self.assertTrue(User.objects.get(username='new_handle').is_active)  # The gate is EmailAddress, not is_active.
 
 
+class _CookieAuthedProbe(APIView):
+    """A mutating view that relies only on JWTAuthentication, with no per-view CSRF mixin."""
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({'ok': True})
+
+    post = put = patch = delete = get
+
+
+class GlobalCsrfEnforcementTests(TestCase):
+    """Cookie-authenticated unsafe requests need the double-submit token on every JWT view."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='csrf-user', email='csrf@example.com', password='x')
+        self.token = encode_jwt({'sub': str(self.user.pk)})
+        self.view = _CookieAuthedProbe.as_view()
+
+    def call(self, method, *, cookie_csrf=None, header_csrf=None, bearer=False, cookie_auth=True):
+        factory = APIRequestFactory()
+        if cookie_auth:
+            factory.cookies[settings.AUTH_COOKIE_NAME] = self.token
+        if cookie_csrf is not None:
+            factory.cookies['csrftoken'] = cookie_csrf
+        extra = {}
+        if header_csrf is not None:
+            extra['HTTP_X_CSRFTOKEN'] = header_csrf
+        if bearer:
+            extra['HTTP_AUTHORIZATION'] = f'Bearer {self.token}'
+        return self.view(getattr(factory, method)('/probe/', {}, format='json', **extra))
+
+    def test_unsafe_methods_without_the_token_are_forbidden(self):
+        for method in ('post', 'put', 'patch', 'delete'):
+            with self.subTest(method=method):
+                self.assertEqual(self.call(method).status_code, 403)
+                self.assertEqual(self.call(method, cookie_csrf='abc').status_code, 403)
+                self.assertEqual(self.call(method, header_csrf='abc').status_code, 403)
+
+    def test_mismatched_token_is_forbidden(self):
+        self.assertEqual(self.call('post', cookie_csrf='abc', header_csrf='abd').status_code, 403)
+
+    def test_matching_token_is_accepted(self):
+        for method in ('post', 'put', 'patch', 'delete'):
+            with self.subTest(method=method):
+                self.assertEqual(self.call(method, cookie_csrf='abc', header_csrf='abc').status_code, 200)
+
+    def test_safe_methods_need_no_token(self):
+        self.assertEqual(self.call('get').status_code, 200)
+
+    def test_bearer_header_is_not_an_ambient_credential(self):
+        self.assertEqual(self.call('post', bearer=True, cookie_auth=False).status_code, 200)
+
+    def test_invalid_session_is_still_unauthenticated_not_a_csrf_error(self):
+        self.token = 'not-a-jwt'
+        self.assertIn(self.call('post').status_code, (401, 403))
+
+
 @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
 class TokenVersionTests(TestCase):
     """A role change ends the sessions the user already holds."""
@@ -1605,3 +1664,38 @@ class PurgeRevokedTokensTests(TestCase):
         self.assertTrue(RevokedToken._meta.get_field('expires_at').db_index)
 
 
+@override_settings(REQUIRE_EMAIL_VERIFICATION=False)
+class ExpiredSessionResponseTests(TestCase):
+    """The SPA only treats 401 as 'session over', so a failed credential must answer 401."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='expiring', email='expiring@example.com', password='x')
+        self.client = APIClient()
+
+    def get_me(self, token=None):
+        if token is not None:
+            self.client.cookies[settings.AUTH_COOKIE_NAME] = token
+        return self.client.get('/api/auth/me/')
+
+    def test_expired_token_answers_401(self):
+        response = self.get_me(encode_jwt({'sub': str(self.user.pk)}, ttl_seconds=-5))
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('Bearer', response['WWW-Authenticate'])
+
+    def test_revoked_token_answers_401(self):
+        token = encode_jwt({'sub': str(self.user.pk)})
+        RevokedToken.objects.create(jti=decode_jwt(token)['jti'], expires_at=timezone.now() + timedelta(hours=1))
+        self.assertEqual(self.get_me(token).status_code, 401)
+
+    def test_a_session_ended_by_a_role_change_answers_401(self):
+        token = encode_jwt({'sub': str(self.user.pk), 'tv': 99})
+        self.assertEqual(self.get_me(token).status_code, 401)
+
+    def test_no_credential_keeps_answering_403(self):
+        response = self.get_me()
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn('WWW-Authenticate', response)
+
+    def test_missing_csrf_token_is_still_403_not_a_session_end(self):
+        self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(self.user.pk)})
+        self.assertEqual(self.client.delete('/api/auth/me/delete-account/').status_code, 403)

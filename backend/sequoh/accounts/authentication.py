@@ -4,23 +4,37 @@ from django.conf import settings
 from django.utils.crypto import constant_time_compare
 from rest_framework.authentication import BaseAuthentication, get_authorization_header
 from rest_framework import exceptions
+from .csrf import enforce_csrf_double_submit
 from .jwt_utils import decode_jwt
 from .models import RevokedToken
 
 
 class JWTAuthentication(BaseAuthentication):
     """Simple DRF authentication class that reads a Bearer JWT from Authorization header.
+
+    A token that arrives in the cookie is an ambient credential, so unsafe methods must also
+    pass the CSRF double submit; this covers every view that authenticates with this class.
     """
+
+    def authenticate_header(self, request):
+        # With a credential that fails (expired, revoked, ended by a role change) DRF answers 401, which
+        # the SPA reads as "session over". Without any credential it keeps answering 403.
+        has_credential = request.COOKIES.get(getattr(settings, "AUTH_COOKIE_NAME", "access_token")) or (
+            get_authorization_header(request)
+        )
+        return 'Bearer realm="api"' if has_credential else None
 
     def authenticate(self, request) -> Optional[Tuple[User, str]]:
         # Soporta tanto `Authorization: Bearer <token>` (legacy) como cookie HttpOnly.
         auth = get_authorization_header(request).decode("utf-8")
         token = ""
+        from_cookie = False
         if auth and auth.lower().startswith("bearer "):
             token = auth[7:].strip()
         if not token:
             # Fallback: token en cookie HttpOnly (flujo cookie-based, cross-site).
             token = request.COOKIES.get(getattr(settings, "AUTH_COOKIE_NAME", "access_token"), "")
+            from_cookie = bool(token)
         if not token:
             return None
         try:
@@ -59,4 +73,6 @@ class JWTAuthentication(BaseAuthentication):
         tv = payload.get("tv")
         if tv is not None and tv != getattr(getattr(user, "app_user", None), "token_version", 0):
             raise exceptions.AuthenticationFailed("Session ended by role change")
+        if from_cookie:
+            enforce_csrf_double_submit(request)
         return (user, token)

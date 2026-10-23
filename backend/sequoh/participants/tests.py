@@ -581,13 +581,14 @@ class ParticipantMetadataTests(TestCase):
         before = Participant.objects.values().get(pk=self.participant.pk)
         client = APIClient()
         client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(self.user.pk)})
-        client.cookies['csrftoken'] = 'matching-csrf'
         payload = {'metadata': {'synthetic': 'injected'}, 'questionary': {'synthetic': 'injected'},
                    'answer': {'synthetic': True}, 'consent_status': 'withdrawn'}
-        for method in ('post', 'put', 'patch'):
+        # PATCH exists for username/avatar only, so it rejects these fields instead of answering 405.
+        for method, expected in (('post', 405), ('put', 405), ('patch', 400)):
             with self.subTest(method=method):
+                client.cookies['csrftoken'] = 'matching-csrf'  # Django rotates a malformed token after each response.
                 response = getattr(client, method)('/api/auth/me/', payload, format='json', HTTP_X_CSRFTOKEN='matching-csrf')
-                self.assertEqual(response.status_code, 405)
+                self.assertEqual(response.status_code, expected)
         response = client.get('/api/auth/me/')
         self.assertEqual(response.status_code, 200)
         self.assertTrue({'metadata', 'questionary', 'answer', 'metadata_links'}.isdisjoint(response.data['user']))
