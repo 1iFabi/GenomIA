@@ -25,19 +25,26 @@ def is_admin_or_analyst(user):
     return is_admin(user) or is_analyst(user)
 
 
+def _set_role(mapping, role):
+    # The new version ends every session issued under the previous role.
+    mapping.role = role
+    mapping.token_version += 1
+    mapping.save(update_fields=["role", "token_version"])
+
+
 def _grant_role(user, code):
     with transaction.atomic():
         mapping = AppUser.objects.select_for_update().get(django_user=user)
-        mapping.role = Role.objects.get(code=code)
-        mapping.save(update_fields=["role"])
+        role = Role.objects.get(code=code)
+        if mapping.role_id != role.pk:
+            _set_role(mapping, role)
 
 
 def _revoke_role(user, code):
     with transaction.atomic():
         mapping = AppUser.objects.select_for_update().select_related("role").get(django_user=user)
         if mapping.role.code == code:
-            mapping.role = Role.objects.get(code=Role.Code.CLIENTE)
-            mapping.save(update_fields=["role"])
+            _set_role(mapping, Role.objects.get(code=Role.Code.CLIENTE))
 
 
 def grant_analyst_role(user):

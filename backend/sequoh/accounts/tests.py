@@ -1007,6 +1007,7 @@ class FunctionalRoleDjangoAdminTests(TestCase):
         mapping = AppUser.objects.get(django_user=target)
         self.assertEqual(mapping.pk, original_id)
         self.assertEqual(mapping.role.code, 'ADMIN')
+        self.assertEqual(mapping.token_version, 1)  # A role change from the admin also ends open sessions.
         self.assertFalse(target.is_staff)
         self.assertFalse(target.is_superuser)
         self.assertEqual(AppUser.objects.get(django_user=other).role.code, 'CLIENTE')
@@ -1207,7 +1208,10 @@ class AppUserMappingTests(TestCase):
         self.assertEqual(AppUser._meta.get_field('django_user').one_to_one, True)
         self.assertEqual(
             {field.name for field in AppUser._meta.local_fields},
-            {'user_id', 'django_user', 'role', 'oidc_issuer', 'oidc_subject', 'avatar_color', 'avatar_figure', 'username_changed_at'},
+            {
+                'user_id', 'django_user', 'role', 'oidc_issuer', 'oidc_subject', 'avatar_color', 'avatar_figure',
+                'username_changed_at', 'token_version',
+            },
         )
         with connection.cursor() as cursor:
             tables = connection.introspection.table_names(cursor)
@@ -1527,5 +1531,62 @@ class RegistrationLinkTests(TestCase):
         self.assertTrue(send.call_args.args[2].startswith('https://'), send.call_args.args[2])
         self.assertFalse(EmailAddress.objects.get(email='new@example.com').verified)
         self.assertTrue(User.objects.get(username='new_handle').is_active)  # The gate is EmailAddress, not is_active.
+
+
+@override_settings(REQUIRE_EMAIL_VERIFICATION=False)
+class TokenVersionTests(TestCase):
+    """A role change ends the sessions the user already holds."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='rolechange', email='role@example.com', password='RoleSecret123!')
+        self.client = APIClient()
+        self.login()
+
+    def login(self):
+        cache.clear()
+        response = self.client.post('/api/auth/login/', {'username': 'rolechange', 'password': 'RoleSecret123!'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        return response
+
+    def me_status(self):
+        return self.client.get('/api/auth/me/').status_code
+
+    def test_new_tokens_carry_the_current_version(self):
+        AppUser.objects.filter(django_user=self.user).update(token_version=3)
+        token = self.login().cookies[settings.AUTH_COOKIE_NAME].value
+        self.assertEqual(decode_jwt(token)['tv'], 3)
+
+    def test_granting_a_role_ends_existing_sessions(self):
+        self.assertEqual(self.me_status(), 200)
+        grant_analyst_role(self.user)
+        self.assertIn(self.me_status(), (401, 403))
+        self.login()
+        self.assertEqual(self.me_status(), 200)
+
+    def test_revoking_a_role_ends_existing_sessions(self):
+        grant_reception_role(self.user)
+        self.login()
+        self.assertEqual(self.me_status(), 200)
+        revoke_reception_role(self.user)
+        self.assertIn(self.me_status(), (401, 403))
+
+    def test_a_role_change_that_changes_nothing_keeps_sessions(self):
+        revoke_analyst_role(self.user)  # Not an analyst: nothing to revoke.
+        self.assertEqual(self.me_status(), 200)
+        grant_analyst_role(self.user)
+        self.login()
+        grant_analyst_role(self.user)  # Already an analyst.
+        self.assertEqual(self.me_status(), 200)
+
+    def test_tokens_issued_before_the_claim_existed_are_still_accepted(self):
+        # Deploy window only: such tokens expire within JWT_EXPIRATION_HOURS.
+        self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(self.user.pk)})
+        grant_analyst_role(self.user)
+        self.assertEqual(self.me_status(), 200)
+
+    def test_a_token_claiming_another_version_is_rejected(self):
+        self.client.cookies[settings.AUTH_COOKIE_NAME] = encode_jwt({'sub': str(self.user.pk), 'tv': 7})
+        self.assertIn(self.me_status(), (401, 403))
 
 

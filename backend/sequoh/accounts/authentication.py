@@ -46,11 +46,17 @@ class JWTAuthentication(BaseAuthentication):
 
         try:
             # Filtrar is_active=True: un usuario desactivado pierde acceso de inmediato.
-            user = User.objects.get(id=user_id, is_active=True)
+            user = User.objects.select_related("app_user").get(id=user_id, is_active=True)
         except User.DoesNotExist:
             raise exceptions.AuthenticationFailed("User not found")
         # Login cookies carry the password-bound hash; a password change invalidates them.
         sah = payload.get("sah")
         if sah is not None and not constant_time_compare(sah, user.get_session_auth_hash()):
             raise exceptions.AuthenticationFailed("Session ended by password change")
+        # A role change bumps the version, which ends the sessions issued before it.
+        # shortcut: tokens issued before the claim existed carry no `tv` and skip this check;
+        # they all expire within JWT_EXPIRATION_HOURS of the deploy, then require it.
+        tv = payload.get("tv")
+        if tv is not None and tv != getattr(getattr(user, "app_user", None), "token_version", 0):
+            raise exceptions.AuthenticationFailed("Session ended by role change")
         return (user, token)

@@ -86,6 +86,8 @@ def issue_auth_cookie(resp, user):
         "email": user.email,
         # Changes with the password hash, so a password change ends every older session.
         "sah": user.get_session_auth_hash(),
+        # Changes with the functional role, so a role change ends every older session.
+        "tv": AppUser.objects.filter(django_user=user).values_list("token_version", flat=True).first() or 0,
     })
     cookie_name = getattr(settings, 'AUTH_COOKIE_NAME', 'access_token')
     samesite = getattr(settings, 'AUTH_COOKIE_SAMESITE', 'Lax')

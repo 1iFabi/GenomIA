@@ -2,6 +2,7 @@ from django.apps import apps
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
+from django.db.models import F
 from profiles.models import Profile
 from services.status import ClientStatus, get_service_projection
 from django.utils import timezone
@@ -61,6 +62,12 @@ class CustomUserAdmin(BaseUserAdmin):
         ('Permisos', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Fechas importantes', {'fields': ('last_login', 'date_joined')}),
     )
+
+    def save_formset(self, request, form, formset, change):
+        super().save_formset(request, form, formset, change)
+        # A role changed from the admin ends the user's open sessions, like the API does.
+        if formset.model is AppUser and any('role' in f.changed_data for f in formset.initial_forms):
+            AppUser.objects.filter(django_user=form.instance).update(token_version=F('token_version') + 1)
 
     def get_phone(self, obj):
         """Obtiene el teléfono del Profile relacionado"""

@@ -52,7 +52,8 @@ class RevokedToken(models.Model):
         blank=True,
         related_name='revoked_tokens'
     )
-    expires_at = models.DateTimeField()
+    # Indexed so the scheduled purge (manage.py purge_revoked_tokens) does not scan the table.
+    expires_at = models.DateTimeField(db_index=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -115,6 +116,8 @@ class AppUser(models.Model):
     avatar_figure = models.CharField(max_length=10, choices=AVATAR_FIGURES, default='initial', db_default='initial')
     # Last self-service rename; the client may rename again USERNAME_CHANGE_EVERY after it.
     username_changed_at = models.DateTimeField(null=True, blank=True)
+    # Bumped when the functional role changes; login tokens carry it as `tv`, so older sessions end.
+    token_version = models.PositiveIntegerField(default=0, db_default=0)
 
     class Meta:
         db_table = 'app_user'
