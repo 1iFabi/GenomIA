@@ -50,6 +50,8 @@ export default function Login() {
   // Modal de verificación de cuenta (via cookies)
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState('');
+  // Set only when a login was refused for lack of verification: it enables "Reenviar correo".
+  const [verificationEmail, setVerificationEmail] = useState('');
 
   const onChange = (e) => {
     const { name, value } = e.target;
@@ -179,6 +181,13 @@ export default function Login() {
       } else {
         // Mapear errores del backend a campos específicos cuando sea posible
         const { status, data } = result;
+        // Correct credentials, unverified email: the fields are fine, so no red fields.
+        if (data?.requires_verification) {
+          setVerificationMessage(data.error || 'Tu cuenta aún no ha sido verificada. Revisa tu correo para completar la verificación.');
+          setVerificationEmail(form.email.trim().toLowerCase());
+          setShowVerificationModal(true);
+          return;
+        }
         let fieldErrors = { email: '', password: '', global: '' };
 
         // DRF puede devolver { username: ["..."], password: ["..."] }
@@ -440,8 +449,13 @@ export default function Login() {
       {/* Modal de verificación de cuenta reutilizando estilos del modal de recuperación */}
       <VerificationModal 
         isOpen={showVerificationModal}
-        onClose={() => setShowVerificationModal(false)}
+        onClose={() => {
+          setShowVerificationModal(false);
+          setVerificationEmail('');
+        }}
         message={verificationMessage || 'Tu cuenta fue verificada correctamente.'}
+        title={verificationEmail ? 'Verificación requerida' : undefined}
+        resendEmail={verificationEmail || undefined}
       />
     </div>
   );

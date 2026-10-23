@@ -8,6 +8,7 @@ export const API_ENDPOINTS = {
   LOGIN: `${API_BASE}/auth/login/`,
   REGISTER: `${API_BASE}/auth/register/`,
   REGISTER_EMAIL_VALIDATION: `${API_BASE}/auth/register/email-validation/`,
+  RESEND_VERIFICATION: `${API_BASE}/auth/register/resend-verification/`,
   PASSWORD_RESET: `${API_BASE}/auth/password-reset/`,
   PASSWORD_RESET_CONFIRM: `${API_BASE}/auth/password-reset-confirm/`,
   ME: `${API_BASE}/auth/me/`,

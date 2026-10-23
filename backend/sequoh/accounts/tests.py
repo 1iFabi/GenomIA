@@ -1,12 +1,19 @@
 import json
+import os
+import subprocess
+import sys
+import time
 from datetime import timedelta
 from importlib import import_module
+from pathlib import Path
 from types import SimpleNamespace
 from django.utils import timezone
 from unittest.mock import patch
 
+from allauth.account.models import EmailAddress, EmailConfirmationHMAC
 from django.apps import apps
 from django.core.cache import cache
+from django.core.management import call_command
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, User
@@ -14,11 +21,16 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
 from django.db.migrations.loader import MigrationLoader
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 import uuid
-from rest_framework.test import APIClient
+from io import StringIO
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.test import APIClient, APIRequestFactory
+from rest_framework.views import APIView
 
+from .authentication import JWTAuthentication
 from .jwt_utils import encode_jwt, decode_jwt
 from .models import AppUser, RevokedToken, Role
 from .signals import assign_new_user_client_role
@@ -1365,3 +1377,160 @@ class MeUpdateTests(TestCase):
 
         AppUser.objects.filter(django_user=self.user).update(username_changed_at=timezone.now() - timedelta(days=30, seconds=1))
         self.assertEqual(self.patch({'username': 'ana.dos'}).status_code, 200)
+def _unverified_user(username='pending', email='pending@example.com', password='PendingSecret123!'):
+    user = User.objects.create_user(username=username, email=email, password=password)
+    address = EmailAddress.objects.create(user=user, email=email, primary=True, verified=False)
+    return user, address
+
+
+@override_settings(REQUIRE_EMAIL_VERIFICATION=True)
+class UnverifiedLoginGateTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.user, self.address = _unverified_user()
+
+    def login(self, password='PendingSecret123!'):
+        return self.client.post('/api/auth/login/', {'username': 'pending', 'password': password}, format='json')
+
+    def test_correct_password_without_a_verified_email_gets_no_session(self):
+        response = self.login()
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(response.data['requires_verification'])
+        self.assertNotIn(settings.AUTH_COOKIE_NAME, response.cookies)
+        self.assertIn(self.client.get('/api/auth/me/').status_code, (401, 403))
+
+    def test_confirming_the_email_opens_the_gate(self):
+        EmailAddress.objects.filter(pk=self.address.pk).update(verified=True)
+        response = self.login()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.cookies[settings.AUTH_COOKIE_NAME]['httponly'])
+
+    def test_a_verified_address_that_is_not_the_account_email_does_not_open_the_gate(self):
+        EmailAddress.objects.create(user=self.user, email='other@example.com', verified=True)
+        self.assertEqual(self.login().status_code, 400)
+
+    def test_wrong_password_does_not_reveal_the_verification_state(self):
+        response = self.login(password='WrongPassword1!')
+        self.assertEqual(response.data, {'success': False, 'error': 'Credenciales inválidas'})
+        self.assertNotIn('requires_verification', response.data)
+
+
+@override_settings(REQUIRE_EMAIL_VERIFICATION=True)
+@patch('accounts.adapters.send_verification_email', return_value=True)
+class ResendVerificationTests(TestCase):
+    URL = '/api/auth/register/resend-verification/'
+
+    def setUp(self):
+        cache.clear()  # The 'resend' throttle counts across tests otherwise.
+        self.client = APIClient()
+        self.user, self.address = _unverified_user()
+
+    def resend(self, email='pending@example.com'):
+        return self.client.post(self.URL, {'email': email}, format='json')
+
+    def test_unverified_address_gets_exactly_one_new_link(self, send):
+        response = self.resend('  Pending@Example.COM ')
+        self.assertEqual((response.status_code, response.data), (200, {'success': True}))
+        send.assert_called_once()
+        self.assertEqual(send.call_args.args[0], 'pending@example.com')
+        self.assertIn('/accounts/confirm-email/', send.call_args.args[2])
+
+    def test_unknown_verified_and_pending_addresses_get_the_same_answer(self, send):
+        done = User.objects.create_user(username='done', email='done@example.com', password='DoneSecret123!')
+        EmailAddress.objects.create(user=done, email='done@example.com', verified=True, primary=True)
+
+        answers = [self.resend(email) for email in ('nobody@example.com', 'done@example.com', 'pending@example.com')]
+
+        self.assertEqual({(a.status_code, json.dumps(a.data)) for a in answers}, {(200, '{"success": true}')})
+        send.assert_called_once()  # Only the pending address got a mail.
+        self.assertEqual(send.call_args.args[0], 'pending@example.com')
+
+    def test_malformed_requests_reveal_nothing_and_send_nothing(self, send):
+        for body in ({}, {'email': None}, {'email': 123}, {'email': ''}, {'email': 'not-an-email'}, ['pending@example.com']):
+            with self.subTest(body=body):
+                cache.clear()  # Six bodies would trip the 5/min throttle.
+                response = self.client.post(self.URL, body, format='json')
+                self.assertEqual((response.status_code, response.data), (200, {'success': True}))
+        send.assert_not_called()
+
+    def test_delivery_failure_looks_like_success_and_never_logs_the_address(self, send):
+        send.return_value = False
+        with self.assertLogs(level='WARNING') as logs:
+            response = self.resend()
+        self.assertEqual((response.status_code, response.data), (200, {'success': True}))
+        self.assertNotIn('pending@example.com', '\n'.join(logs.output))
+        self.assertIn('example.com', '\n'.join(logs.output))  # The domain is enough to debug a delivery problem.
+
+    def test_resend_is_throttled(self, send):
+        statuses = [self.resend().status_code for _ in range(6)]
+        self.assertEqual(statuses, [200] * 5 + [429])
+
+    def test_resend_does_not_open_a_session(self, send):
+        self.assertNotIn(settings.AUTH_COOKIE_NAME, self.resend().cookies)
+
+
+@override_settings(REQUIRE_EMAIL_VERIFICATION=True)
+class EmailConfirmationLinkTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user, self.address = _unverified_user()
+
+    def key_issued(self, hours_ago):
+        with patch('django.core.signing.time.time', return_value=time.time() - hours_ago * 3600):
+            return EmailConfirmationHMAC(self.address).key
+
+    def confirm(self, key):
+        return self.client.get(f'/accounts/confirm-email/{key}/')
+
+    def test_link_inside_the_lifetime_verifies_without_opening_a_session(self):
+        with patch('accounts.signals.send_welcome_email', return_value=True):
+            response = self.confirm(self.key_issued(hours_ago=23))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], f"{settings.FRONTEND_DOMAIN.rstrip('/')}/login?verified=1")
+        self.assertNotIn(settings.AUTH_COOKIE_NAME, response.cookies)
+        self.address.refresh_from_db()
+        self.assertTrue(self.address.verified)
+
+    def test_link_older_than_24_hours_does_not_verify(self):
+        response = self.confirm(self.key_issued(hours_ago=25))
+        self.assertEqual(response.cookies['verification_status'].value, '0')
+        self.address.refresh_from_db()
+        self.assertFalse(self.address.verified)
+
+    def test_confirmation_sends_the_welcome_exactly_once(self):
+        key = self.key_issued(hours_ago=1)
+        with patch('accounts.signals.send_welcome_email', return_value=True) as welcome:
+            self.confirm(key)
+            self.confirm(key)  # A mail scanner or a second click replays the link.
+            login = self.client.post(
+                '/api/auth/login/', {'username': 'pending', 'password': 'PendingSecret123!'},
+                content_type='application/json',
+            )
+        self.assertEqual(login.status_code, 200)
+        welcome.assert_called_once_with(self.user)
+
+
+@override_settings(REQUIRE_EMAIL_VERIFICATION=True, ALLOWED_EMAIL_DOMAINS='', ACCOUNT_DEFAULT_HTTP_PROTOCOL='https')
+class RegistrationLinkTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    @patch('accounts.adapters.send_verification_email', return_value=True)
+    def test_registration_sends_one_https_link_and_no_session(self, send):
+        mx = [SimpleNamespace(exchange=SimpleNamespace(to_text=lambda: 'mx.example.'))]
+        with patch('accounts.email_validation.dns.resolver.resolve', return_value=mx):
+            response = self.client.post('/api/auth/register/', {
+                'username': 'new_handle', 'correo': 'new@example.com', 'contraseña': 'SecurePassword1!',
+                'repetirContraseña': 'SecurePassword1!', 'terminos': True,
+            }, content_type='application/json')
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data['requires_verification'])
+        self.assertNotIn(settings.AUTH_COOKIE_NAME, response.cookies)
+        send.assert_called_once()
+        self.assertTrue(send.call_args.args[2].startswith('https://'), send.call_args.args[2])
+        self.assertFalse(EmailAddress.objects.get(email='new@example.com').verified)
+        self.assertTrue(User.objects.get(username='new_handle').is_active)  # The gate is EmailAddress, not is_active.
+
+

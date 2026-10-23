@@ -643,6 +643,7 @@ const Register = () => {
         }}
         message={verificationMessage || 'Usuario registrado exitosamente. Debes verificar tu cuenta desde tu correo para poder continuar.'}
         title="Verificación requerida"
+        resendEmail={normalizeEmail(formData.correo)}
       />
 
       {showTermsModal && <TermsModal onClose={handleCloseTermsModal} />}

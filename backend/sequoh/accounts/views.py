@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import ParseError
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User, update_last_login
@@ -576,6 +577,31 @@ class RegistrationEmailValidationAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ResendVerificationAPIView(APIView):
+    """Send a fresh confirmation link; the answer never tells whether the address exists or is verified."""
+
+    authentication_classes = []
+    permission_classes = []
+    throttle_scope = 'resend'
+
+    def post(self, request):
+        try:
+            data = request.data
+        except ParseError:
+            data = {}
+        email = data.get('email') if isinstance(data, dict) else None
+        if isinstance(email, str) and email.strip():
+            address = EmailAddress.objects.select_related('user').filter(
+                email__iexact=email.strip(), user__email__iexact=email.strip(), verified=False,
+            ).first()
+            if address:
+                try:
+                    address.send_confirmation(request, signup=True)
+                except EmailDeliveryError:
+                    logger.warning("Resend verification delivery failed (domain=%s)", address.email.rsplit('@', 1)[-1])
+        return Response({"success": True})
 
 
 @method_decorator(csrf_exempt, name='dispatch')
