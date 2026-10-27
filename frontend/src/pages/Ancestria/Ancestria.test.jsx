@@ -14,7 +14,7 @@ import {
   X as CloseIcon,
 } from '@animateicons/react/lucide';
 import { Expand as ExpandIcon, Shrink as ShrinkIcon } from 'lucide-react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { Link, MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_ENDPOINTS, apiRequest, clearToken } from '../../config/api';
 import { AuthProvider } from '../../contexts/AuthContext';
@@ -32,18 +32,18 @@ vi.mock('../../config/api', async (importOriginal) => {
   };
 });
 
-vi.mock('../../components/Sidebar/Sidebar', () => ({
-  default: ({ items, iconOverrides, user, onLogout }) => (
-    <nav aria-label="Dashboard navigation" data-has-icon-overrides={Boolean(iconOverrides)}>
-      <span data-testid="shared-user">{user?.name}</span>
-      {items.map((item) => <a key={item.href} href={item.href}>{item.label}</a>)}
-      <button type="button" onClick={onLogout}>Cerrar sesión</button>
-      {iconOverrides?.categoryItems?.map((Icon, index) => (
-        <Icon key={index} data-testid={`ancestria-sidebar-icon-${index}`} aria-hidden="true" />
-      ))}
-    </nav>
-  ),
-}));
+vi.mock('../../components/ResultsBar/ResultsBar', async () => {
+  const { RESULT_MODULES, GUIDE_HREF } = await import('../../config/resultNav');
+  return {
+    default: ({ user, onLogout }) => (
+      <nav aria-label="Dashboard navigation">
+        <span data-testid="shared-user">{user?.name}</span>
+        {[...RESULT_MODULES, { href: GUIDE_HREF, name: 'Guía de módulos' }].map((m) => <Link key={m.href} to={m.href}>{m.name}</Link>)}
+        <button type="button" onClick={onLogout}>Cerrar sesión</button>
+      </nav>
+    ),
+  };
+});
 
 vi.mock('../../components/SectionHeader/SectionHeader', () => ({
   default: ({ title }) => <header>{title}</header>,
