@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { slotAt, spinPath, trips } from './helixFrames';
+import { slotAt, spinPath } from './helixFrames';
 
 describe('spinPath', () => {
   it('plays one stretch forward and backward', () => {
@@ -16,15 +16,6 @@ describe('spinPath', () => {
     expect(far[0]).toBe('seq_0-4_024.webp');
     expect(far.at(-1)).toBe('seq_0-4_000.webp');
     expect(spinPath(2, 2)).toEqual([]);
-  });
-});
-
-describe('trips', () => {
-  it('lists every pair once, neighbours first', () => {
-    const t = trips(5);
-    expect(t).toHaveLength(10);
-    expect(t.slice(0, 4)).toEqual(['seq_0-1', 'seq_1-2', 'seq_2-3', 'seq_3-4']);
-    expect(t.at(-1)).toBe('seq_0-4');
   });
 });
 

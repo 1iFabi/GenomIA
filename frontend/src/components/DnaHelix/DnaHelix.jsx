@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { frames, slotAt, spinPath, trips } from './helixFrames';
+import { frames, slotAt, spinPath } from './helixFrames';
 import { arbitrate, createArbiter } from './wheelArbiter';
 import './DnaHelix.css';
 
@@ -46,31 +46,37 @@ const DnaHelix = forwardRef(function DnaHelix({ slot, count, label, onPick }, re
   const [diving, setDiving] = useState(false);
   const [first] = useState(slot); // after mount the player owns src: a re-render must not jump to the destination
 
-  // Rest frames first, then the trips (neighbours first), then the dives; six requests at a time.
+  // Frames load as they become needed, not all 380 up front: every rest frame, then from the module on
+  // show the trips to its neighbours (the tour's next stop wraps round) and its dive. A farther pick fades
+  // instead of spinning. Newest needs go first, six requests at a time.
+  const queue = useRef([]);
+  const loading = useRef(0);
+  const pump = () => {
+    while (loading.current < 6 && queue.current.length) {
+      const url = queue.current.shift();
+      if (cache.current.has(url)) continue;
+      const im = new Image();
+      im.decoding = 'async';
+      loading.current += 1;
+      im.onload = im.onerror = () => { loading.current -= 1; pump(); };
+      im.src = url;
+      cache.current.set(url, im);
+    }
+  };
+  const want = (names) => {
+    queue.current = [...names.map((name) => cb.current.base + name), ...queue.current];
+    pump();
+  };
+  const warm = (m) => {
+    const n = cb.current.count;
+    want([...spinPath(m, (m + 1) % n), ...spinPath(m, (m - 1 + n) % n), ...frames(`dive_${m}`)]);
+  };
+
   useEffect(() => {
-    const names = [
-      ...Array.from({ length: count }, (_, m) => `rest_${m}.webp`),
-      ...trips(count).flatMap(frames),
-      ...Array.from({ length: count }, (_, m) => frames(`dive_${m}`)).flat(),
-    ];
-    let live = true;
-    let next = 0;
-    const pump = () => {
-      while (live && next < names.length) {
-        const url = base + names[next++];
-        if (cache.current.has(url)) continue;
-        const im = new Image();
-        im.decoding = 'async';
-        im.onload = pump;
-        im.onerror = pump;
-        im.src = url;
-        cache.current.set(url, im);
-        return;
-      }
-    };
-    for (let k = 0; k < 6; k++) pump();
-    return () => { live = false; };
-  }, [base, count]);
+    warm(shown.current);
+    want(Array.from({ length: count }, (_, m) => `rest_${m}.webp`)); // ahead of the warm-up
+    return () => { queue.current = []; };
+  }, [base, count]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ready = (name) => {
     const im = cache.current.get(cb.current.base + name);
@@ -111,6 +117,7 @@ const DnaHelix = forwardRef(function DnaHelix({ slot, count, label, onPick }, re
     const rest = `rest_${to}.webp`;
     if (from === to) { show(rest); return; }
     shown.current = to;
+    warm(to);
     busy.current = true;
     const t = ++token.current;
     const path = spinPath(from, to);
