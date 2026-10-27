@@ -18,7 +18,7 @@ const getSharedVideo = () => {
   video.preload = "auto";
   video.poster = "/GenomIA_login_loop_poster.jpg";
   video.setAttribute("aria-hidden", "true");
-  // WebM (VP9, 2160×2880) first; MP4 fallback for Safari without VP9.
+  // WebM (VP9, 1080×1920, 24 fps) first; MP4 fallback for Safari without VP9.
   for (const [src, type] of [
     ["/GenomIA_login_loop.webm", "video/webm"],
     ["/GenomIA_login_loop.mp4", "video/mp4"],
@@ -38,9 +38,24 @@ export default function AuthPlate() {
   const slotRef = useRef(null);
 
   useLayoutEffect(() => {
-    const video = getSharedVideo();
-    slotRef.current.appendChild(video);
-    if (!prefersStill() && video.paused) video.play().catch(() => {});
+    const slot = slotRef.current;
+    const attach = () => {
+      const video = getSharedVideo();
+      slot.appendChild(video);
+      if (!prefersStill() && video.paused) video.play().catch(() => {});
+    };
+    if (slot.offsetWidth) {
+      attach();
+      return undefined;
+    }
+    // The page CSS hides the plate on narrow screens: fetch the video only once the plate shows.
+    const observer = new ResizeObserver(() => {
+      if (!slot.offsetWidth) return;
+      observer.disconnect();
+      attach();
+    });
+    observer.observe(slot);
+    return () => observer.disconnect();
   }, []);
 
   return (
