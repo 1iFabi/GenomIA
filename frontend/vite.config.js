@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
 
 // The SPA's CSP: whoever hosts dist/ serves this page, so the policy travels inside it.
@@ -76,7 +77,8 @@ export default defineConfig({
     },
     // Proxy de dev: same-origin hacia el backend para que la cookie HttpOnly funcione.
     proxy: {
-      '/api': 'http://127.0.0.1:8000',
+      // API_PROXY_TARGET lets a second checkout use its own backend port.
+      '/api': process.env.API_PROXY_TARGET || 'http://127.0.0.1:8000',
     },
   },
   test: {
