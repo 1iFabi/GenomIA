@@ -1,0 +1,6 @@
+# Local ignored files Orca copies into each new worktree (literal paths only).
+CLAUDE.md
+.mcp.json
+.claude/settings.json
+backend/sequoh/.env
+frontend/.env
