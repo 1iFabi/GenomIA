@@ -728,7 +728,7 @@ class AccountReadProjectionTests(TestCase):
         rows = {row['id']: row for row in admin.data}
         self.assertEqual(set(rows[client.pk]), {
             'id', 'username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser',
-            'service_status', 'roles', 'is_admin', 'is_analyst', 'is_reception',
+            'service_status', 'roles', 'is_admin', 'is_analyst', 'is_reception', 'date_joined', 'last_login',
         })
         self.assertEqual(rows[client.pk]['service_status'], 'PENDING')
         self.assertEqual(rows[no_profile.pk]['service_status'], 'PENDING')

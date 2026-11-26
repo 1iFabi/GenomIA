@@ -17,6 +17,7 @@ from .views import (
     ManageAnalystRoleAPIView,
     PurchaseProfileAPIView,
 )
+from .admin_panel import AdminActivityAPIView, AdminOverviewAPIView
 from .google_auth import GoogleCompleteSignupAPIView, GoogleLoginAPIView
 
 urlpatterns = [
@@ -41,6 +42,8 @@ urlpatterns = [
 
     # Administración
     path('admin/stats/', AdminStatsAPIView.as_view(), name='api_admin_stats'),
+    path('admin/overview/', AdminOverviewAPIView.as_view(), name='api_admin_overview'),
+    path('admin/activity/', AdminActivityAPIView.as_view(), name='api_admin_activity'),
     path('admin/analysts/', ManageAnalystRoleAPIView.as_view(), name='api_admin_manage_analysts'),
     path('admin/users/', GetUsersAPIView.as_view(), name='api_get_users'),
 ]

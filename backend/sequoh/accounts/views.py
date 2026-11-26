@@ -981,7 +981,8 @@ class GetUsersAPIView(APIView):
 
         # Admin: información completa
         users = list(User.objects.filter(is_active=True).values(
-            "id", "username", "email", "first_name", "last_name", "is_staff", "is_superuser"
+            "id", "username", "email", "first_name", "last_name", "is_staff", "is_superuser",
+            "date_joined", "last_login",
         ))
         user_ids = [user['id'] for user in users]
         roles_by_user = dict(AppUser.objects.filter(
