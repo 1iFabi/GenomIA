@@ -1,0 +1,358 @@
+/* Admin panel: the result-module page (pgx classes from Farmacogenetica.css) re-tinted per section.
+   --ink, --tint and --rung come from the section (config/adminNav.js); the rest mixes from them. */
+.adm-layout {
+  --paper: color-mix(in srgb, var(--tint) 55%, white);
+  --sheet: color-mix(in srgb, var(--tint) 18%, white);
+  --soft: color-mix(in srgb, var(--ink) 72%, white);
+  --line: color-mix(in srgb, var(--tint) 70%, var(--ink) 10%);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* the skeleton's colours; Farmacogenética sets them only inside its own loading block */
+  --skel: var(--line);
+  --skel-sweep: linear-gradient(100deg, transparent 43%, rgb(255 255 255 / 0.5) 47%, rgb(255 255 255 / 0.9) 50%, rgb(255 255 255 / 0.5) 53%, transparent 57%); /* taste-skill-ignore: the loading light, not a fill */
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter', /* taste-skill-ignore: GenomIA's brand face */ system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.adm-layout ::selection {
+  background: color-mix(in srgb, var(--rung) 35%, transparent);
+}
+
+.adm-layout .rbar::before {
+  background: linear-gradient(to bottom, var(--paper) 65%, transparent);
+}
+
+.adm-main {
+  min-width: 0;
+}
+
+.adm-sheet {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border-radius: 1rem;
+  background: var(--sheet);
+}
+
+.adm-sheet__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.adm-sheet__head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.adm-sheet__head a,
+.adm-link {
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+/* Joined strip of tiles, number over label: the analyst panel's KPI strip.
+   Used for the overview figures and, as buttons, for the list filters. */
+.adm-figures,
+.adm-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+  gap: 3px;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 1rem;
+  list-style: none;
+}
+
+.adm-tabs {
+  margin-bottom: 1rem;
+}
+
+.adm-figures {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.adm-figure,
+.adm-tab {
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 1rem 1.125rem;
+  background: var(--sheet);
+}
+
+.adm-tabs li {
+  display: grid;
+}
+
+.adm-tab {
+  width: 100%;
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease);
+}
+
+.adm-tab:hover {
+  background: color-mix(in srgb, var(--tint) 40%, white);
+}
+
+.adm-tab[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--sheet);
+}
+
+.adm-tab:focus-visible {
+  outline: 2px solid var(--rung);
+  outline-offset: -4px;
+}
+
+.adm-figure dt,
+.adm-tab span {
+  order: 2;
+  color: var(--soft);
+  font-size: 0.8125rem;
+}
+
+.adm-tab[aria-pressed="true"] span {
+  color: inherit;
+}
+
+/* a filter without a count shows its label at the number's size */
+.adm-tab span:only-child {
+  color: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.adm-figure dd,
+.adm-tab b {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-stages {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm-stage {
+  display: grid;
+  align-content: start; /* a stage with the extra "oldest" line must not push its siblings' numbers down */
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.adm-stage i {
+  display: block;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rung) calc(25% + var(--share, 0) * 75%), var(--sheet));
+}
+
+.adm-stage b {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-stage span,
+.adm-muted {
+  color: var(--soft);
+  font-size: 0.8125rem;
+}
+
+.adm-staff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.adm-chip[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--sheet);
+}
+
+.adm-chip b {
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-feed {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm-feed li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 1rem;
+  padding: 0.625rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.adm-feed li:first-child {
+  border-top: 0;
+}
+
+.adm-who {
+  display: grid;
+  min-width: 0;
+}
+
+.adm-who b {
+  font-weight: 600;
+}
+
+.adm-email {
+  display: block;
+}
+
+.adm-who span,
+.adm-email {
+  color: var(--soft);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.adm-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+  gap: 1rem 2rem;
+  padding: 0.25rem 0 1rem;
+}
+
+.adm-detail dl {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.adm-detail dt {
+  color: var(--soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.adm-detail dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.adm-roles {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.adm-roles legend {
+  margin-bottom: 0.25rem;
+  color: var(--soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.adm-roles label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+  cursor: pointer;
+}
+
+.adm-roles input {
+  accent-color: var(--ink);
+}
+
+.adm-save {
+  justify-self: start;
+  min-height: 2.5rem;
+  padding: 0.5rem 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--sheet);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.adm-save:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.adm-msg {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.adm-msg--error {
+  color: #a1261b;
+}
+
+.adm-more {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.adm .pgx-row__name {
+  overflow-wrap: anywhere;
+}
+
+@container (max-width: 40rem) {
+  .adm-figures,
+  .adm-tabs,
+  .adm-stages {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* an odd last tile fills the row instead of leaving a hole */
+  .adm-tabs li:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .adm-feed li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

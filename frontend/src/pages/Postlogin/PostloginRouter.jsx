@@ -1,11 +1,12 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Navigate, Routes, Route } from 'react-router-dom';
 import DashboardSkeleton from '../../components/DashboardSkeleton/DashboardSkeleton';
 import PostloginUser from './PostloginUser';
-import PostloginAdmin from './PostloginAdmin';
 import PostloginAnalyst from './PostloginAnalyst';
 import PostloginReception from './PostloginReception';
-import AdminAnalystAccess from './AdminAnalystAccess';
+import AdminOverview from '../Admin/AdminOverview';
+import AdminUsers from '../Admin/AdminUsers';
+import AdminActivity from '../Admin/AdminActivity';
 import Enfermedades from '../Enfermedades/Enfermedades';
 import Farmacogenetica from '../Farmacogenetica/Farmacogenetica';
 import GenominWidget from '../../components/Genomin/GenominWidget';
@@ -16,8 +17,11 @@ const PostloginRouter = ({ user }) => {
   if (role === 'admin') {
     return (
       <Routes>
-        <Route path="/" element={<PostloginAdmin user={user} mode="admin" />} />
-        <Route path="admin/analysts" element={<AdminAnalystAccess user={user} />} />
+        <Route path="/" element={<AdminOverview />} />
+        <Route path="admin/usuarios" element={<AdminUsers />} />
+        <Route path="admin/actividad" element={<AdminActivity />} />
+        {/* The old role-management page now lives in Usuarios. */}
+        <Route path="admin/analysts" element={<Navigate to="/dashboard/admin/usuarios" replace />} />
         <Route path="enfermedades" element={<Enfermedades />} />
         <Route path="farmacogenetica" element={<Farmacogenetica />} />
       </Routes>

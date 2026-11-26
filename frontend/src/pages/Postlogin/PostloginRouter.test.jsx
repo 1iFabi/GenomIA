@@ -13,11 +13,12 @@ vi.mock('../../config/api', () => ({
   clearToken: vi.fn(),
 }));
 vi.mock('./PostloginUser', () => ({ default: ({ user }) => <div data-testid="user-home">{user.id}</div> }));
-vi.mock('./PostloginAdmin', () => ({ default: ({ user }) => <div data-testid="admin-home">{user.id}</div> }));
+vi.mock('../Admin/AdminOverview', () => ({ default: () => <div data-testid="admin-home" /> }));
+vi.mock('../Admin/AdminUsers', () => ({ default: () => <div data-testid="admin-users" /> }));
+vi.mock('../Admin/AdminActivity', () => ({ default: () => <div data-testid="admin-activity" /> }));
 vi.mock('./PostloginAnalyst', () => ({ default: ({ user }) => <div data-testid="analyst-home">{user.id}</div> }));
 vi.mock('./PostloginReception', () => ({ default: ({ user }) => <div data-testid="reception-home">{user.id}</div> }));
 vi.mock('./AdminVariantsDatabase', () => ({ default: () => <div data-testid="admin-variants" /> }));
-vi.mock('./AdminAnalystAccess', () => ({ default: () => <div data-testid="admin-analysts" /> }));
 vi.mock('../Enfermedades/Enfermedades', () => ({ default: () => <div data-testid="enfermedades" /> }));
 vi.mock('../Farmacogenetica/Farmacogenetica', () => ({ default: () => <div data-testid="farmacogenetica" /> }));
 vi.mock('../../components/Genomin/GenominWidget', () => ({ default: () => null }));
@@ -77,7 +78,7 @@ describe('retired SNP catalog dashboard consumers', () => {
     total_users: 7, pending_reports: 3, analysis_count: 4, variants_count: 99,
   } };
 
-  describe.each(['Admin', 'Analyst'])('%s dashboard', (role) => {
+  describe.each(['Analyst'])('%s dashboard', (role) => {
     const renderHome = async () => {
       const { default: Home } = await vi.importActual(`./Postlogin${role}.jsx`);
       apiRequest.mockResolvedValue(response);
@@ -178,10 +179,8 @@ describe('retired SNP catalog dashboard consumers', () => {
 });
 
 describe.each([
-  ['PostloginAdmin', '/dashboard'],
   ['PostloginAnalyst', '/dashboard'],
   ['PostloginReception', '/dashboard'],
-  ['AdminAnalystAccess', '/dashboard/admin/analysts'],
 ])('%s logout', (component, path) => {
   it('awaits one shared best-effort logout before navigating home without a direct POST', async () => {
     const { default: Page } = await vi.importActual(`./${component}.jsx`);
@@ -236,7 +235,7 @@ describe('PostloginRouter', () => {
   it('routes the already-authenticated admin user without another /me request', async () => {
     const view = await renderDashboard({ id: 1, is_staff: true });
 
-    expect(view.querySelector('[data-testid="admin-home"]')?.textContent).toBe('1');
+    expect(view.querySelector('[data-testid="admin-home"]')).not.toBeNull();
     expect(apiRequest).not.toHaveBeenCalled();
   });
 
@@ -254,14 +253,23 @@ describe('PostloginRouter', () => {
     expect(apiRequest).not.toHaveBeenCalled();
   });
 
-  it('preserves the default user dashboard and admin role-management route', async () => {
-    const user = { id: 4, roles: [] };
-    const view = await renderDashboard(user);
+  it('preserves the default user dashboard', async () => {
+    const view = await renderDashboard({ id: 4, roles: [] });
 
     expect(view.querySelector('[data-testid="user-home"]')?.textContent).toBe('4');
-
-    const analysts = await renderDashboard({ id: 5, is_admin: true }, '/dashboard/admin/analysts');
-    expect(analysts.querySelector('[data-testid="admin-analysts"]')).not.toBeNull();
     expect(apiRequest).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['/dashboard/admin/usuarios', 'admin-users'], ['/dashboard/admin/actividad', 'admin-activity'],
+  ])('routes the admin to %s', async (path, marker) => {
+    const view = await renderDashboard({ id: 5, is_admin: true }, path);
+    expect(view.querySelector(`[data-testid="${marker}"]`)).not.toBeNull();
+  });
+
+  it('sends the old role-management link to the users page', async () => {
+    const view = await renderDashboard({ id: 5, is_admin: true }, '/dashboard/admin/analysts');
+    expect(view.querySelector('[data-testid="admin-users"]')).not.toBeNull();
+    expect(view.querySelector('[data-testid="location"]').textContent).toBe('/dashboard/admin/usuarios');
   });
 });

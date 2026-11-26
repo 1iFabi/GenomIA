@@ -21,6 +21,8 @@ export const API_ENDPOINTS = {
   ADMIN_STATS: `${API_BASE}/admin/stats/`,
   GET_USERS: `${API_BASE}/admin/users/`,
   ADMIN_ANALYSTS: `${API_BASE}/admin/analysts/`,
+  ADMIN_OVERVIEW: `${API_BASE}/admin/overview/`,
+  ADMIN_ACTIVITY: `${API_BASE}/admin/activity/`,
   GENOMICS_RESULTS: `${API_BASE}/genoma/v1/results/`,
   ANCESTRY_COHORT: `${API_BASE}/genoma/v1/results/ancestry-cohort/`,
   RECEPTION_SEARCH: `${API_BASE}/reception/search/`,
