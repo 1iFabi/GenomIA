@@ -10,7 +10,7 @@ import './AccountMenu.css';
  * Back to the results is the arrow beside the module dots; here the public site is named as such,
  * so the two never read alike. Password and account deletion live on /profile ("Mi cuenta").
  */
-const AccountMenu = ({ user, onLogout, className = '' }) => {
+const AccountMenu = ({ user, onLogout, className = '', role = 'Cliente GenomIA' }) => {
   const [open, setOpen] = useState(false);
   const root = useRef(null);
   const toggle = useRef(null);
@@ -53,7 +53,7 @@ const AccountMenu = ({ user, onLogout, className = '' }) => {
 
       {open && (
         <nav className="acct__pop" id={id} aria-label="Tu cuenta">
-          <p className="acct__who"><b>{firstName}</b><span>Cliente GenomIA</span></p>
+          <p className="acct__who"><b>{firstName}</b><span>{role ?? 'Cliente GenomIA'}</span></p>
           <ul>
             <li><Link className="acct__item" to="/profile" onClick={close}><UserRound aria-hidden="true" />Mi cuenta</Link></li>
             <li><Link className="acct__item" to="/" onClick={close}><Globe aria-hidden="true" />Ir al sitio de GenomIA</Link></li>

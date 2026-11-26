@@ -17,7 +17,7 @@ const FOLLOW_MS = 600;
 let lastShown = null;
 
 // Riesgo poligénico and monogénico share one page; the hash picks which (poligénico when none).
-const activeIndex = (pathname, hash) => RESULT_MODULES.findIndex((m) => {
+const activeIndex = (modules, pathname, hash) => modules.findIndex((m) => {
   const [path, anchor] = m.href.split('#');
   if (path !== pathname) return false;
   return !anchor || hash === `#${anchor}` || (!hash && anchor === 'polygenic_risk');
@@ -29,13 +29,16 @@ const activeIndex = (pathname, hash) => RESULT_MODULES.findIndex((m) => {
  * Moving between modules is one continuous motion: the old name closes while the new one opens,
  * the pill glides under them and the colours crossfade. Other names show as a label under the
  * pointer, so hovering never moves the dots.
+ * Staff pages pass their own `modules` (and `back={false}`, as they have no helix to go back to); only
+ * the client modules remember the one on show for the helix.
  */
-const ResultsBar = ({ user, onLogout }) => {
+const ResultsBar = ({ user, onLogout, modules = RESULT_MODULES, back = true, accountRole }) => {
   const { pathname, hash } = useLocation();
-  const active = activeIndex(pathname, hash);
+  const client = modules === RESULT_MODULES;
+  const active = activeIndex(modules, pathname, hash);
   const reduce = useReducedMotion();
-  const [shown, setShown] = useState(() => (lastShown !== null && active >= 0 ? lastShown : active));
-  const colours = RESULT_MODULES[shown] || GUIDE_COLOURS;
+  const [shown, setShown] = useState(() => (client && lastShown !== null && active >= 0 ? lastShown : active));
+  const colours = modules[shown] || GUIDE_COLOURS;
   const links = useRef([]);
   const placed = useRef(false);
   const x = useSpring(0, PILL);
@@ -43,17 +46,17 @@ const ResultsBar = ({ user, onLogout }) => {
 
   // Back on the dashboard, the helix waits on the module the client last read.
   useEffect(() => {
-    if (active < 0) return;
+    if (!client || active < 0) return;
     try { sessionStorage.setItem(SLOT_KEY, String(active)); } catch { /* private mode */ }
-  }, [active]);
+  }, [active, client]);
 
   // One frame on the old module, then over to the new one, so the change is seen happening.
   useEffect(() => {
-    if (active >= 0) lastShown = active;
+    if (client && active >= 0) lastShown = active;
     if (shown === active) return undefined;
     const frame = requestAnimationFrame(() => setShown(active));
     return () => cancelAnimationFrame(frame);
-  }, [active, shown]);
+  }, [active, shown, client]);
 
   // The pill chases its module's live box while the names resize, so it glides and grows with them.
   useLayoutEffect(() => {
@@ -87,13 +90,15 @@ const ResultsBar = ({ user, onLogout }) => {
     <>
     <div className="rbar-space" aria-hidden="true" />
     <header className="rbar" style={{ '--ink': colours.ink, '--tint': colours.tint, '--rung': colours.rung }}>
-      <Link to="/dashboard" className="rbar__back" aria-label="Volver a tu ADN">
-        <ArrowLeft size={22} strokeWidth={2.25} aria-hidden="true" />
-      </Link>
+      {back && (
+        <Link to="/dashboard" className="rbar__back" aria-label="Volver a tu ADN">
+          <ArrowLeft size={22} strokeWidth={2.25} aria-hidden="true" />
+        </Link>
+      )}
 
       <nav className="rbar__strand" aria-label="Módulos">
         {shown >= 0 && <Motion.span className="rbar__pill" aria-hidden="true" style={{ x, width }} />}
-        {RESULT_MODULES.map((m, i) => (
+        {modules.map((m, i) => (
           <Link
             key={m.key}
             ref={(node) => { links.current[i] = node; }}
@@ -114,7 +119,7 @@ const ResultsBar = ({ user, onLogout }) => {
         ))}
       </nav>
 
-      <AccountMenu user={user} onLogout={onLogout} />
+      <AccountMenu user={user} onLogout={onLogout} role={accountRole} />
     </header>
     </>
   );

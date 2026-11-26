@@ -42,6 +42,15 @@
   pointer-events: auto;
 }
 
+/* Fixed columns, so a bar without the back arrow (staff pages) keeps the strand centred. */
+.rbar > .rbar__strand {
+  grid-column: 2;
+}
+
+.rbar > .acct {
+  grid-column: 3;
+}
+
 /* The twin of the menu button; the arrow leans back toward the helix under the pointer. */
 .rbar__back {
   display: grid;
